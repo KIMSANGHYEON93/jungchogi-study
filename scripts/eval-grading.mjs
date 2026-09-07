@@ -4,20 +4,36 @@
 //
 // 사용법:
 //   ANTHROPIC_API_KEY=sk-ant-... node scripts/eval-grading.mjs
+//   AI_PROVIDER=openrouter OPENROUTER_API_KEY=sk-or-v1-... node scripts/eval-grading.mjs
 //   node scripts/eval-grading.mjs --out claudedocs/eval-grading-2026-09-03.json
 //   node scripts/eval-grading.mjs --only boundary,partial
 //   node scripts/eval-grading.mjs --limit 5        # 프롬프트를 고칠 때 빠르게 확인
 //
-// ⚠️ **실제 API 를 호출하므로 비용이 든다** (30건 × Opus 5 medium, 회당 약 $0.01 추정).
-//    그래서 `npm test` 에 넣지 않는다 — 키 없이 실패하면 CI 가 깨진다.
+// ─────────────────────────────────────────────────────────────────────────────
+// 어느 경로로 나가는가 — `lib/ai/provider.js` 가 정한다
+// ─────────────────────────────────────────────────────────────────────────────
+//   anthropic  : ⚠️ **돈이 든다.** 30건 × Opus 5 medium, 회당 약 $0.01 추정 → 1회 약 $0.3.
+//   openrouter : 요금은 $0 이지만 **하루 한도 50회(무입금 계정) 중 30회를 한 번에 쓴다.**
+//                한 번 반이면 하루치가 끝난다. 그래서 실행 전에 소진율을 알리고,
+//                호출은 분당 20회를 넘지 않게 스로틀한다 — 넘기면 429 가 줄줄이 나고
+//                **429 도 한도를 깎는다** (재시도가 곧 예산 소모다).
+//
+// 어느 쪽이든 `npm test` 에 넣지 않는다 — 키 없이 실패하면 CI 가 깨진다.
 //
 // 이 러너는 `api/ai/grade.js` 의 POST 핸들러를 **프로세스 안에서 직접** 부른다
 // (`vercel dev` 를 띄우지 않아도 된다). 라우팅만 건너뛰고 그 뒤 경로 —
 // 검증·문항 로드·프롬프트 조립·구조화 출력·응답 정규화 — 는 배포와 같다.
+// 업스트림 선택도 배포와 **같은 자리**(프로바이더)에서 일어난다.
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline/promises';
+
+import { getProvider } from '../lib/ai/provider.js';
+import { createRateLimiter } from '../lib/ai/batchRunner.js';
+import { estimateFreeQuota } from '../lib/ai/variants.js';
+import { OPENROUTER_FREE_LIMITS, isFreeModel } from '../lib/ai/usage.js';
 
 const EVAL_PATH = fileURLToPath(new URL('../tests/eval/grading.json', import.meta.url));
 
@@ -25,33 +41,129 @@ const EVAL_PATH = fileURLToPath(new URL('../tests/eval/grading.json', import.met
 const CONFIDENCE_FLOOR = 0.6;
 
 function parseArgs(argv) {
-  const args = { out: null, only: null, limit: null };
+  const args = {
+    out: null,
+    only: null,
+    limit: null,
+    yes: false,
+    freeDailyLimit: OPENROUTER_FREE_LIMITS.requestsPerDay,
+  };
   for (let i = 0; i < argv.length; i++) {
     const value = argv[i + 1];
     if (argv[i] === '--out') args.out = value;
     else if (argv[i] === '--only') args.only = value?.split(',').map((s) => s.trim());
     else if (argv[i] === '--limit') args.limit = Number(value);
+    else if (argv[i] === '--yes' || argv[i] === '-y') args.yes = true;
+    else if (argv[i] === '--free-daily-limit') args.freeDailyLimit = Number(value);
   }
   return args;
 }
 
-function requireApiKey() {
-  if (process.env.ANTHROPIC_API_KEY?.trim()) return;
+/**
+ * 프로바이더에 맞는 키가 있는지 본다. **어느 경로로 나가는지도 함께 알린다** —
+ * 무료로 돌린다고 생각하고 유료 키를 쓰는 것이 여기서 가장 비싼 실수다.
+ */
+function requireProviderKey(provider) {
+  if (provider.hasKey()) return;
+
+  const guide =
+    provider.name === 'openrouter'
+      ? [
+          'OPENROUTER_API_KEY 가 설정되지 않았습니다. 이 러너는 실제 OpenRouter API 를 호출합니다.',
+          '',
+          '  PowerShell : $env:OPENROUTER_API_KEY = "sk-or-v1-..."; node scripts/eval-grading.mjs',
+          '  bash       : OPENROUTER_API_KEY=sk-or-v1-... node scripts/eval-grading.mjs',
+          '',
+          '키 발급: https://openrouter.ai/ → Keys',
+        ]
+      : [
+          'ANTHROPIC_API_KEY 가 설정되지 않았습니다. 이 러너는 실제 Anthropic API 를 호출합니다.',
+          '',
+          '  PowerShell : $env:ANTHROPIC_API_KEY = "sk-ant-..."; node scripts/eval-grading.mjs',
+          '  bash       : ANTHROPIC_API_KEY=sk-ant-... node scripts/eval-grading.mjs',
+          '',
+          '키 발급: https://console.anthropic.com/ → API Keys',
+        ];
 
   console.error(
     [
       '',
-      'ANTHROPIC_API_KEY 가 설정되지 않았습니다. 이 러너는 실제 Anthropic API 를 호출합니다.',
+      `프로바이더: ${provider.name} (AI_PROVIDER 로 바꿉니다)`,
       '',
-      '  PowerShell : $env:ANTHROPIC_API_KEY = "sk-ant-..."; node scripts/eval-grading.mjs',
-      '  bash       : ANTHROPIC_API_KEY=sk-ant-... node scripts/eval-grading.mjs',
+      ...guide,
       '',
-      '키 발급: https://console.anthropic.com/ → API Keys',
-      '(자동 테스트 `npm test` 는 SDK 를 모킹하므로 키가 필요 없습니다.)',
+      '(자동 테스트 `npm test` 는 프로바이더를 모킹하므로 키가 필요 없습니다.)',
       '',
     ].join('\n')
   );
   process.exit(1);
+}
+
+/**
+ * 실행 전에 **무엇이 제약인지** 알리고 확인을 받는다.
+ *
+ * 유료 경로는 돈, 무료 경로는 하루 호출 수다. 무료 모델에서 달러 추정은 늘 $0 이라
+ * 아무것도 말해 주지 않으므로 그 자리를 **호출 수·한도 소진율**로 바꾼다.
+ *
+ * 무료 경로에서는 분당 한도 스로틀도 함께 돌려준다. "넘기고 429 나면 재시도" 는
+ * 쓸 수 없다 — 429 도 하루 한도를 깎아 재시도가 곧 예산 소모다.
+ *
+ * @returns {Promise<{limiter: {acquire: () => Promise<void>}|null, quota: object|null}>}
+ */
+async function confirmRun({ provider, count, yes, freeDailyLimit }) {
+  console.log('');
+  console.log('─'.repeat(78));
+  console.log(`프로바이더      : ${provider.name} (${provider.model})`);
+  console.log(`평가 항목       : ${count}건`);
+
+  if (!isFreeModel(provider.model)) {
+    console.log(
+      `비용            : ⚠️ 실제 호출입니다. 회당 약 $0.01 추정 → 약 $${(count * 0.01).toFixed(2)}`
+    );
+    console.log('─'.repeat(78));
+    return { limiter: null, quota: null };
+  }
+
+  const quota = estimateFreeQuota({ requestCount: count, dailyLimit: freeDailyLimit });
+  console.log(`호출            : ${quota.requestCount}건`);
+  console.log(
+    `일일 한도       : ${quota.requestCount}/${quota.dailyLimit}건 = ` +
+      `${quota.sharePercent.toFixed(1)}% 소진`
+  );
+  console.log(`분당 한도       : ${quota.perMinuteLimit}건/분 → 최소 ${quota.minMinutes}분`);
+  console.log('비용            : $0 — 무료 모델입니다. 제약은 돈이 아니라 호출 수입니다.');
+  console.log('─'.repeat(78));
+
+  if (quota.exceedsDaily) {
+    console.log(
+      `\n⚠️ 하루 한도(${quota.dailyLimit}건)를 ${quota.overflow}건 넘깁니다.\n` +
+        '   넘어가는 순간부터 429 가 나고, **429 도 한도를 깎습니다.**\n' +
+        '   --limit 로 좁혀 돌리거나 한도가 리셋된 뒤 다시 돌리세요.'
+    );
+  } else if (quota.sharePercent >= 50) {
+    console.log(
+      `\n⚠️ 이 한 번으로 하루치의 ${quota.sharePercent.toFixed(0)}% 를 씁니다.\n` +
+        '   프롬프트를 고치며 반복할 계획이라면 --limit 5 로 좁히는 편이 낫습니다.'
+    );
+  }
+
+  if (!yes) {
+    if (!process.stdin.isTTY) {
+      console.error(
+        '\n대화형 터미널이 아닙니다. 위 소진율을 확인했다면 --yes 를 붙여 다시 실행하세요.'
+      );
+      process.exit(1);
+    }
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await rl.question('\n이대로 돌릴까요? [y/N] ');
+    rl.close();
+    if (!/^y(es)?$/i.test(answer.trim())) {
+      console.log('취소했습니다. 아무것도 보내지 않았습니다.');
+      process.exit(0);
+    }
+  }
+
+  return { limiter: createRateLimiter({ limit: quota.perMinuteLimit }), quota };
 }
 
 /** 한 항목을 채점 엔드포인트에 태운다. */
@@ -180,10 +292,13 @@ function printSummary(rows) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  requireApiKey();
+  const provider = getProvider();
+  requireProviderKey(provider);
 
   // 러너는 한 IP 로 30건을 연달아 보낸다. 기본 레이트리밋(분당 10)에 걸리므로
   // 여기서만 올린다. guard.js 가 모듈 로드 시점에 읽으므로 import 전에 설정해야 한다.
+  // ⚠️ 이건 **우리 서버의** 레이트리밋이다. 업스트림(무료 모델 분당 20회)은
+  //    아래 limiter 가 따로 지킨다 — 둘을 헷갈리면 429 를 업스트림에서 받는다.
   process.env.AI_RATE_LIMIT_PER_MIN ||= '1000';
   // 접근 코드는 배포 게이트라 평가에는 상관없다. 켜져 있으면 401 이 나므로 끈다.
   process.env.AI_ACCESS_CODE = '';
@@ -200,11 +315,21 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`평가셋 ${items.length}건을 채점합니다 (실제 API 호출 — 비용이 발생합니다).\n`);
+  const { limiter, quota } = await confirmRun({
+    provider,
+    count: items.length,
+    yes: args.yes,
+    freeDailyLimit: args.freeDailyLimit,
+  });
+
+  console.log(`\n평가셋 ${items.length}건을 채점합니다 (실제 API 호출).\n`);
 
   const rows = [];
   for (const [index, item] of items.entries()) {
     const label = `[${String(index + 1).padStart(2)}/${items.length}] ${item.source}/${item.id} (${item.kind}, ${item.category})`;
+
+    // 업스트림 분당 한도를 **넘지 않게** 여기서 기다린다 (무료 경로에서만 붙는다).
+    await limiter?.acquire();
 
     let outcome;
     try {
@@ -226,6 +351,17 @@ async function main() {
 
   printSummary(rows);
 
+  // **어느 모델로 쟀는지 없이 일치율만 적으면 그 수치는 비교할 수 없다.**
+  // 프로바이더를 바꾸면 모델이 바뀌고 일치율도 바뀐다.
+  console.log(`\n측정 경로: ${provider.name} · 모델 ${provider.model}`);
+  if (quota) {
+    console.log(
+      `무료 한도: 이 실행으로 ${rows.length}건 = 하루 한도 ${quota.dailyLimit}건의 ` +
+        `${((rows.length / quota.dailyLimit) * 100).toFixed(1)}% 를 썼습니다 ` +
+        '(업스트림 실패도 한도를 깎습니다).'
+    );
+  }
+
   if (args.out) {
     mkdirSync(dirname(args.out), { recursive: true });
     writeFileSync(
@@ -234,6 +370,8 @@ async function main() {
         {
           measuredAt: new Date().toISOString(),
           evalSetVersion: evalSet.version,
+          provider: provider.name,
+          model: provider.model,
           total: rows.length,
           matched: rows.filter((r) => r.judgement.match).length,
           rows,
