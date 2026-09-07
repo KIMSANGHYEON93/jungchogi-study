@@ -10,6 +10,7 @@ import {
   mapOpenAiUsage,
   mapAnthropicUsage,
   createUsageAccumulator,
+  toWireUsage,
   USAGE_TOKEN_FIELDS,
 } from '../lib/ai/providers/usage.js';
 import { TOKEN_FIELDS } from '../lib/ai/usage.js';
@@ -239,5 +240,63 @@ describe('createUsageAccumulator — 여러 턴 합산', () => {
     acc.add(null);
     acc.add(undefined);
     expect(acc.total()).toEqual(emptyUsage(MODEL));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// toWireUsage — 프로바이더 usage → SSE done 프레임의 `usage` 필드
+//
+// 이 이름들은 **프론트엔드 계약**이다. `src/components/AiExplainPanel.jsx` 가
+// `usage.input_tokens`·`usage.cache_read_input_tokens`·`usage.output_tokens` 를
+// 직접 읽는다. 프로바이더가 무엇이든 화면은 같은 이름을 봐야 한다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('toWireUsage', () => {
+  it('계약된 snake_case 이름으로 옮긴다', () => {
+    expect(
+      toWireUsage({
+        model: MODEL,
+        inputTokens: 120,
+        outputTokens: 64,
+        cacheReadTokens: 3_400,
+        cacheCreationTokens: 0,
+      })
+    ).toEqual({
+      input_tokens: 120,
+      output_tokens: 64,
+      cache_read_input_tokens: 3_400,
+      cache_creation_input_tokens: 0,
+    });
+  });
+
+  it('모르는 항목은 키를 만들지 않는다 (0 으로 때우지 않는다)', () => {
+    expect(toWireUsage({ model: MODEL, inputTokens: 10, outputTokens: null, cacheReadTokens: null }))
+      .toEqual({ input_tokens: 10 });
+  });
+
+  it('model 은 싣지 않는다 — 모델 id 는 cost 쪽 계약이다', () => {
+    expect(toWireUsage(emptyUsage(MODEL))).toEqual({});
+  });
+
+  it.each([
+    ['usage 가 없음', undefined],
+    ['usage 가 null', null],
+    ['usage 가 객체가 아님', 'usage'],
+    ['usage 가 배열', []],
+  ])('%s → 빈 객체', (_label, raw) => {
+    expect(toWireUsage(raw)).toEqual({});
+  });
+
+  it('두 프로바이더의 usage 가 같은 이름으로 나간다', () => {
+    const anthropic = mapAnthropicUsage(
+      { input_tokens: 300, output_tokens: 40, cache_read_input_tokens: 900 },
+      MODEL
+    );
+    const openrouter = mapOpenAiUsage(
+      { prompt_tokens: 1200, completion_tokens: 40, prompt_tokens_details: { cached_tokens: 900 } },
+      MODEL
+    );
+
+    expect(toWireUsage(openrouter)).toEqual(toWireUsage(anthropic));
   });
 });
