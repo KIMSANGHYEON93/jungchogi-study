@@ -13,22 +13,33 @@
 //   node scripts/usage-report.mjs claudedocs/usage-2026-09.jsonl
 //   vercel logs --json | node scripts/usage-report.mjs          # stdin 도 받는다
 //   node scripts/usage-report.mjs a.jsonl b.json --json --out claudedocs/usage.json
+//   node scripts/usage-report.mjs a.jsonl --free-daily-limit 1000   # 결제 이력이 있는 계정
 //
 // 집계 원칙은 `lib/ai/usage.js` 와 같다 — **"모름" 을 0 으로 세지 않는다.**
 // 비용을 모르는 기록은 총액에서 빼고 따로 세며, 아는 항목만 더한 하한을 함께 낸다.
+//
+// ── 무료 모델이 섞이면 (2026-09-07 · OpenRouter 전환) ──
+// 비용이 전부 $0 이면 비용 표는 아무것도 말해 주지 않는다. 그때 실질 제약은 **한도**다 —
+// 분당 20회, 무입금 계정 하루 50회. 그래서 무료 호출이 하나라도 있으면 리포트가
+// **호출 수·일일 한도 소진율·분당 최대 호출·실패 코드**를 담은 절을 따로 낸다.
+// 그리고 표의 비용 칸에서 **무료의 $0(아는 값)과 단가를 모르는 모델의 "모름"을 가른다** —
+// 둘이 같은 글자로 보이면 유료 호출이 공짜처럼 읽힌다.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import {
   ENDPOINTS,
-  PRICING,
   PRICING_AS_OF,
   PRICING_SOURCE,
+  PROVIDERS,
   DEFAULT_MODEL,
   TOKEN_FIELDS,
+  OPENROUTER_FREE_LIMITS,
   calculateCost,
   normalizeUsage,
+  priceTableFor,
+  providerForModel,
   pricingAgeMonths,
 } from '../lib/ai/usage.js';
 
@@ -179,6 +190,11 @@ export function seoulDate(ts) {
   }).format(new Date(ts));
 }
 
+/** 경로를 모르는 기록을 모으는 자리표시 (byProvider 맵이 무한정 넓어지지 않게 한다) */
+const UNKNOWN_PROVIDER = 'unknown';
+
+const MINUTE_MS = 60 * 1000;
+
 /** 빈 집계 통 */
 function emptyGroup() {
   return {
@@ -186,6 +202,8 @@ function emptyGroup() {
     ok: 0,
     failed: 0,
     failureRate: 0,
+    // 단가가 0 이라고 **아는** 모델의 호출 수. 비용이 아니라 한도가 제약인 호출이다.
+    freeCalls: 0,
     tokens: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
     tokenSamples: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
     unknownTokenCalls: 0,
@@ -208,16 +226,27 @@ function emptyGroup() {
 function normalizeRecord(raw) {
   const tally = normalizeUsage(raw);
   const model = typeof raw.model === 'string' && raw.model.trim() !== '' ? raw.model : DEFAULT_MODEL;
-  const cost = calculateCost(tally, { model });
+  // `provider` 는 2026-09-07 에 더한 항목이라 옛 로그에는 없다 → 모델 id 로 알아낸다.
+  const provider = PROVIDERS.includes(raw.provider) ? raw.provider : providerForModel(model);
+  const cost = calculateCost(tally, { model, provider });
+
+  // 기록이 들고 온 총액을 그대로 믿는다 — 서버가 계산한 값이고, 우리가 다시 세면
+  // 그 사이 가격표가 바뀌었을 때 조용히 다른 수치를 낸다.
+  // 예외는 **단가가 0 인 무료 모델**뿐이다: 0 짜리 표에서는 총액이 흔들릴 여지가 없어
+  // 우리가 아는 유일한 답이 0 이다. 이걸 "모름" 으로 세면 없는 지출을 암시하게 된다.
+  const recorded =
+    typeof raw.costUsd === 'number' && Number.isFinite(raw.costUsd) ? raw.costUsd : null;
 
   return {
     ts: raw.ts,
     date: seoulDate(raw.ts),
     endpoint: raw.endpoint,
     model,
+    provider,
+    free: cost.free,
     effort: raw.effort ?? null,
     tally,
-    costUsd: typeof raw.costUsd === 'number' && Number.isFinite(raw.costUsd) ? raw.costUsd : null,
+    costUsd: recorded ?? (cost.free && cost.known ? cost.usd : null),
     costAtLeastUsd: cost.usdAtLeast,
     latencyMs:
       typeof raw.latencyMs === 'number' && Number.isFinite(raw.latencyMs) ? raw.latencyMs : null,
@@ -228,6 +257,7 @@ function normalizeRecord(raw) {
 
 function addToGroup(group, record) {
   group.calls += 1;
+  if (record.free) group.freeCalls += 1;
   if (record.ok) group.ok += 1;
   else {
     group.failed += 1;
@@ -281,7 +311,43 @@ function finishGroup(group) {
 }
 
 /**
- * 엔드포인트별·일자별 집계를 만든다.
+ * 무료 모델의 한도 소진을 잰다.
+ *
+ * **비용이 0 이어도 여기서 막힌다.** 무료 모델은 분당 20회, 무입금 계정은 하루 50회
+ * (누적 $10 결제 이력이 있으면 1,000회)가 실질 제약이다. 비용만 보여 주는 리포트는
+ * "왜 갑자기 429 가 나는지" 에 답하지 못한다.
+ *
+ * 일자 버킷은 리포트의 나머지와 같은 **한국 시간**이다. 한도 리셋 시각이 이와 다르면
+ * 경계 날짜의 수치가 하루씩 어긋날 수 있어 리포트가 그 사실을 함께 적는다.
+ *
+ * @param {object[]} records `normalizeRecord` 를 거친 기록
+ * @returns {{calls: number, byDate: Record<string, number>, peakPerMinute: number}}
+ */
+function freeQuotaOf(records) {
+  const free = records.filter((record) => record.free);
+
+  /** @type {Record<string, number>} */
+  const byDate = {};
+  for (const record of free) byDate[record.date] = (byDate[record.date] ?? 0) + 1;
+
+  // 60초 창을 미끄러뜨리며 가장 많이 부른 횟수를 센다 (분당 한도와 견줄 값).
+  const times = free
+    .map((record) => Date.parse(record.ts))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+
+  let peakPerMinute = 0;
+  let start = 0;
+  for (let end = 0; end < times.length; end++) {
+    while (times[end] - times[start] >= MINUTE_MS) start += 1;
+    peakPerMinute = Math.max(peakPerMinute, end - start + 1);
+  }
+
+  return { calls: free.length, byDate, peakPerMinute };
+}
+
+/**
+ * 엔드포인트별·일자별·모델별·경로별 집계를 만든다.
  * @param {object[]} rawRecords `parseRecords` 가 낸 기록 (또는 같은 모양의 객체)
  * @returns {object}
  */
@@ -289,32 +355,51 @@ export function summarize(rawRecords) {
   const records = rawRecords.map(normalizeRecord);
 
   const totals = emptyGroup();
+  const freeTotals = emptyGroup();
   /** @type {Record<string, object>} */
   const byEndpoint = {};
   /** @type {Record<string, object>} */
   const byDate = {};
+  /** @type {Record<string, object>} */
+  const byModel = {};
+  /** @type {Record<string, object>} */
+  const byProvider = {};
   const unknownModels = new Set();
 
   for (const record of records) {
-    if (!PRICING[record.model]) unknownModels.add(record.model);
+    // 무료 모델은 단가를 **아는** 모델이다 — 가격표에 없는 모델로 세면 안 된다.
+    if (!priceTableFor(record.model)) unknownModels.add(record.model);
 
     addToGroup(totals, record);
+    if (record.free) addToGroup(freeTotals, record);
     byEndpoint[record.endpoint] ??= emptyGroup();
     addToGroup(byEndpoint[record.endpoint], record);
     byDate[record.date] ??= emptyGroup();
     addToGroup(byDate[record.date], record);
+    byModel[record.model] ??= emptyGroup();
+    addToGroup(byModel[record.model], record);
+    const provider = record.provider ?? UNKNOWN_PROVIDER;
+    byProvider[provider] ??= emptyGroup();
+    addToGroup(byProvider[provider], record);
   }
 
   finishGroup(totals);
+  finishGroup(freeTotals);
   for (const group of Object.values(byEndpoint)) finishGroup(group);
   for (const group of Object.values(byDate)) finishGroup(group);
+  for (const group of Object.values(byModel)) finishGroup(group);
+  for (const group of Object.values(byProvider)) finishGroup(group);
 
   const dates = Object.keys(byDate).sort();
 
   return {
     totals,
+    freeTotals,
     byEndpoint,
     byDate,
+    byModel,
+    byProvider,
+    freeQuota: freeQuotaOf(records),
     span: { from: dates[0] ?? null, to: dates.at(-1) ?? null },
     unknownModels: [...unknownModels],
     pricingAsOf: PRICING_AS_OF,
@@ -359,8 +444,35 @@ function row(cells, widths) {
   return cells.map((cell, i) => pad(String(cell), widths[i])).join('  ').trimEnd();
 }
 
-function groupTable(title, entries, keyLabel) {
-  const widths = [12, 6, 8, 12, 12, 10, 10, 10];
+/**
+ * 캐시 적중률 칸. **세 상태를 가른다** —
+ *   ① `측정불가` : 캐시읽기 항목을 준 기록이 하나도 없다 (프로바이더가 캐시를 안 쓰거나
+ *      응답에 항목이 없다). 기록 하나만으로는 둘을 가릴 수 없고, "이 모집단이 한 번도
+ *      값을 주지 않았다" 가 정직하게 말할 수 있는 최대치다.
+ *   ② `0.0%`     : 값을 받았고 그 값이 0 이다 — **캐시를 썼는데 못 읽었다.**
+ *   ③ `—`        : 분모가 0 이다 (입력도 캐시읽기도 0). 잴 것이 없다.
+ */
+function cacheCell(group) {
+  if (group.calls > 0 && group.tokenSamples.cacheReadTokens === 0) return '측정불가';
+  return pct(group.cacheHitRate);
+}
+
+/**
+ * 비용 칸. **"모름" 이 $0 으로 보이면 안 된다.**
+ *
+ * 무료 모델의 $0(아는 값)과 단가를 모르는 모델의 합계 0(아무것도 더하지 못한 값)이
+ * 한 열에 나란히 서게 되면서 생긴 구분이다. 둘이 같은 글자로 보이면
+ * **유료 호출이 공짜처럼 읽힌다** — 이 리포트가 막아야 할 가장 나쁜 오독이다.
+ */
+function costCell(group) {
+  if (group.calls === 0) return usd(group.costUsd);
+  if (group.costKnownCalls === 0) return '모름';
+  // 일부만 아는 경우 합계는 하한이다 — 그 사실을 값에 붙여 둔다.
+  return group.costUnknownCalls > 0 ? `${usd(group.costUsd)}+` : usd(group.costUsd);
+}
+
+function groupTable(title, entries, keyLabel, keyWidth = 12) {
+  const widths = [keyWidth, 6, 8, 12, 12, 10, 10, 10];
   const lines = [
     `■ ${title}`,
     `  ${row([keyLabel, '호출', '실패율', '비용 합계', '회당 평균', '캐시적중', 'p50', 'p95'], widths)}`,
@@ -373,9 +485,9 @@ function groupTable(title, entries, keyLabel) {
           key,
           int(group.calls),
           pct(group.failureRate),
-          usd(group.costUsd),
+          costCell(group),
           usd(group.avgCostUsd),
-          pct(group.cacheHitRate),
+          cacheCell(group),
           ms(group.latency.p50),
           ms(group.latency.p95),
         ],
@@ -387,9 +499,52 @@ function groupTable(title, entries, keyLabel) {
 }
 
 /**
+ * 무료 모델 절. **비용이 전부 $0 이면 표가 무의미하다** — 그때 사용자가 알아야 하는 것은
+ * "얼마 썼나" 가 아니라 "한도의 얼마를 태웠나" 다.
+ *
+ * @param {ReturnType<typeof summarize>} summary
+ * @param {number} limit 일일 한도
+ * @returns {string[]}
+ */
+function freeSection(summary, limit) {
+  const { freeQuota, freeTotals, totals } = summary;
+  const lines = [
+    '■ 무료 모델 (OpenRouter :free) — 제약은 비용이 아니라 호출 수다',
+    `  무료 호출 ${int(freeQuota.calls)}건 / 전체 ${int(totals.calls)}건 · ` +
+      '토큰 요금 $0 (모름이 아니라 아는 값 0)',
+    `  실패 ${int(freeTotals.failed)}건 (${pct(freeTotals.failureRate)})` +
+      (Object.keys(freeTotals.errorCodes).length > 0
+        ? ` · 실패 코드: ${Object.entries(freeTotals.errorCodes)
+            .map(([code, count]) => `${code} ${count}`)
+            .join(' · ')}`
+        : ''),
+    `  일일 한도 ${limit}회 대비 소진율 (한국 시간 버킷 — 한도 리셋 시각이 다르면 경계 날짜가 어긋난다)`,
+  ];
+
+  for (const date of Object.keys(freeQuota.byDate).sort()) {
+    const count = freeQuota.byDate[date];
+    const over = count > limit ? '  ⚠️ 한도 초과 — 이후 호출은 429 로 막혔을 수 있다' : '';
+    lines.push(`    ${date}  ${count}/${limit} (${pct(count / limit)})${over}`);
+  }
+
+  const perMinute = OPENROUTER_FREE_LIMITS.requestsPerMinute;
+  const peak = freeQuota.peakPerMinute;
+  lines.push(
+    `  분당 한도 ${perMinute}회 대비 최대 ${peak}회/분` +
+      (peak > perMinute ? '  ⚠️ 분당 한도 초과' : ''),
+    `  (무입금 계정 ${int(OPENROUTER_FREE_LIMITS.requestsPerDay)}회/일 · 누적 ` +
+      `$${OPENROUTER_FREE_LIMITS.creditsThresholdUsd} 결제 이력이 있으면 ` +
+      `${int(OPENROUTER_FREE_LIMITS.requestsPerDayWithCredits)}회/일 — --free-daily-limit 로 바꾼다)`,
+    ''
+  );
+  return lines;
+}
+
+/**
  * 사람이 읽는 리포트를 만든다.
  * @param {ReturnType<typeof summarize>} summary
- * @param {{now?: Date, skipped?: Array<{line: number, reason: string}>, sources?: string[]}} [options]
+ * @param {{now?: Date, skipped?: Array<{line: number, reason: string}>, sources?: string[],
+ *          freeDailyLimit?: number}} [options]
  * @returns {string}
  */
 export function formatReport(summary, options = {}) {
@@ -439,8 +594,13 @@ export function formatReport(summary, options = {}) {
     `  회당 평균 ${usd(totals.avgCostUsd)}`,
     `  토큰 입력 ${int(totals.tokens.inputTokens)} · 출력 ${int(totals.tokens.outputTokens)} · ` +
       `캐시읽기 ${int(totals.tokens.cacheReadTokens)} · 캐시쓰기 ${int(totals.tokens.cacheCreationTokens)}`,
-    `  캐시 적중률 ${pct(totals.cacheHitRate)} — 캐시읽기 / (캐시읽기 + 입력), ` +
-      `입력·캐시읽기를 둘 다 아는 ${int(totals.cacheHitSamples)}/${int(totals.calls)}건으로 잰 값`,
+    // "캐시를 안 쓰는 프로바이더" 와 "캐시를 썼는데 적중 0" 은 다른 상태다.
+    totals.calls > 0 && totals.tokenSamples.cacheReadTokens === 0
+      ? `  캐시 적중률 측정 불가 — 캐시읽기 항목을 준 기록이 0/${int(totals.calls)}건이다. ` +
+        '이 경로가 캐시를 쓰지 않거나 응답에 그 항목이 없다 ("적중 0%" 와 다른 상태다)'
+      : `  캐시 적중률 ${pct(totals.cacheHitRate)} — 캐시읽기 / (캐시읽기 + 입력), ` +
+        `입력·캐시읽기를 둘 다 아는 ${int(totals.cacheHitSamples)}/${int(totals.calls)}건으로 잰 값 ` +
+        `(캐시쓰기를 알려 준 기록 ${int(totals.tokenSamples.cacheCreationTokens)}건)`,
     `  토큰 항목을 하나라도 모르는 기록 ${int(totals.unknownTokenCalls)}건`,
     `  지연 p50 ${ms(totals.latency.p50)} · p95 ${ms(totals.latency.p95)} (표본 ${int(totals.latency.count)}건)`,
     ''
@@ -451,6 +611,12 @@ export function formatReport(summary, options = {}) {
       .map(([code, count]) => `${code} ${count}`)
       .join(' · ');
     lines.push(`  실패 코드: ${codes}`, '');
+  }
+
+  if (summary.freeQuota.calls > 0) {
+    lines.push(
+      ...freeSection(summary, options.freeDailyLimit ?? OPENROUTER_FREE_LIMITS.requestsPerDay)
+    );
   }
 
   const endpointOrder = ENDPOINTS.filter((name) => summary.byEndpoint[name]);
@@ -474,6 +640,31 @@ export function formatReport(summary, options = {}) {
     ''
   );
 
+  // 모델별 — 무료·유료가 섞이면 여기가 "무엇이 돈을 쓰는가" 의 답이다.
+  lines.push(
+    ...groupTable(
+      '모델별',
+      Object.keys(summary.byModel)
+        .sort()
+        .map((model) => [model, summary.byModel[model]]),
+      '모델',
+      40
+    ),
+    ''
+  );
+
+  // 경로별 — 같은 화면의 수치가 어느 경로에서 나왔는지.
+  lines.push(
+    ...groupTable(
+      '경로별',
+      Object.keys(summary.byProvider)
+        .sort()
+        .map((provider) => [provider, summary.byProvider[provider]]),
+      '경로'
+    ),
+    ''
+  );
+
   // 블루프린트 §6 추정치와 나란히 — 추정이 틀렸다면 그게 가장 쓸모 있는 정보다.
   lines.push('■ 블루프린트 §6 추정 대비 실측 (회당)');
   for (const name of endpointOrder) {
@@ -481,6 +672,11 @@ export function formatReport(summary, options = {}) {
     const estimate = BLUEPRINT_ESTIMATES[name];
     if (!estimate) {
       lines.push(`  ${pad(name, 9)} 추정 없음 · 실측 ${usd(group.avgCostUsd)}`);
+      continue;
+    }
+    if (group.calls > 0 && group.freeCalls === group.calls) {
+      // 전부 무료 모델이면 회당 비용은 언제나 $0 이다 — 추정과 견줄 것이 없다.
+      lines.push(`  ${pad(name, 9)} 전부 무료 모델 호출 — 비용 비교가 의미 없다 (한도 절을 보라)`);
       continue;
     }
     const measured = group.avgCostUsd;
@@ -519,19 +715,35 @@ function readStdin() {
 }
 
 /**
+ * 무료 모델의 일일 한도를 읽는다. 읽을 수 없으면 **조용히 기본값**(무입금 계정 50회)이다 —
+ * 한도를 잘못 읽어 소진율을 낙관적으로 보여 주는 것보다 낫다.
+ * @param {unknown} raw
+ * @returns {number|null}
+ */
+function readDailyLimit(raw) {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+}
+
+/**
  * @param {string[]} argv `process.argv.slice(2)`
- * @returns {{text: string, sources: string[], asJson: boolean, out: string|null}}
+ * @returns {{text: string, sources: string[], asJson: boolean, out: string|null,
+ *            freeDailyLimit: number}}
  */
 export function readInputs(argv) {
   const files = [];
   let asJson = false;
   let out = null;
+  let freeDailyLimit = null;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--json') asJson = true;
     else if (arg === '--out') out = argv[++i] ?? null;
     else if (arg.startsWith('--out=')) out = arg.slice('--out='.length);
+    else if (arg === '--free-daily-limit') freeDailyLimit = readDailyLimit(argv[++i]);
+    else if (arg.startsWith('--free-daily-limit='))
+      freeDailyLimit = readDailyLimit(arg.slice('--free-daily-limit='.length));
     else if (!arg.startsWith('--')) files.push(arg);
   }
 
@@ -541,6 +753,7 @@ export function readInputs(argv) {
     sources: files.length > 0 ? files : ['(stdin)'],
     asJson,
     out,
+    freeDailyLimit: freeDailyLimit ?? OPENROUTER_FREE_LIMITS.requestsPerDay,
   };
 }
 
@@ -561,8 +774,16 @@ export function main(argv) {
   const summary = summarize(records);
 
   const output = input.asJson
-    ? JSON.stringify({ ...summary, skipped, sources: input.sources }, null, 2)
-    : formatReport(summary, { skipped, sources: input.sources });
+    ? JSON.stringify(
+        { ...summary, skipped, sources: input.sources, freeDailyLimit: input.freeDailyLimit },
+        null,
+        2
+      )
+    : formatReport(summary, {
+        skipped,
+        sources: input.sources,
+        freeDailyLimit: input.freeDailyLimit,
+      });
 
   if (input.out) {
     writeFileSync(input.out, `${output}\n`, 'utf8');

@@ -433,3 +433,330 @@ describe('CLI — 파일에서 읽어 리포트를 낸다', () => {
     expect(error).toHaveBeenCalledWith(expect.stringContaining('입력을 읽지 못했습니다'));
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 무료 라우팅(OpenRouter) 전환 (2026-09-07)
+//
+// 무료 모델이면 비용이 전부 $0 이라 비용 표가 무의미해진다. 그때 실질 제약은
+// **호출 수와 한도**다 — 분당 20회, 무입금 계정 하루 50회(누적 $10 결제 이력이 있으면 1,000회).
+// 리포트가 비용만 보여 주면 사용자는 무엇에 막혔는지 알 수 없다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+const PAID_OPENROUTER_MODEL = 'deepseek/deepseek-chat';
+
+/** 무료 모델 기록 하나 (비용은 아는 값 0) */
+const freeRec = (overrides = {}) =>
+  rec({ model: FREE_MODEL, provider: 'openrouter', costUsd: 0, ...overrides });
+
+const at = (iso) => ({ ts: iso });
+
+describe('summarize — 모델별·경로별 분해', () => {
+  const summary = summarize([
+    rec(),
+    freeRec({ endpoint: 'grade' }),
+    freeRec({ endpoint: 'grade', ok: false, errorCode: 'RATE_LIMITED' }),
+  ]);
+
+  it('모델별로 나눈다', () => {
+    expect(Object.keys(summary.byModel).sort()).toEqual(['claude-opus-5', FREE_MODEL]);
+    expect(summary.byModel[FREE_MODEL].calls).toBe(2);
+    expect(summary.byModel['claude-opus-5'].calls).toBe(1);
+    expect(summary.byModel['claude-opus-5'].costUsd).toBe(0.035);
+  });
+
+  it('모델별 실패율도 따로 센다 (무료 모델은 429 가 곧 한도다)', () => {
+    expect(summary.byModel[FREE_MODEL].failureRate).toBe(0.5);
+    expect(summary.byModel[FREE_MODEL].errorCodes).toEqual({ RATE_LIMITED: 1 });
+  });
+
+  it('경로별로도 나눈다', () => {
+    expect(Object.keys(summary.byProvider).sort()).toEqual(['anthropic', 'openrouter']);
+    expect(summary.byProvider.openrouter.calls).toBe(2);
+    expect(summary.byProvider.anthropic.calls).toBe(1);
+  });
+
+  it('기록에 provider 가 없는 옛 로그도 모델 id 로 경로를 알아낸다', () => {
+    const old = summarize([rec({ model: FREE_MODEL, provider: undefined, costUsd: 0 })]);
+    expect(Object.keys(old.byProvider)).toEqual(['openrouter']);
+  });
+});
+
+describe('summarize — 무료 모델의 $0 은 아는 값이다', () => {
+  it('총액을 아는 기록으로 센다 (모름으로 세지 않는다)', () => {
+    const summary = summarize([freeRec()]);
+
+    expect(summary.totals.costUsd).toBe(0);
+    expect(summary.totals.costKnownCalls).toBe(1);
+    expect(summary.totals.costUnknownCalls).toBe(0);
+    expect(summary.totals.avgCostUsd).toBe(0);
+  });
+
+  it('무료 모델은 "가격표에 없는 모델" 이 아니다', () => {
+    expect(summarize([freeRec()]).unknownModels).toEqual([]);
+  });
+
+  it('무료가 아닌 OpenRouter 모델은 가격표에 없는 모델로 센다 (0 으로 접지 않는다)', () => {
+    const summary = summarize([rec({ model: PAID_OPENROUTER_MODEL, costUsd: null })]);
+
+    expect(summary.unknownModels).toEqual([PAID_OPENROUTER_MODEL]);
+    expect(summary.totals.costUnknownCalls).toBe(1);
+    expect(summary.totals.costUsd).toBe(0); // 아는 기록이 없어 합계가 0 일 뿐
+    expect(summary.totals.avgCostUsd).toBeNull(); // 평균은 모름 — $0 이 아니다
+  });
+
+  it('기록이 costUsd 를 안 들고 와도 무료 모델이면 0 이다', () => {
+    // 0 짜리 표에서는 총액이 흔들릴 여지가 없다 — 우리가 아는 유일한 답이 0 이다.
+    const summary = summarize([freeRec({ costUsd: null, outputTokens: null })]);
+
+    expect(summary.totals.costUsd).toBe(0);
+    expect(summary.totals.costKnownCalls).toBe(1);
+    expect(summary.totals.costUnknownCalls).toBe(0);
+  });
+
+  it('유료 모델의 costUsd 누락은 여전히 모름이다 (되계산하지 않는다)', () => {
+    const summary = summarize([rec({ costUsd: null })]);
+    expect(summary.totals.costKnownCalls).toBe(0);
+    expect(summary.totals.avgCostUsd).toBeNull();
+  });
+
+  it('무료 호출 수를 따로 센다', () => {
+    const summary = summarize([freeRec(), freeRec(), rec()]);
+    expect(summary.totals.freeCalls).toBe(2);
+    expect(summary.byEndpoint.tutor.freeCalls).toBe(2);
+  });
+});
+
+describe('summarize — 무료 한도 소진', () => {
+  it('날짜별 무료 호출 수를 센다', () => {
+    const summary = summarize([
+      freeRec(at('2026-09-04T01:00:00.000Z')),
+      freeRec(at('2026-09-04T02:00:00.000Z')),
+      freeRec(at('2026-09-04T16:00:00.000Z')), // 한국 시간으로는 다음 날
+      rec(at('2026-09-04T03:00:00.000Z')), // 유료는 한도와 무관하다
+    ]);
+
+    expect(summary.freeQuota.calls).toBe(3);
+    expect(summary.freeQuota.byDate).toEqual({ '2026-09-04': 2, '2026-09-05': 1 });
+  });
+
+  it('60초 창에서 가장 많이 부른 횟수를 잰다 (분당 한도가 실제 병목이다)', () => {
+    const summary = summarize([
+      freeRec(at('2026-09-04T01:00:00.000Z')),
+      freeRec(at('2026-09-04T01:00:20.000Z')),
+      freeRec(at('2026-09-04T01:00:50.000Z')),
+      freeRec(at('2026-09-04T01:02:00.000Z')), // 창 밖
+    ]);
+
+    expect(summary.freeQuota.peakPerMinute).toBe(3);
+  });
+
+  it('무료 기록이 없으면 0 이고 던지지 않는다', () => {
+    const summary = summarize([rec()]);
+    expect(summary.freeQuota).toEqual({ calls: 0, byDate: {}, peakPerMinute: 0 });
+  });
+
+  it('기록이 아예 없어도 빈 한도 집계를 낸다', () => {
+    expect(summarize([]).freeQuota.calls).toBe(0);
+  });
+});
+
+describe('formatReport — 무료 모델이면 비용 대신 호출 수·한도를 보여 준다', () => {
+  const now = new Date('2026-09-04T00:00:00Z');
+  const freeOnly = formatReport(
+    summarize([
+      freeRec(),
+      freeRec(),
+      freeRec({ ok: false, errorCode: 'RATE_LIMITED' }),
+    ]),
+    { now }
+  );
+
+  it('비용이 아니라 호출 수가 제약이라고 말한다', () => {
+    expect(freeOnly).toContain('무료');
+    expect(freeOnly).toMatch(/호출 수|한도/);
+  });
+
+  it('일일 한도 대비 소진율을 낸다', () => {
+    expect(freeOnly).toContain('3/50');
+    expect(freeOnly).toContain('6.0%');
+  });
+
+  it('분당 한도도 함께 낸다 (비용이 0 이어도 여기서 막힌다)', () => {
+    expect(freeOnly).toMatch(/분당.*20/);
+  });
+
+  it('무료 절에서도 실패율을 낸다 (429 가 곧 한도에 걸린 신호다)', () => {
+    expect(freeOnly).toContain('RATE_LIMITED');
+  });
+
+  it('모델별 표를 낸다', () => {
+    expect(freeOnly).toContain('모델별');
+    expect(freeOnly).toContain(FREE_MODEL);
+  });
+
+  it('한도를 넘긴 날을 눈에 띄게 표시한다', () => {
+    const many = summarize(
+      Array.from({ length: 51 }, (_, i) =>
+        freeRec(at(`2026-09-04T0${Math.floor(i / 30)}:${String(i % 30).padStart(2, '0')}:00.000Z`))
+      )
+    );
+    const text = formatReport(many, { now });
+
+    expect(text).toContain('51/50');
+    expect(text).toMatch(/한도 초과/);
+  });
+
+  it('결제 이력이 있으면 한도를 1,000 으로 바꿀 수 있다', () => {
+    const text = formatReport(summarize([freeRec()]), { now, freeDailyLimit: 1_000 });
+    expect(text).toContain('1/1000');
+    expect(text).not.toContain('1/50');
+  });
+
+  it('무료 기록이 없으면 무료 절을 내지 않는다 (없는 제약을 말하지 않는다)', () => {
+    const paidOnly = formatReport(summarize([rec()]), { now });
+    expect(paidOnly).not.toContain('무료 모델');
+  });
+
+  it('무료와 유료가 섞이면 둘 다 보여 준다', () => {
+    const mixed = formatReport(summarize([rec(), freeRec(), rec({ costUsd: 0.02 })]), { now });
+
+    expect(mixed).toContain('무료');
+    expect(mixed).toContain('1/50'); // 무료는 1건만
+    expect(mixed).toContain('모델별');
+    expect(mixed).toContain('claude-opus-5');
+  });
+});
+
+describe('formatReport — 캐시 적중률의 세 가지 상태를 가른다', () => {
+  const now = new Date('2026-09-04T00:00:00Z');
+
+  it('캐시 항목을 한 번도 못 받았으면 "측정 불가" 다 (0% 가 아니다)', () => {
+    // OpenRouter 는 cached_tokens 를 줄 수도 안 줄 수도 있고 cacheCreation 은 아예 모른다.
+    const text = formatReport(
+      summarize([freeRec({ cacheReadTokens: null, cacheCreationTokens: null })]),
+      { now }
+    );
+    expect(text).toMatch(/캐시 적중률 측정 불가|적중률[^\n]*측정 불가/);
+  });
+
+  it('캐시읽기가 아는 0 이면 "적중 0%" 다 (측정 불가가 아니다)', () => {
+    const text = formatReport(
+      summarize([freeRec({ inputTokens: 5_000, cacheReadTokens: 0 })]),
+      { now }
+    );
+    expect(text).toContain('0.0%');
+    expect(text).not.toMatch(/캐시 적중률 측정 불가/);
+  });
+
+  it('집계가 두 상태를 구분해 셀 수 있게 표본 수를 남긴다', () => {
+    const summary = summarize([
+      freeRec({ cacheReadTokens: null, cacheCreationTokens: null }),
+      freeRec({ cacheReadTokens: 0, cacheCreationTokens: 0 }),
+    ]);
+
+    expect(summary.totals.tokenSamples.cacheReadTokens).toBe(1); // 값을 준 기록만
+    expect(summary.totals.tokenSamples.cacheCreationTokens).toBe(1);
+    expect(summary.totals.cacheHitSamples).toBe(1);
+  });
+});
+
+describe('CLI — 무료 일일 한도 옵션', () => {
+  const dirs = [];
+  const workdir = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'usage-report-free-'));
+    dirs.push(dir);
+    return dir;
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('--free-daily-limit 로 한도를 바꾼다', () => {
+    const dir = workdir();
+    const file = join(dir, 'usage.jsonl');
+    writeFileSync(file, `${jsonl(freeRec())}\n`, 'utf8');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(main([file, '--free-daily-limit', '1000'])).toBe(0);
+
+    const text = log.mock.calls.map(([line]) => line).join('\n');
+    expect(text).toContain('1/1000');
+  });
+
+  it('한도를 읽을 수 없으면 기본값(50)으로 돌아간다', () => {
+    const dir = workdir();
+    const file = join(dir, 'usage.jsonl');
+    writeFileSync(file, `${jsonl(freeRec())}\n`, 'utf8');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    expect(main([file, '--free-daily-limit', 'many'])).toBe(0);
+    expect(log.mock.calls.map(([line]) => line).join('\n')).toContain('1/50');
+  });
+});
+
+describe('회귀 — Anthropic 만 있는 리포트의 수치는 그대로다', () => {
+  const records = [
+    rec({ ts: '2026-09-03T01:00:00.000Z', endpoint: 'tutor', latencyMs: 1_000 }),
+    rec({ ts: '2026-09-03T02:00:00.000Z', endpoint: 'grade', latencyMs: 2_000, costUsd: 0.01 }),
+    rec({ ts: '2026-09-04T03:00:00.000Z', endpoint: 'plan', latencyMs: 9_000, costUsd: 0.08 }),
+  ];
+  const summary = summarize(records);
+
+  it('합계·평균·적중률·백분위가 확장 전과 같다', () => {
+    expect(summary.totals.calls).toBe(3);
+    expect(summary.totals.costUsd).toBeCloseTo(0.125, 10);
+    expect(summary.totals.costKnownCalls).toBe(3);
+    expect(summary.totals.cacheHitRate).toBeCloseTo(30_000 / 33_000, 10);
+    expect(summary.totals.latency.p50).toBe(2_000);
+    expect(summary.totals.latency.p95).toBe(9_000);
+    expect(summary.span).toEqual({ from: '2026-09-03', to: '2026-09-04' });
+  });
+
+  it('무료 관련 수치는 전부 0 이고 무료 절이 나오지 않는다', () => {
+    expect(summary.totals.freeCalls).toBe(0);
+    expect(summary.freeQuota.calls).toBe(0);
+    const text = formatReport(summary, { now: new Date('2026-09-04T00:00:00Z') });
+    expect(text).not.toContain('무료 모델');
+    expect(text).toContain('블루프린트');
+  });
+});
+
+describe('formatReport — 표의 비용 칸이 "모름" 을 $0 으로 보이게 하지 않는다', () => {
+  const now = new Date('2026-09-04T00:00:00Z');
+  // 모델 이름은 머리글 경고에도 나온다 — 표의 줄은 마지막 등장이다.
+  const rowFor = (text, needle) =>
+    text
+      .split('\n')
+      .filter((line) => line.includes(needle))
+      .at(-1);
+
+  it('총액을 아는 기록이 없으면 $0 이 아니라 모름으로 적는다', () => {
+    // 무료의 $0 과 나란히 놓이면 유료 호출의 "모름" 이 공짜처럼 보인다 — 가장 나쁜 오독이다.
+    const text = formatReport(summarize([rec({ model: PAID_OPENROUTER_MODEL, costUsd: null })]), {
+      now,
+    });
+    const row = rowFor(text, PAID_OPENROUTER_MODEL);
+
+    expect(row).toContain('모름');
+    expect(row).not.toContain('$0');
+  });
+
+  it('무료 모델의 $0 은 그대로 $0 이다 (아는 값이다)', () => {
+    const row = rowFor(formatReport(summarize([freeRec()]), { now }), FREE_MODEL);
+
+    expect(row).toContain('$0');
+    expect(row).not.toContain('모름');
+  });
+
+  it('아는 기록과 모르는 기록이 섞이면 하한임을 표시한다', () => {
+    const text = formatReport(summarize([rec(), rec({ costUsd: null, outputTokens: null })]), {
+      now,
+    });
+    const row = text.split('\n').find((line) => line.startsWith('  tutor'));
+
+    expect(row).toContain('$0.0350+');
+  });
+});
