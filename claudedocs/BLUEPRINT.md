@@ -99,8 +99,8 @@ Browser (React SPA)                     Vercel Serverless (Node)              An
 | 결정 | 선택 | 이유 / 트레이드오프 |
 |---|---|---|
 | 백엔드 형태 | **Vercel Functions (`api/`)** | 기존 배포 파이프라인 그대로. 별도 서버 운영 없음. 단점: 실행 시간 제한(기본 10s·Pro 60s) → 플래너는 스트리밍 필수 |
-| SDK | `@anthropic-ai/sdk` (TypeScript/JS) | 공식 SDK, Tool Runner·streaming·parse 헬퍼 사용 |
-| 모델 | `claude-opus-5`, `thinking: {type:"adaptive"}` | 비용은 `output_config.effort`로 조절(해설 `low`, 채점 `medium`, 플래너 `high`) |
+| 호출 계층 | **`lib/ai/provider.js` 프로바이더 전환식** (2026-09-07~) | `AI_PROVIDER` 로 anthropic ↔ openrouter. Anthropic 은 `@anthropic-ai/sdk`, OpenRouter 는 의존성 없이 `fetch` |
+| 모델 | anthropic: `claude-opus-5` / openrouter: `nvidia/nemotron-3-super-120b-a12b:free` | effort(해설 `low`·채점 `medium`·플래너 `high`)는 양쪽 다 유지 — 기본 무료 모델을 이것으로 고른 이유가 **`reasoning_effort` 를 받는 유일한 무료 구조화출력 모델**이기 때문이다 |
 | 사용자 데이터 전달 | **요청 시 스냅샷 동봉** (오답노트·결과·학습시간·D-Day, 수 KB) | 서버 DB 없이 localStorage 유지. 도구는 콘텐츠 검색 전용으로 서버에서 실행 |
 | 콘텐츠 컨텍스트 | 관련 섹션만 추출 + `cache_control` (1h TTL) | 전체 md(~300KB)를 매번 넣지 않음. 시스템 프롬프트 + 콘텐츠 프리픽스 고정 → 캐시 적중 |
 | 접근 제어 (MVP) | 환경변수 `AI_ACCESS_CODE` + 요청 헤더 검사, IP당 분당 호출 제한 | 공개 URL이므로 최소 방어. 정식 인증은 범위 밖 |
@@ -428,6 +428,51 @@ Phase 0~5 를 닫은 뒤 그동안 "남긴 것"으로 적어 둔 항목을 서�
 `AI_ACCESS_CODE` 와 `VITE_AI_ACCESS_CODE` 를 **같은 값**으로(한쪽만 넣으면 전부 401),
 `VITE_` 는 빌드 시점에 번들에 박히므로 **환경변수 설정 후 재배포**해야 반영된다.
 
+### 프로바이더 전환 — 무료 라우팅(OpenRouter)으로 (2026-09-07)
+
+**왜**: API 비용 때문에 실제 호출을 한 번도 못 해 봤다. 무료 라우팅 플랫폼으로 옮기되
+**Anthropic 경로는 버리지 않고 환경변수로 고르는 전환식**으로 했다(§7-5 결정).
+테스트 1469 → **2044**, lint 0, build 성공.
+
+**계약**: `getProvider()` 가 세 능력을 준다 — `streamText`(해설) · `completeJson`(채점) ·
+`runToolLoop`(플래너). `system: [{text, cacheable?}]`, `messages: [{role, content}]`,
+`usage` 는 **모르면 null**(0 아님).
+
+**무료 경로에서 잃는 것과 대응**
+| 잃는 것 | 대응 |
+|---|---|
+| 프롬프트 캐싱(`cache_control`) | `supportsPromptCache:false`. 캐시 프리픽스 회귀 테스트 3종은 **Anthropic 전용**으로 갈랐고, OpenRouter 경로에는 프롬프트 동일성·주입 방어 순서·골든 해시 검사를 따로 뒀다 |
+| Batch API (Phase 4) | Anthropic Batch 경로는 **그대로 두고**(50% 할인이 실이득), OpenRouter 는 제한 병렬 + **분당 20회 스로틀** + 진행 기록 파일로 이어하기 |
+| `output_config.effort` | 기본 모델이 `reasoning_effort` 를 받아 유지됨 |
+| 엄격 구조화 출력 | **무료 18종 중 3종만 지원.** 3단 폴백(json_schema → json_object + 스키마를 프롬프트로 → 평문 파싱). 400 으로 거부되면 한 단계 내려 **한 호출에 한 번만** 재시도하고 인스턴스가 기억한다 — 하루 50회 제약에서 매 호출 400 하나를 낭비할 수 없다 |
+
+**돈이 아니라 호출 수가 예산이다.** 무료 모델은 **분당 20회 · 하루 50회**(누적 $10 결제 이력이 있으면
+1,000회). 평가셋 30건이 하루치의 60%, quiz100 전체 변형 생성은 200건 = 400%(최소 4일).
+**실패한 429 도 한도를 깎으므로** "넘기고 재시도"가 아니라 애초에 안 넘기게 스로틀한다.
+비용 리포트도 무료 경로에서는 달러 대신 **일일 한도 소진율**을 보여준다.
+
+**통합에서 잡은 것들**
+- **`prompt_tokens` 는 캐시 읽기를 포함한다**(Anthropic `input_tokens` 는 제외). 그대로 매핑하면
+  캐시 적중률 분모가 부풀어 `1200/900` 요청이 42.9% 로 나온다 — 실제는 75%.
+  `inputTokens = max(0, prompt_tokens - cached_tokens)` 로 바로잡았다.
+- **`usage` 는 와이어에서 snake_case 를 유지해야 한다** — `AiExplainPanel.jsx` 가
+  `usage.input_tokens`·`cache_read_input_tokens` 를 직접 읽는다.
+- 무료 모델 판정은 **슬래시가 있고 `:free` 로 끝날 때만**. `claude-opus-5:free` 같은 이름으로
+  유료 모델을 0원 처리할 수 없고, `anthropic/claude-opus-5`(라우팅 경유)는 수수료를 몰라 "모름".
+- 단가가 전부 0이면 usage 가 덜 와도 총액은 0으로 확정이다. 여기서 `null`(모름)을 내면
+  **"돈이 더 나갔을지도 모른다"는 거짓 신호**가 간다.
+- `PRICING['toString']` 같은 상속 이름이 가격표로 오인돼 비용이 NaN 이 되던 구멍(`Object.hasOwn` 으로 차단).
+- 리포트가 "단가를 몰라 못 더한 0"을 `$0` 으로 찍어 **유료 호출이 공짜처럼 읽히던** 자리 →
+  아는 기록이 0건이면 `모름`, 일부만 알면 `$0.0350+`(하한).
+
+**의도한 손실**: 스트림이 중간에 끊기면 usage 가 전부 `null`(모름)로 남는다. 예전엔 Anthropic 의
+`message_start` 를 엿봐 입력 토큰만은 알 수 있었으나 그건 프로바이더 전용 사실이었다.
+0 이 아니라 "모름"이므로 조용한 과소 집계는 아니다.
+
+**아직 실제 호출로 검증되지 않았다.** 무료 모델이 우리 스키마로 유효한 한국어 변형 문항·채점을
+실제로 내는지, 429 본문이 분당/하루를 구분할 수 있게 오는지는 키를 넣고 소량(`--ids` 3건)으로
+먼저 확인해야 한다.
+
 ### Phase 0 에서 드러난 파서·스토리지 결함 — **전건 해소 (2026-09-02)**
 
 테스트를 씌우면서 확인된 8건. P1·P2 는 Phase 0 안에서 고쳤고, 화면에 보이는 내용이 바뀌는 P3~P8 은 현행 동작을 테스트로 고정만 해두었다가 별도 작업으로 닫았다. 각 건마다 실패하는 테스트를 먼저 쓰고(고정해 둔 특성 테스트의 기대값을 새 동작으로 갱신) 수정했으며, `public/data` 실제 콘텐츠를 파싱한 JSON 을 수정 전후로 덤프해 **의도한 차이만 있는지 확인**했다.
@@ -520,7 +565,10 @@ Phase 1 완료 시 `response.usage`를 로깅해 이 표를 실측치로 교체�
    AI 응답 스키마 검증(structured outputs가 담당)이다.
 4. ~~Phase 순서~~ → **플래너를 앞당긴다. Phase 2 = 학습 플래너(구 3), Phase 3 = 자동 채점(구 2).**
    이유: 플래너가 이 앱의 차별점이고, 채점은 플래너가 만든 계획을 소비하는 쪽에 가깝다.
-5. ~~**파서 결함 P3~P8 처리 시점**~~ → **결정됨(2026-09-02)**: Phase 1 앞에 별도로 닫았다. §5 "Phase 0 에서 드러난 파서·스토리지 결함" 참조
+5. ~~**모델/비용 재검토**~~ → **결정됨(2026-09-07)**: API 비용 때문에 **무료 라우팅(OpenRouter)으로 전환**하되
+   Anthropic 경로는 `AI_PROVIDER` 로 고를 수 있게 남긴다. 근거와 잃는 것은 아래 "프로바이더 전환" 절 참조.
+   §7-1(단일 `claude-opus-5`)은 **Anthropic 경로에 한해** 유효하다.
+6. ~~**파서 결함 P3~P8 처리 시점**~~ → **결정됨(2026-09-02)**: Phase 1 앞에 별도로 닫았다. §5 "Phase 0 에서 드러난 파서·스토리지 결함" 참조
 
 ---
 
