@@ -18,6 +18,14 @@ import {
   PRICING_SOURCE,
   BATCH_MULTIPLIER,
   DEFAULT_MODEL,
+  FREE_PRICING,
+  PROVIDERS,
+  OPENROUTER_FREE_LIMITS,
+  OPENROUTER_MODELS_ENDPOINT,
+  providerForModel,
+  isFreeModel,
+  priceTableFor,
+  toUsdPerMillion,
   normalizeUsage,
   calculateCost,
   pricingAgeMonths,
@@ -341,5 +349,244 @@ describe('calculateCost — usage 가 일부만 오거나 아예 없을 때', ()
 
   it('tally 대신 원시 usage 를 그대로 줘도 같은 결과를 낸다', () => {
     expect(calculateCost(sdkUsage(), { model: MODEL }).usd).toBe(0.035);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 프로바이더 확장 (2026-09-07) — 무료 라우팅(OpenRouter)으로 갈아타면서.
+//
+// 여기서 못 박는 것 하나 더:
+//   4. **무료 모델의 0 은 "아는 값 0" 이다.** `:free` 접미사가 붙은 OpenRouter 모델은
+//      단가가 0 이라는 것을 우리가 안다 — `usd: 0` · `known: true` 로 나와야 한다.
+//      반대로 무료가 아닌 OpenRouter 모델은 단가를 모르므로 **0 으로 접지 않고 거부**한다.
+//      이 둘을 섞으면 유료 호출의 비용이 조용히 $0 으로 사라진다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+const PAID_OPENROUTER_MODEL = 'deepseek/deepseek-chat';
+
+describe('가격표 — 무료 모델의 0 도 값 그대로 고정한다', () => {
+  it('무료 단가 네 항목이 모두 0 이다 (모름이 아니라 0)', () => {
+    expect(FREE_PRICING).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+  });
+
+  it('프로바이더 목록은 둘뿐이다', () => {
+    expect(PROVIDERS).toEqual(['anthropic', 'openrouter']);
+  });
+
+  it('OpenRouter 무료 한도를 값 그대로 고정한다 (비용이 0 이어도 이게 실질 제약이다)', () => {
+    expect(OPENROUTER_FREE_LIMITS).toEqual({
+      requestsPerMinute: 20,
+      requestsPerDay: 50,
+      requestsPerDayWithCredits: 1_000,
+      creditsThresholdUsd: 10,
+    });
+  });
+
+  it('유료 OpenRouter 단가를 어디서 가져오는지 코드가 들고 있다', () => {
+    expect(OPENROUTER_MODELS_ENDPOINT).toBe('https://openrouter.ai/api/v1/models');
+  });
+});
+
+describe('providerForModel — 모델 id 만으로 경로를 판정한다', () => {
+  it('슬래시가 없는 id 는 Anthropic 경로다', () => {
+    expect(providerForModel('claude-opus-5')).toBe('anthropic');
+    expect(providerForModel('  claude-opus-5  ')).toBe('anthropic');
+  });
+
+  it('vendor/model 꼴은 OpenRouter 경로다', () => {
+    expect(providerForModel(FREE_MODEL)).toBe('openrouter');
+    expect(providerForModel(PAID_OPENROUTER_MODEL)).toBe('openrouter');
+    expect(providerForModel('anthropic/claude-opus-5')).toBe('openrouter');
+  });
+
+  it('id 를 읽을 수 없으면 기본값으로 넘어가지 않고 모름(null)이다', () => {
+    for (const bad of ['', '   ', null, undefined, 123, {}]) {
+      expect(providerForModel(bad)).toBeNull();
+    }
+  });
+});
+
+describe('isFreeModel — :free 접미사만 무료로 본다', () => {
+  it('OpenRouter 의 :free 변형이면 무료다', () => {
+    expect(isFreeModel(FREE_MODEL)).toBe(true);
+    expect(isFreeModel('deepseek/deepseek-r1:free')).toBe(true);
+    expect(isFreeModel(`  ${FREE_MODEL}  `)).toBe(true);
+  });
+
+  it('접미사가 없으면 무료가 아니다', () => {
+    expect(isFreeModel(PAID_OPENROUTER_MODEL)).toBe(false);
+    expect(isFreeModel('meta-llama/llama-3.3-70b-instruct')).toBe(false);
+  });
+
+  it('OpenRouter id 꼴이 아닌 이름에 :free 를 붙여도 무료가 아니다', () => {
+    // 이름만 바꿔서 유료 모델을 0 원으로 만들 수 있으면 판정 규칙이 무너진다.
+    expect(isFreeModel('claude-opus-5:free')).toBe(false);
+  });
+
+  it('대소문자를 바꾼 접미사는 인정하지 않는다 (추측하느니 거부한다)', () => {
+    expect(isFreeModel('meta-llama/llama-3.3-70b-instruct:FREE')).toBe(false);
+  });
+
+  it('id 가 아니면 무료가 아니다', () => {
+    for (const bad of ['', '   ', null, undefined, 42]) expect(isFreeModel(bad)).toBe(false);
+  });
+});
+
+describe('priceTableFor — 단가표를 고르는 단 하나의 규칙', () => {
+  it('가격표에 있는 모델은 그 표를 준다', () => {
+    expect(priceTableFor(MODEL)).toEqual(PRICING[MODEL]);
+    expect(priceTableFor(`  ${MODEL}  `)).toEqual(PRICING[MODEL]);
+  });
+
+  it('무료 모델은 0 짜리 표를 준다 (모름이 아니다)', () => {
+    expect(priceTableFor(FREE_MODEL)).toEqual(FREE_PRICING);
+  });
+
+  it('무료가 아닌 OpenRouter 모델은 모름이다 (표가 없다)', () => {
+    expect(priceTableFor(PAID_OPENROUTER_MODEL)).toBeUndefined();
+  });
+
+  it('OpenRouter 를 거친 같은 모델도 Anthropic 표에 얹지 않는다', () => {
+    // anthropic/claude-opus-5 는 라우팅 수수료가 붙을 수 있고 우리가 그 단가를 모른다.
+    expect(priceTableFor('anthropic/claude-opus-5')).toBeUndefined();
+  });
+
+  it('Object.prototype 의 이름을 모델 id 로 줘도 표로 오인하지 않는다', () => {
+    for (const inherited of ['toString', 'constructor', 'hasOwnProperty', '__proto__']) {
+      expect(priceTableFor(inherited)).toBeUndefined();
+    }
+  });
+
+  it('id 를 읽을 수 없으면 표가 없다', () => {
+    expect(priceTableFor('')).toBeUndefined();
+    expect(priceTableFor(null)).toBeUndefined();
+  });
+});
+
+describe('toUsdPerMillion — OpenRouter 단가를 우리 표 단위로 옮긴다', () => {
+  it('토큰당 USD 문자열을 $/1M 으로 바꾼다', () => {
+    // pricing.prompt = "0.0000005" → $0.5 / 1M
+    expect(toUsdPerMillion('0.0000005')).toBe(0.5);
+    expect(toUsdPerMillion('0.000003')).toBe(3);
+    expect(toUsdPerMillion(0)).toBe(0);
+  });
+
+  it('읽을 수 없는 값은 0 이 아니라 null 이다', () => {
+    for (const bad of ['', '   ', 'free', null, undefined, -1, Number.NaN, {}]) {
+      expect(toUsdPerMillion(bad)).toBeNull();
+    }
+  });
+});
+
+describe('calculateCost — 무료 모델은 아는 값 0 이다', () => {
+  const cost = (usage, options) => calculateCost(normalizeUsage(usage), options);
+
+  it('네 항목을 다 알면 $0 이고 경고가 없다', () => {
+    const result = cost(sdkUsage(), { model: FREE_MODEL });
+
+    expect(result.usd).toBe(0);
+    expect(result.usdAtLeast).toBe(0);
+    expect(result.known).toBe(true);
+    expect(result.warning).toBeNull();
+    expect(result.free).toBe(true);
+    expect(result.provider).toBe('openrouter');
+  });
+
+  it('토큰을 일부 몰라도 총액은 여전히 아는 값 0 이다 (단가가 0 이면 모르는 토큰도 0 원)', () => {
+    const result = cost({ input_tokens: 1_000 }, { model: FREE_MODEL });
+
+    expect(result.usd).toBe(0);
+    expect(result.known).toBe(true);
+    // 총액은 알지만 usage 가 덜 온 사실은 그대로 남긴다 — 다른 사실이다.
+    expect(result.warning).toBe('PARTIAL_USAGE');
+    expect(result.unknownFields.sort()).toEqual([
+      'cacheCreationTokens',
+      'cacheReadTokens',
+      'outputTokens',
+    ]);
+  });
+
+  it('usage 가 통째로 없어도 무료 모델의 총액은 0 이다', () => {
+    const result = cost(undefined, { model: FREE_MODEL });
+    expect(result.usd).toBe(0);
+    expect(result.known).toBe(true);
+    expect(result.warning).toBe('NO_USAGE');
+  });
+
+  it('Batch 배수를 걸어도 0 은 0 이다', () => {
+    expect(cost(sdkUsage(), { model: FREE_MODEL, batch: true }).usd).toBe(0);
+  });
+});
+
+describe('calculateCost — 무료가 아닌 OpenRouter 모델은 모름이다', () => {
+  const result = calculateCost(normalizeUsage(sdkUsage()), { model: PAID_OPENROUTER_MODEL });
+
+  it('0 으로 접지 않고 계산을 거부한다', () => {
+    expect(result.usd).toBeNull();
+    expect(result.usd).not.toBe(0);
+    expect(result.usdAtLeast).toBeNull();
+    expect(result.known).toBe(false);
+    expect(result.warning).toBe('UNKNOWN_MODEL');
+  });
+
+  it('무료가 아니라는 사실과 경로는 그래도 남긴다', () => {
+    expect(result.free).toBe(false);
+    expect(result.provider).toBe('openrouter');
+    expect(result.model).toBe(PAID_OPENROUTER_MODEL);
+  });
+});
+
+describe('calculateCost — Anthropic 계산은 한 푼도 바뀌지 않는다 (회귀)', () => {
+  it('네 항목 조합·Batch·하한이 확장 전 값 그대로다', () => {
+    const full = calculateCost(normalizeUsage(sdkUsage()), { model: MODEL });
+    expect(full.usd).toBe(0.035);
+    expect(full.usdAtLeast).toBe(0.035);
+    expect(full.known).toBe(true);
+    expect(full.warning).toBeNull();
+
+    const batch = calculateCost(normalizeUsage(sdkUsage()), { model: MODEL, batch: true });
+    expect(batch.usd).toBe(0.0175);
+
+    const partial = calculateCost(normalizeUsage({ input_tokens: 1_000, output_tokens: 500 }), {
+      model: MODEL,
+    });
+    expect(partial.usd).toBeNull();
+    expect(partial.usdAtLeast).toBe(0.0175);
+    expect(partial.warning).toBe('PARTIAL_USAGE');
+  });
+
+  it('유료 모델은 free 가 false 이고 경로는 anthropic 이다', () => {
+    const result = calculateCost(normalizeUsage(sdkUsage()), { model: MODEL });
+    expect(result.free).toBe(false);
+    expect(result.provider).toBe('anthropic');
+  });
+
+  it('모르는 Anthropic 모델은 여전히 거부한다 (무료 규칙이 새지 않는다)', () => {
+    const result = calculateCost(normalizeUsage(sdkUsage()), { model: 'claude-opus-6' });
+    expect(result.usd).toBeNull();
+    expect(result.warning).toBe('UNKNOWN_MODEL');
+    expect(result.free).toBe(false);
+  });
+
+  it('모델 id 를 읽을 수 없으면 경로도 모름이다', () => {
+    const result = calculateCost(normalizeUsage(sdkUsage()), { model: '' });
+    expect(result.warning).toBe('UNKNOWN_MODEL');
+    expect(result.provider).toBeNull();
+  });
+
+  it('호출부가 경로를 알려 주면 그 값을 쓴다 (추론보다 우선)', () => {
+    const result = calculateCost(normalizeUsage(sdkUsage()), {
+      model: MODEL,
+      provider: 'openrouter',
+    });
+    expect(result.provider).toBe('openrouter');
+    // 단가 판정은 여전히 모델 id 로만 한다 — 경로를 바꿔도 값이 흔들리지 않는다.
+    expect(result.usd).toBe(0.035);
+  });
+
+  it('계약 밖 경로 값은 무시하고 모델 id 로 추론한다', () => {
+    const result = calculateCost(normalizeUsage(sdkUsage()), { model: MODEL, provider: 'groq' });
+    expect(result.provider).toBe('anthropic');
   });
 });
