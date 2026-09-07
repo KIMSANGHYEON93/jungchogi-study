@@ -1,5 +1,11 @@
 // 프롬프트 **캐시 프리픽스** 회귀 테스트 (블루프린트 §5 Phase 5).
 //
+// ⚠️ **이 파일은 Anthropic 경로 전용이다.** 프롬프트 캐시는 Anthropic 에만 있고
+// (`supportsPromptCache`), `cache_control`·TTL·최소 캐시 가능 분량은 그 경로에서만
+// 뜻이 있다. 그래서 `AI_PROVIDER=anthropic` 으로 못 박고 SDK 를 모킹한다.
+// OpenRouter 경로에서도 지켜져야 하는 것(프리픽스 바이트 안정성·주입 방어 순서·
+// 골든 해시)은 `tests/prompt-openrouter.test.js` 가 따로 잡는다.
+//
 // 프롬프트 캐싱은 **프리픽스 매치**다. 고정 프리픽스의 한 바이트만 달라져도 그 뒤가
 // 전부 무효화되고, 그때 깨지는 것은 기능이 아니라 **비용**이다 — 화면은 멀쩡히
 // 동작하면서 `cache_read_input_tokens` 만 0 이 된다. 어떤 기존 테스트도 이걸 잡지 않는다.
@@ -47,6 +53,7 @@ const { buildVariantSystem, buildVariantRequests, estimateTokens } = await impor
 );
 const { resetRateLimits } = await import('../lib/ai/guard.js');
 const { resetClient } = await import('../lib/ai/client.js');
+const { resetProvider } = await import('../lib/ai/provider.js');
 const { clearContentCache, CACHE_PREFIX_FILE } = await import('../lib/ai/content.js');
 
 const FIXTURE_DIR = fileURLToPath(new URL('./fixtures/ai-data', import.meta.url));
@@ -120,6 +127,7 @@ function coldStart() {
   grade.resetGradeSystemBlocks();
   plan.resetPlanSystemBlocks();
   resetClient();
+  resetProvider();
 }
 
 /** tutor 를 한 번 호출하고 업스트림에 나간 요청 파라미터를 돌려준다 */
@@ -189,6 +197,7 @@ beforeEach(() => {
   vi.stubEnv('JUNGCHOGI_DATA_DIR', FIXTURE_DIR);
   vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
   vi.stubEnv('AI_ACCESS_CODE', '');
+  vi.stubEnv('AI_PROVIDER', 'anthropic');
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});

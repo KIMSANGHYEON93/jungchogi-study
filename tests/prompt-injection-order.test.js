@@ -46,6 +46,7 @@ const plan = await import('../api/ai/plan.js');
 const { buildVariantPrompt } = await import('../lib/ai/variants.js');
 const { resetRateLimits } = await import('../lib/ai/guard.js');
 const { resetClient } = await import('../lib/ai/client.js');
+const { resetProvider } = await import('../lib/ai/provider.js');
 const { clearContentCache } = await import('../lib/ai/content.js');
 
 const FIXTURE_DIR = fileURLToPath(new URL('./fixtures/ai-data', import.meta.url));
@@ -114,6 +115,7 @@ function coldStart() {
   grade.resetGradeSystemBlocks();
   plan.resetPlanSystemBlocks();
   resetClient();
+  resetProvider();
 }
 
 async function callTutor(body, ip = '203.0.113.11') {
@@ -145,6 +147,7 @@ beforeEach(() => {
   vi.stubEnv('JUNGCHOGI_DATA_DIR', FIXTURE_DIR);
   vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
   vi.stubEnv('AI_ACCESS_CODE', '');
+  vi.stubEnv('AI_PROVIDER', 'anthropic');
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
