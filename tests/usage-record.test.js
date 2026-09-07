@@ -4,9 +4,12 @@
 // 공유한다. 임의로 필드를 늘리거나 이름을 바꾸면 세 곳이 한꺼번에 어긋나므로
 // 여기서 **키 집합 자체**를 못 박는다.
 //
-//   { ts, endpoint, model, effort,
+//   { ts, endpoint, model, provider, effort,
 //     inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens,
 //     costUsd, latencyMs, ok, errorCode }
+//
+// `provider` 는 2026-09-07(무료 라우팅 전환)에 **더한** 항목이다. 기존 열둘은 이름도 뜻도
+// 그대로다 — 프론트 원장은 화이트리스트로 읽어 모르는 항목을 버리므로 더하기만 하면 안전하다.
 //
 // 그리고 하나 더 — **개인 학습 데이터는 여기에 들어오지 못한다.**
 // 기록은 열거된 항목만으로 조립되므로 답안·문항 내용은 구조적으로 새어 나갈 수 없다.
@@ -43,7 +46,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('buildUsageRecord — 계약된 열두 필드', () => {
+describe('buildUsageRecord — 계약된 열세 필드', () => {
   it('계약 그대로의 기록을 만든다', () => {
     const { record } = buildUsageRecord(args());
 
@@ -51,6 +54,7 @@ describe('buildUsageRecord — 계약된 열두 필드', () => {
       ts: '2026-09-04T12:00:00.000Z',
       endpoint: 'tutor',
       model: 'claude-opus-5',
+      provider: 'anthropic',
       effort: 'low',
       inputTokens: 1_000,
       outputTokens: 500,
@@ -302,5 +306,166 @@ describe('toCostPayload — 응답에 싣는 cost 객체', () => {
 
     expect(serialized).not.toContain('quiz100');
     expect(serialized).not.toContain('정규화');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// provider — 어느 경로로 나간 호출인가 (2026-09-07 · 무료 라우팅 전환)
+//
+// 기록에 모델만 있으면 나중에 로그를 볼 때 그 호출이 Anthropic 으로 갔는지
+// OpenRouter 로 갔는지 알 수 없다. 비용이 0 인 호출이 섞이기 시작하면 그 구분이
+// 곧 "왜 이 호출은 공짜인가" 의 답이 된다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FREE_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+const PAID_OPENROUTER_MODEL = 'deepseek/deepseek-chat';
+
+describe('buildUsageRecord — 프로바이더를 기록에 남긴다', () => {
+  it('계약 항목이 열둘에서 열셋으로 늘었고, 기존 열둘은 이름 그대로다', () => {
+    // 더하기만 한다 — 이름을 바꾸거나 빼면 프론트 원장·서버 로그·리포트가 한꺼번에 어긋난다.
+    expect(USAGE_RECORD_FIELDS).toContain('provider');
+    expect(USAGE_RECORD_FIELDS).toHaveLength(13);
+    expect([
+      'ts',
+      'endpoint',
+      'model',
+      'effort',
+      'inputTokens',
+      'outputTokens',
+      'cacheReadTokens',
+      'cacheCreationTokens',
+      'costUsd',
+      'latencyMs',
+      'ok',
+      'errorCode',
+    ].every((field) => USAGE_RECORD_FIELDS.includes(field))).toBe(true);
+  });
+
+  it('Anthropic 모델은 anthropic 으로 남는다', () => {
+    expect(buildUsageRecord(args()).record.provider).toBe('anthropic');
+  });
+
+  it('OpenRouter 모델은 openrouter 로 남는다 (무료·유료 모두)', () => {
+    expect(buildUsageRecord(args({ model: FREE_MODEL })).record.provider).toBe('openrouter');
+    expect(buildUsageRecord(args({ model: PAID_OPENROUTER_MODEL })).record.provider).toBe(
+      'openrouter'
+    );
+  });
+
+  it('호출부가 경로를 알려 주면 그 값을 쓴다', () => {
+    const { record } = buildUsageRecord(args({ model: 'claude-opus-5', provider: 'openrouter' }));
+    expect(record.provider).toBe('openrouter');
+    // 단가는 여전히 모델 id 로 판정한다 — 경로를 바꿔도 비용이 흔들리지 않는다.
+    expect(record.costUsd).toBe(0.035);
+  });
+
+  it('계약 밖 경로 값은 모델 id 로 되돌린다', () => {
+    for (const bad of ['groq', '', null, 7]) {
+      expect(buildUsageRecord(args({ provider: bad })).record.provider).toBe('anthropic');
+    }
+  });
+
+  it('모델 id 를 읽을 수 없으면 경로도 모름(null)이다', () => {
+    expect(buildUsageRecord(args({ model: '' })).record.provider).toBeNull();
+    expect(buildUsageRecord(args({ model: undefined })).record.provider).toBe('anthropic');
+  });
+
+  it('기록의 키 집합은 여전히 계약 목록과 정확히 같다', () => {
+    for (const model of [FREE_MODEL, PAID_OPENROUTER_MODEL, '']) {
+      const { record } = buildUsageRecord(args({ model }));
+      expect(Object.keys(record).sort()).toEqual([...USAGE_RECORD_FIELDS].sort());
+    }
+  });
+});
+
+describe('buildUsageRecord — 무료 모델 기록', () => {
+  it('비용을 0 으로 기록한다 (null 이 아니다)', () => {
+    const { record, cost } = buildUsageRecord(args({ model: FREE_MODEL }));
+
+    expect(record.costUsd).toBe(0);
+    expect(record.provider).toBe('openrouter');
+    expect(cost.known).toBe(true);
+    expect(cost.free).toBe(true);
+    expect(cost.warning).toBeNull();
+  });
+
+  it('usage 를 못 받아도 0 이다 — 모르는 토큰도 무료는 무료다', () => {
+    const { record, cost } = buildUsageRecord(args({ model: FREE_MODEL, usage: undefined }));
+
+    expect(record.costUsd).toBe(0);
+    expect(record.inputTokens).toBeNull(); // 토큰은 여전히 "모름" 이다
+    expect(cost.warning).toBe('NO_USAGE');
+    expect(cost.known).toBe(true);
+  });
+
+  it('토큰은 그대로 남는다 (한도 소진을 세려면 호출 수와 토큰이 필요하다)', () => {
+    const { record } = buildUsageRecord(args({ model: FREE_MODEL }));
+    expect(record.inputTokens).toBe(1_000);
+    expect(record.outputTokens).toBe(500);
+  });
+});
+
+describe('buildUsageRecord — 유료 OpenRouter 모델 기록', () => {
+  it('비용을 0 이 아니라 null 로 남긴다', () => {
+    const { record, cost } = buildUsageRecord(args({ model: PAID_OPENROUTER_MODEL }));
+
+    expect(record.costUsd).toBeNull();
+    expect(record.costUsd).not.toBe(0);
+    expect(cost.warning).toBe('UNKNOWN_MODEL');
+    expect(cost.free).toBe(false);
+  });
+});
+
+describe('logUsage — 모르는 모델 경고는 경로에 맞는 길을 가리킨다', () => {
+  it('OpenRouter 모델이면 단가를 어디서 가져오는지 알려 준다', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { record, cost } = buildUsageRecord(args({ model: PAID_OPENROUTER_MODEL }));
+
+    logUsage(record, cost);
+
+    const message = warn.mock.calls[0][0];
+    expect(message).toContain(PAID_OPENROUTER_MODEL);
+    expect(message).toContain('openrouter.ai/api/v1/models');
+  });
+
+  it('무료 모델은 경고 없이 지나간다 (비용이 0 인 것을 안다)', () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { record, cost } = buildUsageRecord(args({ model: FREE_MODEL }));
+
+    logUsage(record, cost);
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('toCostPayload — 경로와 무료 여부도 함께 싣는다', () => {
+  it('provider 와 free 가 payload 에 있다', () => {
+    const { record, cost } = buildUsageRecord(args({ model: FREE_MODEL }));
+    const payload = toCostPayload(record, cost);
+
+    expect(payload.provider).toBe('openrouter');
+    expect(payload.free).toBe(true);
+    expect(payload.costUsd).toBe(0);
+    expect(payload.usd).toBe(0);
+  });
+
+  it('Anthropic 호출의 payload 값은 확장 전과 같다 (회귀)', () => {
+    const { record, cost } = buildUsageRecord(args());
+    const payload = toCostPayload(record, cost);
+
+    expect(payload).toMatchObject({
+      usd: 0.035,
+      costUsd: 0.035,
+      usdAtLeast: 0.035,
+      known: true,
+      unknownFields: [],
+      batch: false,
+      pricingAsOf: '2026-06',
+      warning: null,
+      provider: 'anthropic',
+      free: false,
+    });
   });
 });
