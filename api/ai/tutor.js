@@ -13,19 +13,20 @@
 //           스트림이 시작된 뒤의 오류는 SSE 프레임으로:
 //             data: {"error":{"code":"UPSTREAM","message":"..."}}\n\n
 //
+// 업스트림은 `lib/ai/provider.js` 가 고른다 (Anthropic | OpenRouter). **이 계약은
+// 어느 쪽으로 나가든 같다** — `usage` 의 이름까지 포함해서. 프론트엔드
+// (`AiExplainPanel`)가 `usage.input_tokens` 를 직접 읽으므로 토큰 이름은
+// `toWireUsage` 가 한 벌로 맞춘다. 여섯 조합은 `tests/ai-provider-contract.test.js`.
+//
 // Vercel Functions 는 이름이 HTTP 메서드인 export(웹 핸들러)를 보면
 // Node 런타임을 **스트리밍 모드**로 돌린다 (`packages/node` 의 `hasWebHandlers`).
 // 그래서 `export default (req, res)` 대신 `export function POST(request)` 로 쓰고
 // 본문이 `ReadableStream` 인 `Response` 를 돌려주면 그대로 흘러나간다.
 // 함수 실행 시간·`public/data` 번들 포함은 `vercel.json` 의 `functions` 항목 참조.
 
-import {
-  streamTutorMessage,
-  classifyUpstreamError,
-  hasApiKey,
-  MODEL,
-  TUTOR_EFFORT,
-} from '../../lib/ai/client.js';
+import { getProvider } from '../../lib/ai/provider.js';
+import { TUTOR_EFFORT, TUTOR_MAX_TOKENS } from '../../lib/ai/client.js';
+import { toWireUsage } from '../../lib/ai/providers/usage.js';
 import {
   jsonError,
   getClientIp,
@@ -89,13 +90,15 @@ let cachedSystemBlocks = null;
 function buildSystemBlocks() {
   if (cachedSystemBlocks) return cachedSystemBlocks;
 
-  const blocks = [{ type: 'text', text: SYSTEM_PROMPT }];
+  const blocks = [{ text: SYSTEM_PROMPT }];
   const overview = readDataFile(CACHE_PREFIX_FILE);
   if (overview) {
-    blocks.push({ type: 'text', text: `# 교재 총론\n\n${overview}` });
+    blocks.push({ text: `# 교재 총론\n\n${overview}` });
   }
-  // 마지막 고정 블록에 캐시 breakpoint. 가변 내용은 이 뒤(messages)에만 둔다.
-  blocks.at(-1).cache_control = { type: 'ephemeral', ttl: '1h' };
+  // 마지막 고정 블록에 캐시 breakpoint 를 **요청한다**. 실제로 거는지는 프로바이더가 정한다
+  // (Anthropic 은 마지막 cacheable 블록에 `cache_control` 을 얹고, OpenRouter 는
+  // 프롬프트 캐시가 없어 무시한다). 가변 내용은 이 뒤(messages)에만 둔다.
+  blocks.at(-1).cacheable = true;
 
   cachedSystemBlocks = blocks;
   return blocks;
@@ -209,47 +212,53 @@ export async function POST(request) {
     return jsonError('BAD_REQUEST', `${source} 에 id ${id} 인 문항이 없습니다.`);
   }
 
-  if (!hasApiKey()) {
-    console.error('[ai/tutor] ANTHROPIC_API_KEY 가 설정되지 않았습니다.');
+  // 5) 프로바이더 선택. `AI_PROVIDER` 가 아는 값이 아니면 여기서 던진다 —
+  //    조용히 다른 경로로 나가면 무료로 돌리려던 요청이 유료 키로 나가도 화면은 같다.
+  let provider;
+  try {
+    provider = getProvider();
+  } catch (error) {
+    console.error('[ai/tutor] 프로바이더 설정이 잘못되었습니다.', error);
     return jsonError('UPSTREAM', 'AI 기능이 설정되지 않았습니다.', { retryable: false });
   }
 
-  // 5) 프롬프트 구성 — 고정 프리픽스는 system, 가변 내용은 messages
+  if (!provider.hasKey()) {
+    console.error(`[ai/tutor] ${provider.name} 자격증명이 설정되지 않았습니다.`);
+    return jsonError('UPSTREAM', 'AI 기능이 설정되지 않았습니다.', { retryable: false });
+  }
+
+  // 6) 프롬프트 구성 — 고정 프리픽스는 system, 가변 내용은 messages
   const sections = findRelatedSections(buildSearchQuery(problem), {
     limit: RELATED_SECTION_LIMIT,
   });
   const messages = buildMessages(buildProblemPrompt(problem, sections, userAnswer), history);
 
-  // 6) 스트림을 열고 **첫 이벤트까지만** 먼저 받아 본다.
+  // 7) 스트림을 열고 **첫 이벤트까지만** 먼저 받아 본다.
   //    여기서 실패하면 아직 아무것도 안 보냈으므로 계약대로 JSON 오류로 내려갈 수 있다.
   //    (헤더를 내보낸 뒤에는 상태코드를 되돌릴 수 없다)
+  //    두 프로바이더 모두 `streamText` 가 async generator 라 **첫 `next()` 에서야**
+  //    요청이 나간다 — 그래서 이 패턴이 프로바이더와 무관하게 그대로 성립한다.
   //
   //    이 시점부터 지연을 잰다 — 게이트·문항 로드가 아니라 **업스트림 호출**의 시간이다.
   const startedAt = Date.now();
 
   /**
-   * 스트림이 흘리는 usage 를 누적한다.
+   * 마지막 `done` 이벤트로 받은 usage.
    *
-   * `message_start` 에 입력·캐시 토큰이, `message_delta` 에 누적 출력 토큰이 실려 온다.
-   * 중간에 끊기면 출력만 모르는 상태가 되는데, 그 "모름" 을 0 으로 때우지 않으려면
-   * 본 것과 못 본 것을 나눠 들고 있어야 한다.
+   * ⚠️ 스트림이 **도중에 끊기면 usage 를 모른다.** 프로바이더 계약은 스트림 중간에
+   * 토큰 수를 흘리지 않기 때문이다 (OpenRouter 도 마지막 청크에만 싣는다). 예전
+   * Anthropic 전용 경로는 `message_start` 로 입력 토큰을 먼저 볼 수 있었는데 그건
+   * 이 계약 밖의 사실이었다. 모르는 것을 0 으로 때우지 않는다는 규칙(`lib/ai/usage.js`)
+   * 그대로, 실패한 요청은 토큰을 전부 null 로 기록한다.
    */
-  let observed = null;
-  const observeUsage = (event) => {
-    const chunk =
-      event?.type === 'message_start'
-        ? event.message?.usage
-        : event?.type === 'message_delta'
-          ? event.usage
-          : null;
-    if (chunk && typeof chunk === 'object') observed = { ...(observed ?? {}), ...chunk };
-  };
+  let usage = null;
 
   /** 요청 하나에 사용 기록 한 줄. 성공·실패 어느 쪽으로 끝나도 정확히 한 번 부른다. */
-  const record = ({ usage, ok, errorCode }) => {
+  const record = ({ ok, errorCode }) => {
     const built = buildUsageRecord({
       endpoint: 'tutor',
-      model: MODEL,
+      model: provider.model,
+      provider: provider.name,
       effort: TUTOR_EFFORT,
       usage,
       latencyMs: Date.now() - startedAt,
@@ -263,47 +272,47 @@ export async function POST(request) {
 
   let iterator;
   let firstEvent;
-  let stream;
   try {
-    stream = streamTutorMessage({ system: buildSystemBlocks(), messages });
+    const stream = provider.streamText({
+      system: buildSystemBlocks(),
+      messages,
+      maxTokens: TUTOR_MAX_TOKENS,
+      effort: TUTOR_EFFORT,
+    });
     iterator = stream[Symbol.asyncIterator]();
     firstEvent = await iterator.next();
   } catch (error) {
-    const failure = classifyUpstreamError(error);
+    const failure = provider.classifyError(error);
     console.error('[ai/tutor] 스트림 시작 실패', failure.status, error);
-    record({ usage: observed, ok: false, errorCode: failure.code });
+    record({ ok: false, errorCode: failure.code });
     return jsonError(failure.code, failure.message, { retryable: failure.retryable });
   }
 
-  // 7) 나머지는 SSE 로 흘린다. 이 뒤의 오류는 SSE 프레임으로만 알릴 수 있다.
+  // 8) 나머지는 SSE 로 흘린다. 이 뒤의 오류는 SSE 프레임으로만 알릴 수 있다.
   const body = new ReadableStream({
     async start(controller) {
-      const emitText = (event) => {
-        observeUsage(event);
-        if (event?.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
-          controller.enqueue(sseFrame({ delta: event.delta.text }));
-        }
+      const emit = (event) => {
+        if (event?.type === 'text') controller.enqueue(sseFrame({ delta: event.text }));
+        else if (event?.type === 'done') usage = event.usage;
       };
 
       try {
-        if (!firstEvent.done) emitText(firstEvent.value);
+        if (!firstEvent.done) emit(firstEvent.value);
         for (;;) {
           const next = await iterator.next();
           if (next.done) break;
-          emitText(next.value);
+          emit(next.value);
         }
-        const final = await stream.finalMessage();
         console.log(
-          `[ai/tutor] ${source}/${id} usage=${JSON.stringify(final.usage ?? {})} stop=${final.stop_reason ?? ''}`
+          `[ai/tutor] ${source}/${id} provider=${provider.name} usage=${JSON.stringify(usage ?? {})}`
         );
-        const cost = record({ usage: final.usage, ok: true, errorCode: null });
+        const cost = record({ ok: true, errorCode: null });
         // 기존 필드는 그대로 두고 cost 만 **더한다** (프론트가 이미 usage 를 읽는다).
-        controller.enqueue(sseFrame({ done: true, usage: final.usage, cost }));
+        controller.enqueue(sseFrame({ done: true, usage: toWireUsage(usage), cost }));
       } catch (error) {
-        const failure = classifyUpstreamError(error);
+        const failure = provider.classifyError(error);
         console.error('[ai/tutor] 스트림 도중 실패', failure.status, error);
-        // 끊겼어도 그때까지 본 토큰은 기록한다 — 실패한 요청에도 돈이 나간다.
-        record({ usage: observed, ok: false, errorCode: failure.code });
+        record({ ok: false, errorCode: failure.code });
         controller.enqueue(
           sseFrame({
             error: { code: failure.code, message: failure.message, retryable: failure.retryable },

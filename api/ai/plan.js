@@ -13,17 +13,19 @@
 //             401 UNAUTHORIZED / 429 RATE_LIMITED / 400 BAD_REQUEST / 502 UPSTREAM
 //           스트림 시작 **후** → SSE 프레임 data: {"error":{...}}\n\n
 //
+// 업스트림은 `lib/ai/provider.js` 가 고른다 (Anthropic | OpenRouter). **이 계약은
+// 어느 쪽으로 나가든 같다** — 도구 진행 프레임의 순서까지 포함해서. 두 프로바이더가
+// 각자의 루프 안에서 같은 자리에 도구 이벤트를 발행하고, 여기서 `phase` 계약으로
+// 옮긴다. 여섯 조합은 `tests/ai-provider-contract.test.js`.
+//
 // `export function POST(request)` 형태여야 Vercel Node 런타임이 스트리밍 모드로 돈다
 // (`export default (req,res)` 면 응답이 전량 버퍼링돼 SSE 가 몰려 나간다).
 // 함수 실행 시간(maxDuration 60)·`public/data` 번들 포함은 `vercel.json` 참조.
 
-import {
-  runPlanner,
-  classifyUpstreamError,
-  hasApiKey,
-  MODEL,
-  PLAN_EFFORT,
-} from '../../lib/ai/client.js';
+import { getProvider } from '../../lib/ai/provider.js';
+import { PLAN_EFFORT, PLAN_MAX_TOKENS } from '../../lib/ai/client.js';
+import { toWireUsage } from '../../lib/ai/providers/usage.js';
+import { extractJsonObject } from '../../lib/ai/providers/json.js';
 import {
   jsonError,
   getClientIp,
@@ -142,12 +144,14 @@ let cachedSystemBlocks = null;
 function buildSystemBlocks() {
   if (cachedSystemBlocks) return cachedSystemBlocks;
 
-  const blocks = [{ type: 'text', text: SYSTEM_PROMPT }];
+  const blocks = [{ text: SYSTEM_PROMPT }];
   const overview = readDataFile(CACHE_PREFIX_FILE);
   if (overview) {
-    blocks.push({ type: 'text', text: `# 교재 총론\n\n${overview}` });
+    blocks.push({ text: `# 교재 총론\n\n${overview}` });
   }
-  blocks.at(-1).cache_control = { type: 'ephemeral', ttl: '1h' };
+  // 캐시 breakpoint 를 **요청한다**. 실제로 거는지는 프로바이더가 정한다
+  // (Anthropic 은 `cache_control` 을 얹고, OpenRouter 는 캐시가 없어 무시한다).
+  blocks.at(-1).cacheable = true;
 
   cachedSystemBlocks = blocks;
   return blocks;
@@ -219,30 +223,30 @@ function buildPlanPrompt(snapshot, today) {
 }
 
 /**
- * 최종 메시지에서 계획 JSON 을 꺼낸다.
+ * 도구 루프의 최종 결과에서 계획 JSON 을 꺼낸다.
  *
  * 구조화 출력이 형태를 보장하지만, 정책 폴백·max_tokens 절단·구조화 출력 미적용 같은
  * 경로에서는 스키마를 벗어난 응답이 올 수 있다. 계약을 어긴 응답을 그대로
  * 프론트엔드에 흘리면 화면이 깨지므로 여기서 한 번 더 확인한다.
- * @param {object|null} message
+ *
+ * `data` 가 null 이면 `text` 에서 파싱한다 — OpenRouter 의 무료 모델은 엄격 스키마를
+ * 못 거는 일이 잦아 그쪽에서는 이 경로가 주 경로다.
+ * @param {{data: object|null, text: string}} result 프로바이더 `runToolLoop` 결과
  * @returns {{ok: true, plan: object} | {ok: false, reason: string}}
  */
-export function extractPlan(message) {
-  const text = (message?.content ?? [])
-    .filter((block) => block?.type === 'text')
-    .map((block) => block.text)
-    .join('')
-    .trim();
+export function extractPlan(result) {
+  let plan = result?.data ?? null;
 
-  if (!text) {
-    return { ok: false, reason: '모델이 계획 대신 도구 호출만 남기고 끝냈습니다.' };
-  }
+  if (plan === null || typeof plan !== 'object') {
+    const text = typeof result?.text === 'string' ? result.text.trim() : '';
 
-  let plan;
-  try {
-    plan = JSON.parse(text);
-  } catch {
-    return { ok: false, reason: '모델 응답이 JSON 이 아닙니다.' };
+    if (!text) {
+      return { ok: false, reason: '모델이 계획 대신 도구 호출만 남기고 끝냈습니다.' };
+    }
+
+    // 코드펜스·머리말이 섞여 와도 건질 수 있는 만큼 건진다 (`grade` 와 같은 규칙).
+    plan = extractJsonObject(text);
+    if (plan === null) return { ok: false, reason: '모델 응답이 JSON 이 아닙니다.' };
   }
 
   const valid =
@@ -307,12 +311,22 @@ export async function POST(request) {
   if (!validated.ok) return jsonError(validated.code, validated.message);
   const { snapshot } = validated.value;
 
-  if (!hasApiKey()) {
-    console.error('[ai/plan] ANTHROPIC_API_KEY 가 설정되지 않았습니다.');
+  // 4) 프로바이더 선택. `AI_PROVIDER` 가 아는 값이 아니면 여기서 던진다 —
+  //    조용히 다른 경로로 나가면 무료로 돌리려던 요청이 유료 키로 나가도 화면은 같다.
+  let provider;
+  try {
+    provider = getProvider();
+  } catch (error) {
+    console.error('[ai/plan] 프로바이더 설정이 잘못되었습니다.', error);
     return jsonError('UPSTREAM', 'AI 기능이 설정되지 않았습니다.', { retryable: false });
   }
 
-  // 4) 도구 준비. 기준 시각은 여기서 한 번만 읽는다 —
+  if (!provider.hasKey()) {
+    console.error(`[ai/plan] ${provider.name} 자격증명이 설정되지 않았습니다.`);
+    return jsonError('UPSTREAM', 'AI 기능이 설정되지 않았습니다.', { retryable: false });
+  }
+
+  // 5) 도구 준비. 기준 시각은 여기서 한 번만 읽는다 —
   //    한 요청 안에서 시각이 흘러 간격 반복 판정이 달라지지 않게.
   const now = Date.now();
   const today = todayInSeoul(now);
@@ -325,7 +339,50 @@ export async function POST(request) {
     else pending.push(payload);
   };
 
-  const { tools, stats } = createPlannerTools({ snapshot, now, onEvent: push });
+  const { tools } = createPlannerTools({ snapshot, now });
+
+  /**
+   * 도구를 프로바이더 계약 형태로 옮긴다.
+   *
+   * `createPlannerTools` 는 SDK Tool Runner 형태(`input_schema`·`strict`)로 만들지만
+   * 계약이 요구하는 것은 `{name, description, parameters, run}` 넷이다. 실행 래퍼
+   * (진행 이벤트·예외 흡수)는 이미 `run` 안에 들어 있고, 호출 상한과 진행 이벤트는
+   * **프로바이더의 루프가** 맡는다 — 두 프로바이더가 같은 자리에서 같은 순서로
+   * 발행해야 화면이 프로바이더를 몰라도 되기 때문이다.
+   */
+  const providerTools = tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.input_schema,
+    run: tool.run,
+  }));
+
+  /** 도구 호출 시도 수 — 실행된 수(`toolCalls`)와의 차이가 상한에 걸려 거절된 수다 */
+  let toolAttempts = 0;
+  let sawEvent = false;
+  let markEvent = () => {};
+  /** 첫 진행 이벤트가 나면 풀린다. 이게 곧 "스트림을 열어야 한다" 는 신호다. */
+  const firstEvent = new Promise((resolve) => {
+    markEvent = resolve;
+  });
+
+  /**
+   * 프로바이더의 도구 이벤트를 SSE 계약(`phase`)으로 옮긴다.
+   * 이름이 다른 이유는 계약이 갈리기 때문이다 — 프로바이더는 `{type, name}`,
+   * 프론트엔드는 `{phase, tool}` 을 읽는다 (`src/domain/studyPlan.js`).
+   */
+  const onEvent = (event) => {
+    if (event?.type === 'tool') {
+      toolAttempts += 1;
+      push({ phase: 'tool', tool: event.name, input: event.input });
+    } else if (event?.type === 'tool_result') {
+      push({ phase: 'tool_result', tool: event.name, ok: event.ok });
+    } else {
+      return;
+    }
+    sawEvent = true;
+    markEvent();
+  };
 
   //    지연은 **업스트림 호출**부터 잰다 (게이트·검증 시간이 아니라).
   const startedAt = Date.now();
@@ -334,7 +391,8 @@ export async function POST(request) {
   const record = ({ usage, ok, errorCode }) => {
     const built = buildUsageRecord({
       endpoint: 'plan',
-      model: MODEL,
+      model: provider.model,
+      provider: provider.name,
       effort: PLAN_EFFORT,
       usage,
       latencyMs: Date.now() - startedAt,
@@ -346,54 +404,63 @@ export async function POST(request) {
     return toCostPayload(built.record, built.cost);
   };
 
-  // 5) 러너를 만들고 **첫 턴이 끝날 때까지** 기다린다.
-  //    여기서 실패하면 아직 아무것도 안 보냈으므로 계약대로 JSON 오류로 내려갈 수 있다
-  //    (헤더를 내보낸 뒤에는 상태코드를 되돌릴 수 없다).
-  let runner;
-  let iterator;
-  try {
-    runner = runPlanner({
+  // 6) 도구 루프를 돌린다. 계약상 이건 **한 덩어리 Promise** 라 "첫 턴만" 기다릴 수 없다.
+  //    그래서 둘 중 먼저 오는 것을 기다린다:
+  //      · 첫 진행 이벤트 → 화면에 보여줄 것이 생겼다는 뜻이니 스트림을 연다.
+  //        이 뒤의 실패는 계약대로 SSE 프레임으로만 알릴 수 있다.
+  //      · 루프의 종료 → 아직 아무것도 안 보냈으므로 실패면 JSON 오류로 내려갈 수 있다
+  //        (헤더를 내보낸 뒤에는 상태코드를 되돌릴 수 없다).
+  //    "업스트림 첫 요청이 거절당하면 JSON" 이라는 기존 판정과 결과가 같다 — 그 실패는
+  //    도구를 부르기 전에 나므로 이벤트가 하나도 없는 상태에서 루프가 끝난다.
+  const loop = provider
+    .runToolLoop({
       system: buildSystemBlocks(),
       messages: [{ role: 'user', content: buildPlanPrompt(snapshot, today) }],
-      tools,
+      tools: providerTools,
+      maxToolCalls: MAX_TOOL_CALLS,
       schema: PLAN_SCHEMA,
-    });
-    iterator = runner[Symbol.asyncIterator]();
-    const first = await iterator.next();
-    if (!first.done) await first.value.finalMessage();
-  } catch (error) {
-    const failure = classifyUpstreamError(error);
-    console.error('[ai/plan] 첫 턴 실패', failure.status, error);
+      schemaName: 'plan',
+      maxTokens: PLAN_MAX_TOKENS,
+      effort: PLAN_EFFORT,
+      onEvent,
+    })
+    .then(
+      (result) => ({ ok: true, result }),
+      (error) => ({ ok: false, error })
+    );
+
+  const settled = await Promise.race([loop, firstEvent.then(() => null)]);
+
+  if (settled !== null && !settled.ok && !sawEvent) {
+    const failure = provider.classifyError(settled.error);
+    console.error('[ai/plan] 도구 루프 시작 실패', failure.status, settled.error);
     record({ usage: null, ok: false, errorCode: failure.code });
     return jsonError(failure.code, failure.message, { retryable: failure.retryable });
   }
 
-  // 6) 나머지는 SSE 로 흘린다. 이 뒤의 오류는 SSE 프레임으로만 알릴 수 있다.
+  // 7) 나머지는 SSE 로 흘린다. 이 뒤의 오류는 SSE 프레임으로만 알릴 수 있다.
   const body = new ReadableStream({
     async start(streamController) {
       controller = streamController;
       for (const payload of pending.splice(0)) controller.enqueue(sseFrame(payload));
 
       try {
-        // 남은 턴을 끝까지 돌린다. 도구 실행은 러너가 next() 안에서 하고,
+        // 남은 턴을 끝까지 기다린다. 도구 실행은 프로바이더의 루프가 하고,
         // 그때 발행되는 진행 이벤트가 위 push 로 곧바로 프레임이 된다.
-        for (;;) {
-          const next = await iterator.next();
-          if (next.done) break;
-          await next.value.finalMessage();
-        }
+        const outcome = await loop;
+        if (!outcome.ok) throw outcome.error;
+        const final = outcome.result;
 
-        const final = await runner.done();
         console.log(
-          `[ai/plan] tools=${stats.calls}/${MAX_TOOL_CALLS} refused=${stats.refused} ` +
-            `usage=${JSON.stringify(final?.usage ?? {})} stop=${final?.stop_reason ?? ''}`
+          `[ai/plan] provider=${provider.name} tools=${final.toolCalls}/${MAX_TOOL_CALLS} ` +
+            `refused=${toolAttempts - final.toolCalls} usage=${JSON.stringify(final.usage ?? {})}`
         );
 
         // 계획 추출 결과가 나온 뒤에 기록한다 — 토큰은 썼지만 계획을 못 낸 요청은
         // ok:false 다. 순서를 바꾸면 실패를 성공으로 세게 된다.
         const extracted = extractPlan(final);
         const cost = record({
-          usage: final?.usage,
+          usage: final.usage,
           ok: extracted.ok,
           errorCode: extracted.ok ? null : 'UPSTREAM',
         });
@@ -414,10 +481,10 @@ export async function POST(request) {
 
         // 기존 필드는 그대로 두고 cost 만 **더한다** (프론트가 이미 plan·usage 를 읽는다).
         controller.enqueue(
-          sseFrame({ done: true, plan: extracted.plan, usage: final?.usage, cost })
+          sseFrame({ done: true, plan: extracted.plan, usage: toWireUsage(final.usage), cost })
         );
       } catch (error) {
-        const failure = classifyUpstreamError(error);
+        const failure = provider.classifyError(error);
         console.error('[ai/plan] 스트림 도중 실패', failure.status, error);
         // 끊겼어도 기록은 남긴다 — 실패한 요청에도 토큰이 나갔을 수 있다.
         record({ usage: null, ok: false, errorCode: failure.code });

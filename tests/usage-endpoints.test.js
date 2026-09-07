@@ -267,12 +267,16 @@ describe('사용 기록 — 세 엔드포인트 공통', () => {
       expect(record.ok).toBe(true);
       expect(record.errorCode).toBeNull();
       expect(record.model).toBe('claude-opus-5');
+      expect(record.provider).toBe('anthropic'); // 어느 경로로 나갔는지도 기록에 남는다
       expect(record.effort).toBe(effort);
     });
 
-    it(`${name}: 기록은 계약된 열두 필드만 갖는다`, async () => {
+    // 2026-09-07 에 `provider` 가 더해져 열둘에서 열셋이 됐다. 단언은 처음부터
+    // `USAGE_RECORD_FIELDS` 를 그대로 비교하고 있어 통과했지만 이름이 낡아 있었다.
+    it(`${name}: 기록은 계약된 열세 필드만 갖는다`, async () => {
       await run();
       expect(Object.keys(onlyUsageRecord()).sort()).toEqual([...USAGE_RECORD_FIELDS].sort());
+      expect(USAGE_RECORD_FIELDS).toHaveLength(13);
     });
 
     it(`${name}: 토큰과 비용을 실제 usage 로 채운다`, async () => {
@@ -332,7 +336,18 @@ describe('오답 해설 — 응답 계약', () => {
     expect(record.costUsd).toBeNull();
   });
 
-  it('스트림 도중 끊기면 그때까지 받은 토큰만 기록하고 총액은 null 이다', async () => {
+  // ⚠️ 2026-09-07 프로바이더 계층으로 옮기면서 **약해진 지점** (의도한 손실).
+  //
+  //   예전 Anthropic 전용 경로는 `message_start` 의 usage 를 엿볼 수 있어 끊긴
+  //   스트림에서도 입력·캐시 토큰을 살렸다. 프로바이더 계약(`lib/ai/provider.js`)의
+  //   `streamText` 는 `{type:'text'}` 와 마지막 `{type:'done', usage}` 만 흘린다 —
+  //   OpenRouter 도 `stream_options.include_usage` 로 **마지막 청크에만** 싣기 때문에
+  //   "스트림 도중의 토큰 수" 는 두 경로가 공유할 수 있는 사실이 아니다.
+  //
+  //   그래서 끊긴 요청은 이제 토큰을 전부 "모름" 으로 남긴다. 0 으로 때우지 않는다는
+  //   규칙은 그대로다 — 기록은 `warning: 'NO_USAGE'` 로 남아 리포트에서 구분된다.
+  //   되살리려면 계약에 중간 usage 이벤트를 더해야 하고, 그건 프로바이더 계층의 일이다.
+  it('스트림 도중 끊기면 토큰을 모름으로 남기고 총액도 내지 않는다', async () => {
     streamMock.mockImplementation(() => fakeTutorStream({ failAfter: 2 }));
 
     await (await tutor.POST(tutorRequest())).text();
@@ -340,9 +355,11 @@ describe('오답 해설 — 응답 계약', () => {
 
     expect(record.ok).toBe(false);
     expect(record.errorCode).toBe('UPSTREAM');
-    expect(record.inputTokens).toBe(1_000); // message_start 로 받은 값은 살린다
-    expect(record.outputTokens).toBeNull(); // 출력은 못 봤다
-    expect(record.costUsd).toBeNull(); // 모르는 항목이 있으면 총액을 내지 않는다
+    // 끝까지 못 갔으므로 done 이벤트가 없다 → 네 항목 모두 모름이다 (0 이 아니다)
+    expect(record.inputTokens).toBeNull();
+    expect(record.outputTokens).toBeNull();
+    expect(record.cacheReadTokens).toBeNull();
+    expect(record.costUsd).toBeNull();
   });
 });
 
@@ -463,7 +480,7 @@ describe('응답의 cost 는 프론트 원장이 그대로 저장할 수 있는 
   // 비용만 보내면 원장의 토큰 항목이 전부 0 이 되므로 기록을 통째로 싣는다.
   const contractFields = [...USAGE_RECORD_FIELDS];
 
-  it('tutor done 프레임의 cost 가 계약된 열두 필드를 갖는다', async () => {
+  it('tutor done 프레임의 cost 가 계약된 열세 필드를 갖는다', async () => {
     const done = parseSse(await (await tutor.POST(tutorRequest())).text()).at(-1);
 
     for (const field of contractFields) expect(done.cost).toHaveProperty(field);

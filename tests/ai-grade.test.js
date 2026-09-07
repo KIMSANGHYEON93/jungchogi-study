@@ -151,7 +151,10 @@ describe('POST /api/ai/grade — 성공 경로', () => {
     const body = await res.json();
 
     expect(body).not.toHaveProperty('usage');
-    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('cache_read_input_tokens'));
+    // 프로바이더 계층을 거치면서 로그의 토큰 이름이 SDK 의 snake_case 가 아니라
+    // 사용 기록의 계약 이름(`lib/ai/usage.js` 의 TOKEN_FIELDS)으로 통일됐다 —
+    // 사람이 읽는 줄과 기계가 먹는 줄이 이제 같은 이름을 쓴다.
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('cacheReadTokens'));
   });
 });
 

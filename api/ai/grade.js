@@ -12,19 +12,20 @@
 //   실패  : { "error": { "code", "message" } }
 //           401 UNAUTHORIZED / 429 RATE_LIMITED / 400 BAD_REQUEST / 502 UPSTREAM
 //
+// 업스트림은 `lib/ai/provider.js` 가 고른다 (Anthropic | OpenRouter). **이 계약은
+// 어느 쪽으로 나가든 같다.** 무료 모델은 엄격 스키마를 못 거는 일이 잦아
+// `normalizeGrade` 의 "본문에서 JSON 을 건진다" 경로가 OpenRouter 에서는 주 경로가
+// 된다 — 그래서 두 경로 모두 같은 관용도(`extractJsonObject`)를 쓴다.
+//
 // **스트리밍하지 않는다.** 해설·플래너와 달리 출력이 짧고 구조화돼 있어 부분 JSON 을
 // 화면에 보여줄 수 없다. 한 번에 받아 검증한 뒤 계약대로 내려보내는 쪽이 단순하다.
 // 다만 함수 형태는 다른 엔드포인트와 통일한다 — Vercel Node 런타임은 이름이 HTTP
 // 메서드인 export(웹 핸들러)를 보고 웹 표준 Request/Response 로 다룬다.
 // 실행 시간·`public/data` 번들 포함은 `vercel.json` 참조.
 
-import {
-  gradeMessage,
-  classifyUpstreamError,
-  hasApiKey,
-  MODEL,
-  GRADE_EFFORT,
-} from '../../lib/ai/client.js';
+import { getProvider } from '../../lib/ai/provider.js';
+import { GRADE_EFFORT, GRADE_MAX_TOKENS } from '../../lib/ai/client.js';
+import { extractJsonObject } from '../../lib/ai/providers/json.js';
 import {
   jsonError,
   getClientIp,
@@ -145,13 +146,15 @@ let cachedSystemBlocks = null;
 function buildSystemBlocks() {
   if (cachedSystemBlocks) return cachedSystemBlocks;
 
-  const blocks = [{ type: 'text', text: SYSTEM_PROMPT }];
+  const blocks = [{ text: SYSTEM_PROMPT }];
   const overview = readDataFile(CACHE_PREFIX_FILE);
   if (overview) {
-    blocks.push({ type: 'text', text: `# 교재 총론\n\n${overview}` });
+    blocks.push({ text: `# 교재 총론\n\n${overview}` });
   }
-  // 마지막 고정 블록에 캐시 breakpoint. 가변 내용은 이 뒤(messages)에만 둔다.
-  blocks.at(-1).cache_control = { type: 'ephemeral', ttl: '1h' };
+  // 마지막 고정 블록에 캐시 breakpoint 를 **요청한다**. 실제로 거는지는 프로바이더가
+  // 정한다 (Anthropic 은 `cache_control` 을 얹고, OpenRouter 는 캐시가 없어 무시한다).
+  // 가변 내용은 이 뒤(messages)에만 둔다.
+  blocks.at(-1).cacheable = true;
 
   cachedSystemBlocks = blocks;
   return blocks;
@@ -223,6 +226,20 @@ function clampNumber(value, min, max) {
 }
 
 /**
+ * 잘린 JSON 처럼 보이는가.
+ *
+ * `max_tokens` 에 걸려 끊기면 객체를 열어 놓고 닫지 못한 채로 온다. 예전에는
+ * SDK 의 `stop_reason === 'max_tokens'` 로 판단했지만 프로바이더 계약에는 그 필드가
+ * 없다 (OpenAI 호환 쪽은 `finish_reason` 으로 이름도 다르다). 본문 모양으로 재는 편이
+ * 프로바이더와 무관하고, 어차피 **안내 문구를 고르는 데만** 쓴다 — 어느 쪽이든
+ * 결과는 재시도 가능한 UPSTREAM 이다.
+ * @param {string} text JSON 을 건지지 못한 본문
+ */
+function looksTruncated(text) {
+  return text.includes('{') && !text.trimEnd().endsWith('}');
+}
+
+/**
  * 모델 응답에서 채점 결과를 꺼내 계약된 형태로 정규화한다.
  *
  * 구조화 출력이 형태를 보장하지만, 정책 폴백·`max_tokens` 절단·구조화 출력 미적용 같은
@@ -232,24 +249,30 @@ function clampNumber(value, min, max) {
  *   - **거절한다**: verdict 가 계약 밖이거나 필수 필드가 없거나 JSON 이 아닌 경우.
  *     이건 판정 자체를 믿을 수 없다는 뜻이라 조여서 통과시키면 안 된다.
  *
- * @param {object|null} message SDK `messages.parse` 응답
+ * `data` 가 null 인 경로(구조화 출력을 못 걸었거나 모델이 스키마를 어긴 경우)에는
+ * `text` 에서 JSON 을 파싱한다. **두 프로바이더가 공유하는 경로다** — OpenRouter 의
+ * 무료 모델은 엄격 스키마를 못 거는 일이 잦아 이쪽이 오히려 주 경로가 된다.
+ *
+ * @param {{data: object|null, text: string}} result 프로바이더 `completeJson` 결과
  * @returns {{ok: true, grade: object, clamped: string[]} | {ok: false, reason: string}}
  */
-export function normalizeGrade(message) {
-  let raw = message?.parsed_output ?? null;
+export function normalizeGrade(result) {
+  let raw = result?.data ?? null;
 
   if (raw === null || typeof raw !== 'object') {
-    const text = (message?.content ?? [])
-      .filter((block) => block?.type === 'text')
-      .map((block) => block.text)
-      .join('')
-      .trim();
+    const text = typeof result?.text === 'string' ? result.text.trim() : '';
 
     if (!text) return { ok: false, reason: '모델이 채점 결과를 내지 않았습니다.' };
-    try {
-      raw = JSON.parse(text);
-    } catch {
-      return { ok: false, reason: '모델 응답이 JSON 이 아닙니다.' };
+
+    // 코드펜스·머리말이 섞여 와도 건질 수 있는 만큼 건진다. `JSON.parse` 로 곧장 가면
+    // Anthropic 경로만 그런 응답에 약해져 **프로바이더마다 관용도가 갈린다.**
+    raw = extractJsonObject(text);
+    if (raw === null) {
+      return {
+        ok: false,
+        truncated: looksTruncated(text),
+        reason: '모델 응답이 JSON 이 아닙니다.',
+      };
     }
   }
 
@@ -333,12 +356,22 @@ export async function POST(request) {
     return jsonError('BAD_REQUEST', `${source} 에 id ${id} 인 문항이 없습니다.`);
   }
 
-  if (!hasApiKey()) {
-    console.error('[ai/grade] ANTHROPIC_API_KEY 가 설정되지 않았습니다.');
+  // 5) 프로바이더 선택. `AI_PROVIDER` 가 아는 값이 아니면 여기서 던진다 —
+  //    조용히 다른 경로로 나가면 무료로 돌리려던 요청이 유료 키로 나가도 화면은 같다.
+  let provider;
+  try {
+    provider = getProvider();
+  } catch (error) {
+    console.error('[ai/grade] 프로바이더 설정이 잘못되었습니다.', error);
     return jsonError('UPSTREAM', 'AI 기능이 설정되지 않았습니다.', { retryable: false });
   }
 
-  // 5) 호출 — 스트리밍하지 않으므로 실패는 전부 여기서 잡히고 계약대로 상태코드를 줄 수 있다
+  if (!provider.hasKey()) {
+    console.error(`[ai/grade] ${provider.name} 자격증명이 설정되지 않았습니다.`);
+    return jsonError('UPSTREAM', 'AI 기능이 설정되지 않았습니다.', { retryable: false });
+  }
+
+  // 6) 호출 — 스트리밍하지 않으므로 실패는 전부 여기서 잡히고 계약대로 상태코드를 줄 수 있다
   //    지연은 **업스트림 호출**부터 잰다 (게이트·문항 로드 시간이 아니라).
   const startedAt = Date.now();
 
@@ -346,7 +379,8 @@ export async function POST(request) {
   const record = ({ usage, ok, errorCode }) => {
     const built = buildUsageRecord({
       endpoint: 'grade',
-      model: MODEL,
+      model: provider.model,
+      provider: provider.name,
       effort: GRADE_EFFORT,
       usage,
       latencyMs: Date.now() - startedAt,
@@ -358,40 +392,42 @@ export async function POST(request) {
     return toCostPayload(built.record, built.cost);
   };
 
-  let message;
+  let result;
   try {
-    message = await gradeMessage({
+    result = await provider.completeJson({
       system: buildSystemBlocks(),
       messages: [{ role: 'user', content: buildGradePrompt(problem, kind, userAnswer) }],
       schema: GRADE_SCHEMA,
+      schemaName: 'grade',
+      maxTokens: GRADE_MAX_TOKENS,
+      effort: GRADE_EFFORT,
     });
   } catch (error) {
-    const failure = classifyUpstreamError(error);
+    const failure = provider.classifyError(error);
     console.error('[ai/grade] 채점 요청 실패', failure.status, error);
     record({ usage: null, ok: false, errorCode: failure.code });
     return jsonError(failure.code, failure.message, { retryable: failure.retryable });
   }
 
   console.log(
-    `[ai/grade] ${kind} ${source}/${id} usage=${JSON.stringify(message?.usage ?? {})} ` +
-      `stop=${message?.stop_reason ?? ''}`
+    `[ai/grade] ${kind} ${source}/${id} provider=${provider.name} ` +
+      `usage=${JSON.stringify(result?.usage ?? {})}`
   );
 
-  // 6) 응답 검증 — 계약을 어긴 응답을 그대로 흘리면 화면이 깨진다.
+  // 7) 응답 검증 — 계약을 어긴 응답을 그대로 흘리면 화면이 깨진다.
   //    검증 결과가 나온 뒤에 기록한다 — 토큰은 썼지만 채점을 못 낸 요청은 ok:false 다.
-  const normalized = normalizeGrade(message);
+  const normalized = normalizeGrade(result);
   const cost = record({
-    usage: message?.usage,
+    usage: result?.usage,
     ok: normalized.ok,
     errorCode: normalized.ok ? null : 'UPSTREAM',
   });
 
   if (!normalized.ok) {
-    const truncated = message?.stop_reason === 'max_tokens';
     console.error('[ai/grade] 채점 결과 추출 실패:', normalized.reason);
     return jsonError(
       'UPSTREAM',
-      truncated
+      normalized.truncated
         ? '채점 응답이 너무 길어 중간에 잘렸습니다. 다시 시도해 주세요.'
         : `채점 결과를 만들지 못했습니다. ${normalized.reason} 다시 시도해 주세요.`,
       { retryable: true }
