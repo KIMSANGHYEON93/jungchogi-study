@@ -49,6 +49,52 @@ describe('mapOpenAiUsage', () => {
     expect(usage.cacheReadTokens).toBe(900);
   });
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // prompt_tokens 는 캐시 읽기를 **포함한** 값이다 (Anthropic 의 input_tokens 는 제외).
+  // 그대로 옮기면 캐시 토큰이 inputTokens 와 cacheReadTokens 양쪽에 들어가
+  // **두 번 세어진다.** 무료 모델은 단가가 0 이라 금액은 무해하지만, 캐시 적중률의
+  // 분모(`src/utils/usageLedger.js` 의 input+cacheRead+cacheCreation)가 부풀어
+  // 적중률이 실제보다 낮게 보고된다.
+  // ───────────────────────────────────────────────────────────────────────────
+  it('prompt_tokens 에서 캐시 읽기를 빼 입력을 낸다 (이중 계산 방지)', () => {
+    const usage = mapOpenAiUsage(
+      { prompt_tokens: 1200, completion_tokens: 340, prompt_tokens_details: { cached_tokens: 900 } },
+      MODEL
+    );
+    // 1200 은 캐시 900 을 포함한 값이다 → 캐시가 아닌 입력은 300 이다
+    expect(usage.inputTokens).toBe(300);
+    // 세 입력 항목의 합이 업스트림이 말한 총 입력과 같아야 한다
+    expect(usage.inputTokens + usage.cacheReadTokens).toBe(1200);
+  });
+
+  it('캐시 적중률의 분모가 총 입력과 같아진다', () => {
+    const usage = mapOpenAiUsage(
+      { prompt_tokens: 1000, completion_tokens: 10, prompt_tokens_details: { cached_tokens: 800 } },
+      MODEL
+    );
+    // `src/utils/usageLedger.js` 의 cacheHitRate 와 같은 계산
+    const denominator = usage.inputTokens + usage.cacheReadTokens;
+    expect(denominator).toBe(1000);
+    expect(usage.cacheReadTokens / denominator).toBe(0.8);
+  });
+
+  it('cached_tokens 를 모르면 뺄 것도 없다 — prompt_tokens 를 그대로 쓴다', () => {
+    const usage = mapOpenAiUsage({ prompt_tokens: 1200, completion_tokens: 340 }, MODEL);
+    expect(usage.inputTokens).toBe(1200);
+    expect(usage.cacheReadTokens).toBeNull();
+  });
+
+  it('cached_tokens 가 prompt_tokens 보다 크면 0 으로 막는다 (음수 토큰은 없다)', () => {
+    // 중계기가 어긋난 값을 줄 수 있다. 음수를 흘리면 `lib/ai/usage.js` 가
+    // 그 값을 "모름" 으로 버려 입력 토큰이 통째로 사라진다.
+    const usage = mapOpenAiUsage(
+      { prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 400 } },
+      MODEL
+    );
+    expect(usage.inputTokens).toBe(0);
+    expect(usage.cacheReadTokens).toBe(400);
+  });
+
   it('캐시 쓰기는 OpenAI 호환 응답에 없다 — 언제나 null 이다', () => {
     const usage = mapOpenAiUsage(
       { prompt_tokens: 1, completion_tokens: 1, prompt_tokens_details: { cached_tokens: 1 } },
@@ -175,7 +221,8 @@ describe('createUsageAccumulator — 여러 턴 합산', () => {
     acc.add(mapOpenAiUsage({ prompt_tokens: 5, completion_tokens: 1 }, MODEL));
 
     const total = acc.total();
-    expect(total.inputTokens).toBe(10);
+    // 첫 턴의 입력은 5 - 4 = 1 (prompt_tokens 는 캐시를 포함한 값이다), 둘째 턴은 5
+    expect(total.inputTokens).toBe(6);
     expect(total.outputTokens).toBe(2);
     expect(total.cacheReadTokens).toBeNull();
     expect(total.cacheCreationTokens).toBeNull();

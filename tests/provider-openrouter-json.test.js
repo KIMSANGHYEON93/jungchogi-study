@@ -243,7 +243,9 @@ describe('usage', () => {
     const { usage } = await call(STRICT_MODEL);
     expect(usage).toEqual({
       model: STRICT_MODEL,
-      inputTokens: 1200,
+      // `prompt_tokens` 1200 은 캐시로 읽은 900 을 **포함한** 값이다.
+      // 계약(`lib/ai/usage.js`)은 세 입력 항목이 겹치지 않는다고 전제하므로 빼서 넘긴다.
+      inputTokens: 300,
       outputTokens: 340,
       cacheReadTokens: 900,
       cacheCreationTokens: null,
