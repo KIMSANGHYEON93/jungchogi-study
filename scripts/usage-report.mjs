@@ -553,7 +553,7 @@ export function formatReport(summary, options = {}) {
   const age = pricingAgeMonths(now);
 
   const lines = [
-    'jungchogi-app AI 사용량·비용 리포트',
+    'jungchogi AI 사용량·비용 리포트',
     `가격표 기준일 ${PRICING_AS_OF} · ${PRICING_SOURCE}`,
   ];
 

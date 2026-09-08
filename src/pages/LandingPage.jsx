@@ -402,7 +402,7 @@ export default function LandingPage() {
       <footer className="landing-footer" role="contentinfo">
         <div className="landing-footer-inner">
           <div className="landing-footer-links">
-            <a href="https://github.com/KIMSANGHYEON93/jungchogi-study-app" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <a href="https://github.com/KIMSANGHYEON93/jungchogi-study" target="_blank" rel="noopener noreferrer">GitHub</a>
             <a href="mailto:sanghyun6467@gmail.com">문의하기</a>
           </div>
           <p className="landing-footer-copy">

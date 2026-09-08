@@ -1,4 +1,4 @@
-# jungchogi-app 블루프린트 — 에이전트 AI 적용 로드맵
+# jungchogi 블루프린트 — 에이전트 AI 적용 로드맵
 
 > 작성일: 2026-09-02 · 기준 커밋: `283e544` (main) · 상태: **초안(사용자 검토 필요)**
 > 목적: 현재까지의 진행 단계를 확정하고, 에이전트 AI를 단계적으로 도입하는 계획을 명세 우선(SDD)으로 정리한다.
@@ -402,7 +402,7 @@ Phase 0~5 를 닫은 뒤 그동안 "남긴 것"으로 적어 둔 항목을 서�
 
 ### 프로덕션 스모크 (2026-09-06) — 키 없이 확인되는 것 전부
 
-배포는 GitHub 연동 자동 배포다(main 푸시 → 프로덕션). **https://jungchogi-study-app.vercel.app**
+배포는 GitHub 연동 자동 배포다(main 푸시 → 프로덕션). **https://jungchogi-study.vercel.app**
 `ANTHROPIC_API_KEY` 가 아직 Vercel 에 없어 AI 호출만 막힌 상태에서, 나머지를 실제 배포본에
 브라우저(Playwright)와 curl 로 확인했다.
 

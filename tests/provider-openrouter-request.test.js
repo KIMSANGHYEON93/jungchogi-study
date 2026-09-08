@@ -82,12 +82,12 @@ describe('엔드포인트와 헤더', () => {
   it('OPENROUTER_SITE_URL·OPENROUTER_APP_NAME 을 리더보드 헤더로 붙인다', async () => {
     await createOpenRouterProvider({
       ...KEY_ENV,
-      OPENROUTER_SITE_URL: 'https://jungchogi-study-app.vercel.app',
-      OPENROUTER_APP_NAME: 'jungchogi-app',
+      OPENROUTER_SITE_URL: 'https://jungchogi-study.vercel.app',
+      OPENROUTER_APP_NAME: 'jungchogi',
     }).completeJson({ system: [], messages: [] });
 
-    expect(lastHeaders()['HTTP-Referer']).toBe('https://jungchogi-study-app.vercel.app');
-    expect(lastHeaders()['X-Title']).toBe('jungchogi-app');
+    expect(lastHeaders()['HTTP-Referer']).toBe('https://jungchogi-study.vercel.app');
+    expect(lastHeaders()['X-Title']).toBe('jungchogi');
   });
 
   it('선택 헤더는 값이 없으면 아예 붙지 않는다', async () => {
