@@ -166,7 +166,8 @@ export default function DailyGoalCard({ examDate, dayChecks, onToggleDay }) {
             <Icon name="calendar" size={14} /> 캘린더로 내보내기 (.ics)
           </button>
           <p className="goal-hint goal-export-hint">
-            Google 캘린더 · 애플 캘린더 · 아웃룩의 &quot;가져오기&quot;로 열 수 있습니다.
+            Google 캘린더 · 애플 캘린더 · 아웃룩의 &quot;가져오기&quot;로 열 수 있습니다. 새 캘린더(예:
+            정처기)를 만들어 가져오면 시험일이 바뀌었을 때 캘린더째 지우고 다시 가져올 수 있어요.
           </p>
         </>
       ) : null}
