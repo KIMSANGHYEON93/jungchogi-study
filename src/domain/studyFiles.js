@@ -1,0 +1,22 @@
+// 학습 노트 화면과 검색이 같이 쓰는 학습 문서 목록. Day N 은 STUDY_FILES[N-1] 이다.
+
+export const STUDY_FILES = [
+  { name: 'Day 01 — C언어', file: '정처기_Day01_C언어.md' },
+  { name: 'Day 02 — Java', file: '정처기_Day02_Java.md' },
+  { name: 'Day 03 — Python+SQL', file: '정처기_Day03_Python_SQL.md' },
+  { name: 'Day 04 — SQL심화', file: '정처기_Day04_SQL심화_알고리즘.md' },
+  { name: 'Day 05 — 디자인패턴/UML', file: '정처기_Day05_디자인패턴_UML.md' },
+  { name: 'Day 06 — SW공학', file: '정처기_Day06_소프트웨어공학.md' },
+  { name: 'Day 07 — 코드복습', file: '정처기_Day07_코드종합복습.md' },
+  { name: 'Day 08 — 이론총정리', file: '정처기_Day08_이론용어총정리.md' },
+  { name: 'Day 09 — 모의고사1', file: '정처기_Day09_모의고사1회.md' },
+  { name: 'Day 10 — 약점보강', file: '정처기_Day10_약점보강.md' },
+  { name: 'Day 11 — 모의고사2', file: '정처기_Day11_모의고사2회.md' },
+  { name: 'Day 12 — 최종정리', file: '정처기_Day12_최종정리.md' },
+  { name: 'Day 13 — 시험전날', file: '정처기_Day13_시험전날.md' },
+  { name: 'Day 14 — 시험당일', file: '정처기_Day14_시험당일.md' },
+  { name: '보강 — 기출+암기119선', file: '정처기_보강_기출분석_암기119선.md' },
+  { name: '단답형 100선', file: '정처기_단답형_100선.md' },
+  { name: '코드 트레이싱 드릴', file: '정처기_코드트레이싱_드릴.md' },
+  { name: '합격 전략 가이드', file: '정보처리기사_실기_합격전략.md' },
+];

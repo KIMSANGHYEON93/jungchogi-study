@@ -170,3 +170,32 @@ export function summarizeQuizResults(results) {
     accuracy: graded === 0 ? null : Math.round((correct / graded) * 100),
   };
 }
+
+/**
+ * 출력 비교용 정규화: 공백·줄바꿈을 한 칸으로 모으고, 괄호·쉼표·콜론 둘레의 공백은 없앤다.
+ * `[3, 4, 5]` 와 `[3,4,5]` 를 같게 보되, `10 B` 와 `10B` 처럼 토큰이 달라지는 차이는 남긴다.
+ * 대소문자는 구분한다 — `true`/`True` 는 언어마다 다른 출력이다.
+ * @param {string} text
+ */
+function normalizeOutput(text) {
+  return String(text)
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([[\]{}(),:])\s*/g, '$1');
+}
+
+/**
+ * 입력한 출력이 정답 출력과 같은지.
+ *
+ * 일치만 확정으로 쓴다. 불일치는 표현 차이(공백·따옴표 등)일 수 있어 호출자가
+ * 오답으로 기록하지 않고 사용자의 자기 채점에 맡겨야 한다.
+ *
+ * @param {unknown} userAnswer
+ * @param {unknown} expectedOutput 비어 있으면(SQL 등 출력이 표·쿼리인 문항) 비교하지 않는다
+ * @returns {boolean|null} 비교할 정답 출력이 없으면 null
+ */
+export function matchesExpectedOutput(userAnswer, expectedOutput) {
+  if (typeof expectedOutput !== 'string' || expectedOutput.trim() === '') return null;
+  if (typeof userAnswer !== 'string') return false;
+  return normalizeOutput(userAnswer) === normalizeOutput(expectedOutput);
+}

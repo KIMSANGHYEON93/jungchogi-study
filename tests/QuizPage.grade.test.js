@@ -106,7 +106,7 @@ async function typeAnswer(container, answer = '30 50') {
 }
 
 /** 첫 문항을 풀고 `정답 확인`까지 누른 상태를 만든다 */
-async function answerFirstProblem(container, answer = '30 50') {
+async function answerFirstProblem(container, answer = '0 0') {
   await typeAnswer(container, answer);
   await act(async () => { buttonByName(container, '정답 확인').click(); });
   await flush();
