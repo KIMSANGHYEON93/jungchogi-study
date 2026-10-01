@@ -2462,3 +2462,26 @@ html { scroll-behavior: smooth; }
 .quiz-auto-verdict.mismatch {
   color: var(--warning);
 }
+
+.goal-import {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--border);
+}
+
+.goal-import-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.goal-import-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
