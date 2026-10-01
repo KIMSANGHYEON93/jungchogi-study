@@ -102,7 +102,7 @@ async function goToLast(container) {
 }
 
 /** 지금 문항에 답을 적고 `정답 확인`을 누른다 */
-async function answerCurrent(container, answer = '7') {
+async function answerCurrent(container, answer = 'zzz') {
   await act(async () => { typeInto(container.querySelector('input.quiz-input'), answer); });
   await act(async () => { buttonByName(container, '정답 확인').click(); });
   await flush();
@@ -284,7 +284,7 @@ describe('변형 진도는 교재 진도와 섞이지 않는다', () => {
   it('교재 문항은 예전처럼 quiz_results 에 기록한다', async () => {
     const { container, unmount } = render();
     await flush();
-    await answerCurrent(container, '30 50');
+    await answerCurrent(container, '0 0');
     expect(loadProgress('quiz_results', {})).toEqual({ 'C-01': 'answered' });
     expect(loadProgress(VARIANT_RESULTS_KEY, {})).toEqual({});
     unmount();
@@ -310,7 +310,7 @@ describe('변형 문항은 서버 API 를 부르지 않는다', () => {
     const { container, unmount } = render();
     await flush();
     await enableVariants(container);
-    await answerCurrent(container, '30 50');
+    await answerCurrent(container, '0 0');
     expect(container.textContent).toContain('AI 해설');
     expect(container.textContent).toContain('AI 채점');
     unmount();

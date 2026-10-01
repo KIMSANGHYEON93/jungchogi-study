@@ -26,6 +26,7 @@ import { isGeneratedItem } from '../domain/generatedItems';
 import {
   QUIZ_RESULT,
   isConfidentGrade,
+  matchesExpectedOutput,
   summarizeQuizResults,
   verdictToQuizResult,
   withQuizResult,
@@ -61,6 +62,8 @@ export default function QuizPage() {
   const [allProblems, setAllProblems] = useState([]);
   const [lang, setLang] = useState('전체');
   const [userAnswer, setUserAnswer] = useState('');
+  // 정답 출력과의 자동 비교 결과: true 일치 / false 불일치 / null 비교 불가(SQL 등)
+  const [autoMatch, setAutoMatch] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState({}); // { id: 'correct'|'incorrect'|'answered' }
   // 변형 채점은 별도 맵에 쌓는다 — 아래 saveResults 주석 참조
@@ -112,6 +115,14 @@ export default function QuizPage() {
   const handleSubmit = () => {
     if (!userAnswer.trim()) return;
     setSubmitted(true);
+    const match = matchesExpectedOutput(userAnswer, current.expectedOutput);
+    setAutoMatch(match);
+    // 일치는 확정 정답으로 바로 기록한다. 불일치는 표현 차이일 수 있어 기록하지 않고
+    // 아래 자기 채점에 맡긴다.
+    if (match === true) {
+      saveResults(withQuizResult(currentResults, current.id, QUIZ_RESULT.CORRECT));
+      return;
+    }
     // 시도 자체는 바로 남긴다(진도 표시가 여기에 걸려 있다). 정오는 아직 모르므로
     // 'answered' = "시도했으나 정오 미상". 이미 채점된 문항은 덮어쓰지 않는다 —
     // 다시 풀었다고 지난 판정을 정오 미상으로 되돌리면 정보가 사라진다.
@@ -138,6 +149,7 @@ export default function QuizPage() {
   const goTo = (newIdx) => {
     setIndex(newIdx);
     setUserAnswer('');
+    setAutoMatch(null);
     setSubmitted(false);
   };
 
@@ -235,6 +247,16 @@ export default function QuizPage() {
               <button className="btn-primary" onClick={handleSubmit} style={{ marginTop: 8 }}>정답 확인</button>
             ) : (
               <div className="quiz-result correct" style={{ marginTop: 12 }} aria-live="polite">
+                {autoMatch === true ? (
+                  <p className="quiz-auto-verdict match" role="status">
+                    <Icon name="check-circle" size={16} /> 정답입니다 — 입력한 출력이 정답과 일치합니다.
+                  </p>
+                ) : autoMatch === false ? (
+                  <p className="quiz-auto-verdict mismatch" role="status">
+                    <Icon name="alert-circle" size={16} /> 입력한 출력이 정답과 다릅니다. 표현 차이일 수 있으니
+                    풀이와 비교해 아래에서 직접 채점해 주세요.
+                  </p>
+                ) : null}
                 <h3 style={{ marginBottom: 8, color: 'var(--success)' }}>풀이</h3>
                 <GeneratedAnswerNotice item={current} />
                 <div className="md-content" style={{ fontSize: '0.9rem' }}>
