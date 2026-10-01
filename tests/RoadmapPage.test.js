@@ -21,7 +21,6 @@ function render() {
   return container;
 }
 
-const radio = (c, label) => [...c.querySelectorAll('[role="radio"]')].find((b) => b.textContent.includes(label));
 const days = (c) => [...c.querySelectorAll('.road-day')];
 const dayCard = (c, label) => days(c).find((el) => el.querySelector('.road-day-d').textContent === label);
 
@@ -63,34 +62,18 @@ describe('25일 로드맵 화면', () => {
     expect(today[0].textContent).toContain('오늘');
   });
 
-  it('동시 대비가 기본으로 선택돼 있다', () => {
+  it('시험 종류 선택 없이 기사·산업기사 공통 로드맵이라고 안내한다', () => {
     const c = render();
-    expect(radio(c, '동시 대비').getAttribute('aria-checked')).toBe('true');
-    expect(radio(c, '정보처리기사').getAttribute('aria-checked')).toBe('false');
+    expect(c.querySelector('[role="radiogroup"]')).toBeNull();
+    expect(c.querySelector('.road-controls-title').textContent).toContain('공통 로드맵');
+    expect(c.querySelector('.road-controls').textContent).toContain('공통 모듈');
+    expect(c.querySelector('.road-controls').textContent).toContain('기사 특화');
   });
 
-  it('시험 종류를 바꾸면 3단계 주제 구성이 바뀌고 선택이 저장된다', async () => {
+  it('3단계는 공통 복습이 먼저, 기사 특화가 뒤다', () => {
     const c = render();
-    const scopes = () => [...dayCard(c, 'D-9').querySelectorAll('.road-topic')].map((e) => e.className.includes('is-engineer'));
-
-    expect(scopes()).toEqual([false, true]); // 동시 대비: 공통 먼저
-
-    await act(async () => { radio(c, '정보처리기사').click(); });
-    expect(scopes()).toEqual([true, false]); // 기사: 특화 먼저
-    expect(loadProgress('exam_type', null)).toBe('engineer');
-
-    await act(async () => { radio(c, '정보처리산업기사').click(); });
-    expect(scopes()).toEqual([false]); // 산업기사: 공통만
-    expect(c.textContent).toContain('산업기사 출제 범위는 이 앱이 확정하지 않습니다');
-    expect(loadProgress('exam_type', null)).toBe('industrial');
-  });
-
-  it('저장된 시험 종류로 열린다 (깨진 값은 기본값)', () => {
-    saveProgress('exam_type', 'industrial');
-    expect(radio(render(), '정보처리산업기사').getAttribute('aria-checked')).toBe('true');
-    saveProgress('exam_type', 'nope');
-    const c2 = render();
-    expect(radio(c2, '동시 대비').getAttribute('aria-checked')).toBe('true');
+    const scopes = [...dayCard(c, 'D-9').querySelectorAll('.road-topic')].map((e) => e.className.includes('is-engineer'));
+    expect(scopes).toEqual([false, true]);
   });
 
   it('체크하면 저장되고 진도 게이지가 오른다', async () => {

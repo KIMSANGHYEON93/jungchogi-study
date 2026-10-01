@@ -1,28 +1,15 @@
 // 25일 D-Day 로드맵 — 시험일에서 거꾸로 센 D-24 ~ D-Day 의 4단계 일정.
 //
 // `dailyPlan.js`(Day01~14 학습 문서를 남은 날에 균등 분배)와 달리 이쪽은 **기간별 단계**가 먼저다.
-// 단계가 정해진 뒤 그 안의 하루 학습 주제가 정해지고, 어느 시험을 노리는지(`examType`)가
-// 하루 주제의 구성과 순서를 바꾼다.
+// 단계가 정해진 뒤 그 안의 하루 학습 주제가 정해진다.
+//
+// **정보처리기사·산업기사를 함께 준비하는 하나의 공통 계획이다.** 시험 종류별로 갈라지지 않고,
+// 두 시험이 겹치는 공통 모듈(코딩·SQL·OS/네트워크·테스트)을 먼저 두고 기사 특화 주제는 그 뒤에 둔다.
 //
 // 날짜는 시험일에서 d 일을 빼서 만든다. 시험일을 바꿔도 "D-n 일차"의 의미(와 체크 기록)가
 // 그대로 이어지도록 체크는 날짜가 아니라 d 번호로 저장한다.
 
 import { addDays, daysUntil, resolveExamDate } from './dailyPlan';
-
-/** @typedef {'both'|'engineer'|'industrial'} ExamType */
-
-export const EXAM_TYPES = [
-  { key: 'both', label: '동시 대비', hint: '기사·산업기사 공통 모듈을 최우선으로 배치' },
-  { key: 'engineer', label: '정보처리기사', hint: '기사 특화 주제를 앞에 두고 공통 복습은 뒤로' },
-  { key: 'industrial', label: '정보처리산업기사', hint: '기사 특화 주제를 빼고 공통 모듈만' },
-];
-
-export const DEFAULT_EXAM_TYPE = 'both';
-
-/** 저장값이 깨졌거나 구버전이어도 로드맵이 막히지 않게 알려진 값만 통과시킨다 */
-export function normalizeExamType(value) {
-  return EXAM_TYPES.some((t) => t.key === value) ? value : DEFAULT_EXAM_TYPE;
-}
 
 /** 로드맵 길이: D-24 ~ D-Day = 25칸. 체크는 D-24 ~ D-1 의 24일 학습일에만 있다. */
 export const ROADMAP_START_D = 24;
@@ -39,8 +26,7 @@ export const ROADMAP_PHASES = [
  * `study` 는 학습 노트 Day 번호, `query` 는 앱 안 자료를 찾는 검색어(`tests/roadmap.test.js` 가
  * 실제 자료에서 결과가 나오는지 확인한다), `to` 는 앱 안 화면 경로다.
  *
- * 3단계(D-9~D-4)는 하루마다 공통 복습 1개 + 기사 특화 1개로 짠다. 시험 종류에 따라
- * 특화 주제를 앞세우거나(기사), 공통을 앞세우거나(동시), 특화를 뺀다(산업기사).
+ * 3단계(D-9~D-4)는 하루마다 공통 복습 1개 + 기사 특화 1개로 짠다. 공통 복습이 항상 먼저다.
  */
 const COMMON = 'common';
 const ENGINEER = 'engineer';
@@ -128,11 +114,12 @@ const EXAM_DAY = {
   topics: [{ text: '신분증 · 수험표 · 필기구 확인, 암기 노트 가볍게 훑기', scope: COMMON, study: 14 }],
 };
 
-/** 시험 종류에 맞게 하루 주제를 거르고 정렬한다. 안정 정렬이라 같은 scope 끼리는 원래 순서를 지킨다. */
-export function topicsFor(day, examType) {
-  const type = normalizeExamType(examType);
-  if (type === 'industrial') return day.topics.filter((t) => t.scope === COMMON);
-  const rank = (t) => (type === 'engineer' ? (t.scope === ENGINEER ? 0 : 1) : t.scope === COMMON ? 0 : 1);
+/**
+ * 하루 주제를 공통 → 기사 특화 순으로 정렬한다. 안정 정렬이라 같은 scope 끼리는 원래 순서를 지킨다.
+ * 기사·산업기사를 함께 준비하므로 거르지는 않는다.
+ */
+export function topicsFor(day) {
+  const rank = (t) => (t.scope === COMMON ? 0 : 1);
   return [...day.topics].sort((a, b) => rank(a) - rank(b));
 }
 
@@ -154,20 +141,18 @@ export function phaseOfD(d) {
  */
 
 /**
- * @param {{examDate?: unknown, today: string, examType?: unknown, checks?: Record<string, unknown>}} input
+ * @param {{examDate?: unknown, today: string, checks?: Record<string, unknown>}} input
  * @returns {{
  *   status: 'ok'|'before'|'exam-passed'|'no-date',
- *   examType: ExamType, examDate: string|null, isDefaultExamDate: boolean,
+ *   examDate: string|null, isDefaultExamDate: boolean,
  *   todayD: number|null, phases: (typeof ROADMAP_PHASES[number] & {days: RoadmapDay[]})[],
  *   examDay: RoadmapDay|null, progress: {done: number, total: number, percent: number}
  * }}
  */
-export function buildRoadmap({ examDate: storedExamDate, today, examType, checks = {} }) {
-  const type = normalizeExamType(examType);
+export function buildRoadmap({ examDate: storedExamDate, today, checks = {} }) {
   const { examDate, isDefault } = resolveExamDate(storedExamDate, today);
   const empty = (status) => ({
     status,
-    examType: type,
     examDate,
     isDefaultExamDate: isDefault,
     todayD: null,
@@ -186,7 +171,7 @@ export function buildRoadmap({ examDate: storedExamDate, today, examType, checks
       date,
       phaseNo: phaseOfD(day.d)?.no ?? null,
       title: day.title,
-      topics: topicsFor(day, type),
+      topics: topicsFor(day),
       done: day.d > 0 && !!checks?.[day.d],
       isToday: todayD === day.d,
       isPast: todayD !== null && todayD < day.d,
@@ -197,7 +182,6 @@ export function buildRoadmap({ examDate: storedExamDate, today, examType, checks
   const done = days.filter((x) => x.done).length;
   const base = {
     status: todayD < 0 ? 'exam-passed' : todayD > ROADMAP_START_D ? 'before' : 'ok',
-    examType: type,
     examDate,
     isDefaultExamDate: isDefault,
     todayD,

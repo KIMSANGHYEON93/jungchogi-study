@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../components/Icon';
-import { EXAM_TYPES, buildRoadmap, normalizeExamType, topicLinks } from '../domain/roadmap';
+import { buildRoadmap, topicLinks } from '../domain/roadmap';
 import { getExamDate, loadProgress, saveProgress, toLocalDateKey } from '../utils/storage';
 
 const CHECKS_KEY = 'roadmap_checks';
-const EXAM_TYPE_KEY = 'exam_type';
 
 const SCOPE_LABEL = { common: '공통', engineer: '기사 특화' };
 
@@ -24,13 +23,11 @@ function loadChecks() {
 
 export default function RoadmapPage() {
   const [today] = useState(() => toLocalDateKey());
-  const [examType, setExamType] = useState(() => normalizeExamType(loadProgress(EXAM_TYPE_KEY, null)));
   const [checks, setChecks] = useState(loadChecks);
   const todayRef = useRef(null);
 
-  const roadmap = buildRoadmap({ examDate: getExamDate(), today, examType, checks });
+  const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks });
   const { progress } = roadmap;
-  const activeType = EXAM_TYPES.find((t) => t.key === roadmap.examType);
 
   // 오늘 카드가 목록 아래쪽이면 화면 밖이다. 첫 렌더 뒤 한 번만 끌어온다.
   useEffect(() => {
@@ -38,11 +35,6 @@ export default function RoadmapPage() {
     // 구현이 없는 환경(jsdom 등)에서는 건너뛴다
     if (typeof el?.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
   }, []);
-
-  const chooseType = (key) => {
-    setExamType(key);
-    saveProgress(EXAM_TYPE_KEY, key);
-  };
 
   const toggleDay = (d) => {
     const next = { ...checks, [d]: !checks[d] };
@@ -102,29 +94,13 @@ export default function RoadmapPage() {
 
       <section className="card road-controls" aria-labelledby="road-target">
         <h2 id="road-target" className="road-controls-title">
-          <Icon name="target" size={18} /> 목표 시험
+          <Icon name="target" size={18} /> 정보처리기사 · 산업기사 공통 로드맵
         </h2>
-        <div className="road-toggle" role="radiogroup" aria-label="목표 시험 선택">
-          {EXAM_TYPES.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="radio"
-              aria-checked={roadmap.examType === t.key}
-              className={`btn-outline road-toggle-button${roadmap.examType === t.key ? ' active' : ''}`}
-              onClick={() => chooseType(t.key)}
-            >
-              {t.label}
-              {t.key === 'both' ? <span className="road-toggle-default"> (기본)</span> : null}
-            </button>
-          ))}
-        </div>
-        <p className="road-hint" role="status">{activeType.hint}</p>
-        {roadmap.examType === 'industrial' ? (
-          <p className="road-hint">
-            산업기사 출제 범위는 이 앱이 확정하지 않습니다 — 기사 특화로 분류한 주제를 뺀 것이니 Q-Net 공지로 확인하세요.
-          </p>
-        ) : null}
+        <p className="road-hint">
+          두 시험을 함께 준비하는 하나의 계획입니다. 두 시험이 겹치는 <strong>공통 모듈</strong>(코딩 · SQL · OS/네트워크 · 테스트)을
+          먼저 두고, <span className="badge badge-warning">기사 특화</span> 주제(SDLC · 디자인패턴 · 연계 · 보안)는 3단계에서
+          공통 복습 뒤에 이어집니다.
+        </p>
 
         <div className="road-gauge">
           <div

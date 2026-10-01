@@ -2213,19 +2213,8 @@ html { scroll-behavior: smooth; }
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  margin: 0 0 var(--space-md);
+  margin: 0 0 var(--space-sm);
   font-size: 1.1rem;
-}
-
-.road-toggle {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-}
-
-.road-toggle-default {
-  font-size: 0.75rem;
-  opacity: 0.75;
 }
 
 .road-hint {

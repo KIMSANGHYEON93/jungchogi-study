@@ -2,30 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  DEFAULT_EXAM_TYPE,
-  EXAM_TYPES,
   ROADMAP_DAYS,
   ROADMAP_PHASES,
   buildRoadmap,
-  normalizeExamType,
   phaseOfD,
   topicsFor,
 } from '../src/domain/roadmap.js';
 
 const base = { examDate: '2026-10-25', today: '2026-10-01' };
 const allDays = (r) => r.phases.flatMap((p) => p.days);
-
-describe('시험 종류', () => {
-  it('동시 대비가 기본이고 세 가지가 있다', () => {
-    expect(DEFAULT_EXAM_TYPE).toBe('both');
-    expect(EXAM_TYPES.map((t) => t.label)).toEqual(['동시 대비', '정보처리기사', '정보처리산업기사']);
-  });
-
-  it('알 수 없는 값·깨진 저장값은 기본값으로 떨어진다', () => {
-    expect(normalizeExamType('engineer')).toBe('engineer');
-    for (const bad of [undefined, null, '', 'x', 3, {}]) expect(normalizeExamType(bad)).toBe('both');
-  });
-});
 
 describe('25일 구성', () => {
   const r = buildRoadmap(base);
@@ -97,47 +82,6 @@ describe('오늘 표시', () => {
     expect(buildRoadmap({ ...base, today: '2026-10-26' }).status).toBe('exam-passed');
     expect(buildRoadmap({ ...base, today: '2026-10-25' }).todayD).toBe(0);
     expect(buildRoadmap({ ...base, today: '2026-10-25' }).examDay.isToday).toBe(true);
-  });
-});
-
-describe('시험 종류별 구성', () => {
-  const phase3 = (type) => buildRoadmap({ ...base, examType: type }).phases[2].days;
-
-  it('동시 대비: 3단계도 공통 모듈이 먼저, 기사 특화가 뒤', () => {
-    for (const day of phase3('both')) {
-      expect(day.topics.map((t) => t.scope)).toEqual(['common', 'engineer']);
-    }
-  });
-
-  it('정보처리기사: 기사 특화가 먼저', () => {
-    for (const day of phase3('engineer')) {
-      expect(day.topics.map((t) => t.scope)).toEqual(['engineer', 'common']);
-    }
-  });
-
-  it('정보처리산업기사: 기사 특화를 빼고 공통만', () => {
-    for (const day of phase3('industrial')) {
-      expect(day.topics.length).toBeGreaterThan(0);
-      expect(day.topics.every((t) => t.scope === 'common')).toBe(true);
-    }
-  });
-
-  it('기본은 동시 대비', () => {
-    expect(buildRoadmap(base).examType).toBe('both');
-  });
-
-  it('1·2·4단계는 시험 종류와 무관하게 같다', () => {
-    const texts = (type) =>
-      buildRoadmap({ ...base, examType: type }).phases.filter((p) => p.no !== 3).flatMap((p) => p.days.flatMap((d) => d.topics.map((t) => t.text)));
-    expect(texts('engineer')).toEqual(texts('both'));
-    expect(texts('industrial')).toEqual(texts('both'));
-  });
-
-  it('원본 주제 배열을 건드리지 않는다', () => {
-    const day = ROADMAP_DAYS.find((d) => d.d === 9);
-    const before = day.topics.map((t) => t.text);
-    topicsFor(day, 'engineer');
-    expect(day.topics.map((t) => t.text)).toEqual(before);
   });
 });
 
@@ -216,5 +160,42 @@ describe('단계 정의', () => {
   it('구간이 겹치거나 비지 않고 D-24 ~ D-1 을 덮는다', () => {
     const covered = ROADMAP_PHASES.flatMap((p) => Array.from({ length: p.fromD - p.toD + 1 }, (_, i) => p.fromD - i));
     expect(covered).toEqual(Array.from({ length: 24 }, (_, i) => 24 - i));
+  });
+});
+
+describe('기사·산업기사 공통 계획', () => {
+  const phase = (no) => buildRoadmap(base).phases[no - 1].days;
+
+  it('시험 종류로 갈라지지 않는다 — 옵션 없이 하나의 계획이다', () => {
+    const a = buildRoadmap(base);
+    const b = buildRoadmap({ ...base, examType: 'industrial' });
+    expect(b.phases.map((p) => p.days.map((d) => d.topics.map((t) => t.text)))).toEqual(
+      a.phases.map((p) => p.days.map((d) => d.topics.map((t) => t.text)))
+    );
+    expect('examType' in a).toBe(false);
+  });
+
+  it('3단계는 공통 복습이 먼저, 기사 특화가 뒤에 온다', () => {
+    for (const day of phase(3)) {
+      expect(day.topics.map((t) => t.scope)).toEqual(['common', 'engineer']);
+    }
+  });
+
+  it('기사 특화 주제(SDLC·디자인패턴·연계·보안)가 계획에 모두 들어 있다', () => {
+    const engineer = phase(3).flatMap((d) => d.topics.filter((t) => t.scope === 'engineer').map((t) => t.text)).join(' ');
+    for (const word of ['SDLC', '디자인패턴', '연계', '보안']) expect(engineer).toMatch(word);
+  });
+
+  it('1·2·4단계는 공통 주제만이다', () => {
+    for (const no of [1, 2, 4]) {
+      for (const day of phase(no)) expect(day.topics.every((t) => t.scope === 'common')).toBe(true);
+    }
+  });
+
+  it('원본 주제 배열을 건드리지 않는다', () => {
+    const day = ROADMAP_DAYS.find((d) => d.d === 9);
+    const before = day.topics.map((t) => t.text);
+    topicsFor(day);
+    expect(day.topics.map((t) => t.text)).toEqual(before);
   });
 });
