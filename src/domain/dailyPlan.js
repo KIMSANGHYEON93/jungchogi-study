@@ -206,3 +206,13 @@ export function buildDailyPlan({ examDate: storedExamDate, today, dayChecks = {}
     progress: { ...base.progress, perDay },
   };
 }
+
+/**
+ * 일정에서 Day 가 배정된 날짜 항목. 완료했거나(일정에서 빠짐) 배정이 없으면 null.
+ * @param {DailyPlan} plan
+ * @param {number} day
+ * @returns {ScheduleEntry|null}
+ */
+export function plannedEntryForDay(plan, day) {
+  return plan.schedule.find((e) => e.units.some((u) => u.day === day)) ?? null;
+}

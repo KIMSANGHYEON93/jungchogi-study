@@ -3,27 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import MarkdownViewer from '../components/MarkdownViewer';
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
-
-const FILES = [
-  { name: 'Day 01 — C언어', file: '정처기_Day01_C언어.md' },
-  { name: 'Day 02 — Java', file: '정처기_Day02_Java.md' },
-  { name: 'Day 03 — Python+SQL', file: '정처기_Day03_Python_SQL.md' },
-  { name: 'Day 04 — SQL심화', file: '정처기_Day04_SQL심화_알고리즘.md' },
-  { name: 'Day 05 — 디자인패턴/UML', file: '정처기_Day05_디자인패턴_UML.md' },
-  { name: 'Day 06 — SW공학', file: '정처기_Day06_소프트웨어공학.md' },
-  { name: 'Day 07 — 코드복습', file: '정처기_Day07_코드종합복습.md' },
-  { name: 'Day 08 — 이론총정리', file: '정처기_Day08_이론용어총정리.md' },
-  { name: 'Day 09 — 모의고사1', file: '정처기_Day09_모의고사1회.md' },
-  { name: 'Day 10 — 약점보강', file: '정처기_Day10_약점보강.md' },
-  { name: 'Day 11 — 모의고사2', file: '정처기_Day11_모의고사2회.md' },
-  { name: 'Day 12 — 최종정리', file: '정처기_Day12_최종정리.md' },
-  { name: 'Day 13 — 시험전날', file: '정처기_Day13_시험전날.md' },
-  { name: 'Day 14 — 시험당일', file: '정처기_Day14_시험당일.md' },
-  { name: '보강 — 기출+암기119선', file: '정처기_보강_기출분석_암기119선.md' },
-  { name: '단답형 100선', file: '정처기_단답형_100선.md' },
-  { name: '코드 트레이싱 드릴', file: '정처기_코드트레이싱_드릴.md' },
-  { name: '합격 전략 가이드', file: '정보처리기사_실기_합격전략.md' },
-];
+import { STUDY_FILES as FILES } from '../domain/studyFiles';
+import { buildDailyPlan, plannedEntryForDay } from '../domain/dailyPlan';
+import { getExamDate, loadProgress, toLocalDateKey } from '../utils/storage';
 
 // `/study?day=6` → FILES 인덱스. Day N 은 FILES[N-1] 이다.
 // 오늘의 계획 카드의 study_day 항목이 이 경로로 들어온다.
@@ -33,16 +15,44 @@ function indexForDayParam(raw) {
   return day - 1;
 }
 
+// `/study?doc=15` → FILES 인덱스 그대로. 검색 결과가 Day 가 아닌 문서(보강·합격전략)로 보낼 때 쓴다.
+function indexForDocParam(raw) {
+  // 파라미터가 없을 때 Number(null) === 0 이 첫 문서로 읽히지 않도록 먼저 거른다
+  if (raw === null || raw === '') return null;
+  const idx = Number(raw);
+  return Number.isInteger(idx) && idx >= 0 && idx < FILES.length ? idx : null;
+}
+
+/** 'YYYY-MM-DD' → 'M/D(요일)' (UTC 해석이라 시간대에 흔들리지 않는다) */
+function formatPlannedDate(dateKey) {
+  const d = new Date(`${dateKey}T00:00:00Z`);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${['일', '월', '화', '수', '목', '금', '토'][d.getUTCDay()]})`;
+}
+
 export default function StudyPage() {
   useStudyTimer();
   const [searchParams] = useSearchParams();
   // 첫 렌더에만 URL 을 읽는다 — 이후 선택은 사용자 조작이 소유한다.
   // effect 로 동기화하지 않으므로 set-state-in-effect 가 생기지 않는다.
-  const [selectedIdx, setSelectedIdx] = useState(() => indexForDayParam(searchParams.get('day')));
+  const [selectedIdx, setSelectedIdx] = useState(
+    () => indexForDocParam(searchParams.get('doc')) ?? indexForDayParam(searchParams.get('day'))
+  );
   // 로드 결과에 해당 인덱스를 함께 담아 loading/content 를 파생 상태로 계산한다
   const [loaded, setLoaded] = useState({ idx: -1, text: '' });
   const loading = loaded.idx !== selectedIdx;
   const content = loading ? '' : loaded.text;
+
+  // 이 Day 가 일정의 어느 날에 배정됐는지 — 문서 안에 날짜를 박아 두면 일정이 바뀔 때 어긋난다.
+  // 렌더마다 다시 계산하지 않도록 한 번만 읽는다(체크 변경은 대시보드에서 일어나고 이 화면은 새로 열린다).
+  const [plan] = useState(() =>
+    buildDailyPlan({
+      examDate: getExamDate(),
+      today: toLocalDateKey(),
+      dayChecks: loadProgress('day_checks', {}) || {},
+    })
+  );
+  const planned = selectedIdx < 14 ? plannedEntryForDay(plan, selectedIdx + 1) : null;
+  const dayDone = selectedIdx < 14 && !!(loadProgress('day_checks', {}) || {})[selectedIdx + 1];
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +98,15 @@ export default function StudyPage() {
             </div>
           ) : (
             <div className="card">
+              {selectedIdx < 14 ? (
+                <p className="study-planned" role="note">
+                  {dayDone
+                    ? '완료한 Day 입니다.'
+                    : planned
+                      ? `예정일 ${formatPlannedDate(planned.date)} · ${planned.dDay === 0 ? 'D-Day' : `D-${planned.dDay}`} (시험일 ${plan.examDate?.replace(/-/g, '.')} 기준 자동 배정)`
+                      : '남은 일정에 배정된 날짜가 없습니다. 대시보드에서 시험일을 확인하세요.'}
+                </p>
+              ) : null}
               <MarkdownViewer content={content} />
             </div>
           )}
