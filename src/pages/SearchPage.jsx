@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import { parseQuiz } from '../utils/parseQuiz';
 import { parseCodeDrill } from '../utils/parseCodeDrill';
 import { parseBogang } from '../utils/parseBogang';
+import { parseStudyNotes, makeSnippet } from '../utils/parseStudyNotes';
+import { STUDY_FILES } from '../domain/studyFiles';
 import { fetchMarkdown } from '../utils/mdCache';
 import { applyGeneratedItems } from '../utils/generatedDeck';
 import useVariantPreference from '../hooks/useVariantPreference';
@@ -21,6 +23,8 @@ const SOURCE_CONFIG = {
   quiz100: { label: '단답형 100선', badge: 'badge-primary', file: '정처기_단답형_100선.md', parser: 'quiz', generatedSource: 'quiz100' },
   codeDrill: { label: '코드 트레이싱', badge: 'badge-warning', file: '정처기_코드트레이싱_드릴.md', parser: 'code', generatedSource: 'codedrill' },
   bogang: { label: '암기 119선', badge: 'badge-danger', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', generatedSource: 'bogang' },
+  // 문제 은행이 아니라 Day 문서 등 학습 노트 본문 — 제목(#~###) 단위 섹션으로 색인한다
+  notes: { label: '학습 노트', badge: 'badge-success' },
 };
 
 export default function SearchPage() {
@@ -28,6 +32,7 @@ export default function SearchPage() {
   const syntaxTheme = theme === 'dark' ? oneDark : oneLight;
   const [searchParams] = useSearchParams();
   const [allItems, setAllItems] = useState([]);
+  const [noteItems, setNoteItems] = useState([]);
   // `/search?q=...` 로 들어오면 그 검색어로 연다 (오늘의 계획의 섹션 링크).
   // 첫 렌더에만 읽는다 — 이후 입력은 사용자가 소유한다.
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
@@ -76,6 +81,26 @@ export default function SearchPage() {
     return () => { cancelled = true; };
   }, [includeVariants]);
 
+  // 학습 노트 색인. 문제 은행과 따로 불러 — 노트 문서 하나가 실패해도 문제 검색은 그대로 동작한다.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.allSettled(STUDY_FILES.map((f) => fetchMarkdown(f.file))).then((settled) => {
+      if (cancelled) return;
+      const items = settled.flatMap((r, fileIdx) =>
+        r.status === 'fulfilled'
+          ? parseStudyNotes(r.value, fileIdx).map((sec) => ({
+              ...sec,
+              source: 'notes',
+              // 문서 이름(사이드바에 보이는 '시험전날' 등)으로도 찾을 수 있게 포함한다
+              searchText: `${STUDY_FILES[fileIdx].name} ${sec.heading} ${sec.text}`.toLowerCase(),
+            }))
+          : []
+      );
+      setNoteItems(items);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // 검색 실행 (디바운스)
   const debounceRef = useRef(null);
   const doSearch = useCallback((q, items, filter) => {
@@ -96,14 +121,16 @@ export default function SearchPage() {
     setResults(filtered);
   }, []);
 
+  const searchable = useMemo(() => [...allItems, ...noteItems], [allItems, noteItems]);
+
   useEffect(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      doSearch(query, allItems, sourceFilter);
+      doSearch(query, searchable, sourceFilter);
       setShowCount(20);
     }, 200);
     return () => clearTimeout(debounceRef.current);
-  }, [query, allItems, sourceFilter, doSearch]);
+  }, [query, searchable, sourceFilter, doSearch]);
 
   // 자동 포커스
   useEffect(() => {
@@ -175,7 +202,7 @@ export default function SearchPage() {
           <div style={{ marginBottom: 16, color: 'var(--text-dim)' }}><Icon name="search" size={48}/></div>
           <p style={{ color: 'var(--text-dim)' }}>
             단답형 100선, 코드 트레이싱 40문제, 암기 119선 보강<br />
-            총 {allItems.length}개 항목에서 검색합니다
+            학습 노트 {noteItems.length}개 섹션을 포함해 총 {searchable.length}개 항목에서 검색합니다
           </p>
         </div>
       ) : results.length === 0 ? (
@@ -189,6 +216,25 @@ export default function SearchPage() {
             const config = SOURCE_CONFIG[item.source];
             const key = `${item.source}_${item.id}`;
             const isExpanded = expandedId === key;
+
+            if (item.source === 'notes') {
+              const keywords = query.toLowerCase().split(/\s+/).filter(Boolean);
+              return (
+                <div key={key} className="card search-result-card" style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                    <span className={`badge ${config.badge}`}>{config.label}</span>
+                    <span className="badge badge-primary">{STUDY_FILES[item.fileIdx].name}</span>
+                  </div>
+                  <h3 style={{ fontSize: '0.95rem', lineHeight: 1.6 }}>{item.heading}</h3>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)', margin: '4px 0 8px' }}>
+                    {makeSnippet(item.text, keywords)}
+                  </p>
+                  <Link className="plan-item-link" to={`/study?doc=${item.fileIdx}`}>
+                    학습 노트에서 열기 <Icon name="chevron-right" size={14} />
+                  </Link>
+                </div>
+              );
+            }
 
             return (
               <div key={key} className="card search-result-card" style={{ marginBottom: 10 }}>

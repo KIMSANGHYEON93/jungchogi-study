@@ -2437,3 +2437,28 @@ html { scroll-behavior: smooth; }
 .goal-export-hint {
   margin: var(--space-xs) 0 0;
 }
+
+.study-planned {
+  margin: 0 0 var(--space-md);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  color: var(--primary-dim);
+  background: rgba(var(--primary-rgb), 0.1);
+  border-radius: 8px;
+}
+
+.quiz-auto-verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-sm);
+  font-weight: 600;
+}
+
+.quiz-auto-verdict.match {
+  color: var(--success);
+}
+
+.quiz-auto-verdict.mismatch {
+  color: var(--warning);
+}
