@@ -124,6 +124,7 @@ function unitOf(day) {
  * @property {number} dDay 그날 기준 남은 일수 (시험 당일 0)
  * @property {{day:number,label:string,phase:{key:string,label:string}}[]} units 그날 목표 학습 단위
  * @property {'study'|'review'|'exam'} kind 단위가 없으면 'review', 시험 당일은 'exam'
+ * @property {boolean} busy 캘린더에서 가져온 "바쁜 날"이라 새 Day 를 배정하지 않았는지
  */
 
 /**
@@ -141,11 +142,13 @@ function unitOf(day) {
 /**
  * 시험일·오늘·완료 체크로 오늘~시험일 일정을 만든다.
  *
- * @param {{examDate?: unknown, today: string, dayChecks?: Record<string, unknown>}} input
+ * @param {{examDate?: unknown, today: string, dayChecks?: Record<string, unknown>, busyDates?: Iterable<string>}} input
  *   `examDate` 가 없거나 형식이 틀리면 기본 시험일(10/25)을 쓴다.
+ *   `busyDates` 의 날(캘린더에서 가져옴)에는 새 Day 를 배정하지 않고 나머지 날에 균등 분배한다.
+ *   단, 고정일(Day13·14)은 못 옮기고, 분배할 날이 전부 바쁘면 바쁜 날을 무시한다(일정 없이 끝나지 않게).
  * @returns {DailyPlan}
  */
-export function buildDailyPlan({ examDate: storedExamDate, today, dayChecks = {} }) {
+export function buildDailyPlan({ examDate: storedExamDate, today, dayChecks = {}, busyDates = [] }) {
   const { examDate, isDefault } = resolveExamDate(storedExamDate, today);
   const total = STUDY_DAYS.length;
   const done = STUDY_DAYS.filter((d) => dayChecks?.[d.day]).length;
@@ -171,10 +174,14 @@ export function buildDailyPlan({ examDate: storedExamDate, today, dayChecks = {}
   if (daysLeft >= 1) pinned.set(daysLeft - 1, 13);
 
   // 분배 대상: 아직 체크 안 한 Day01~12 를 고정일을 뺀 날들에 나눈다.
+  const busy = new Set(busyDates);
   const freeOffsets = dayOffsets.filter((o) => !pinned.has(o));
+  // 바쁜 날을 뺀 날들에 나눈다. 전부 바쁘면 바쁜 날을 무시한다 — 분량이 사라지면 안 된다.
+  const workableOffsets = freeOffsets.filter((o) => !busy.has(addDays(today, o)));
+  const slotOffsets = workableOffsets.length > 0 ? workableOffsets : freeOffsets;
   const pendingFree = FREE_DAYS.filter((d) => !dayChecks?.[d]);
-  const shares = freeOffsets.length > 0 ? splitEvenly(pendingFree, freeOffsets.length) : [];
-  const shareByOffset = new Map(freeOffsets.map((o, i) => [o, shares[i]]));
+  const shares = slotOffsets.length > 0 ? splitEvenly(pendingFree, slotOffsets.length) : [];
+  const shareByOffset = new Map(slotOffsets.map((o, i) => [o, shares[i]]));
 
   // 분배할 날이 하나도 없는데 남은 Day 가 있으면(시험 당일·전날뿐) 가장 이른 고정일 칸에 몰아 넣는다.
   const overflow = freeOffsets.length === 0 ? pendingFree : [];
@@ -189,11 +196,17 @@ export function buildDailyPlan({ examDate: storedExamDate, today, dayChecks = {}
         ? [...(offset === overflowOffset ? overflow : []), ...pendingPinned]
         : shareByOffset.get(offset) ?? [];
     const kind = offset === daysLeft ? 'exam' : dayNumbers.length > 0 ? 'study' : 'review';
-    return { date, dDay: daysLeft - offset, units: dayNumbers.map(unitOf), kind };
+    return {
+      date,
+      dDay: daysLeft - offset,
+      units: dayNumbers.map(unitOf),
+      kind,
+      busy: busy.has(date) && workableOffsets.length > 0,
+    };
   });
 
   const plannedBeforeFinal = pendingFree.length;
-  const spread = Math.max(freeOffsets.length, 1);
+  const spread = Math.max(slotOffsets.length, 1);
   const perDay = Math.round((plannedBeforeFinal / spread) * 10) / 10;
   const allDone = done === total;
 
