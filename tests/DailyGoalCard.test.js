@@ -4,6 +4,13 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import DailyGoalCard from '../src/components/DailyGoalCard.jsx';
+import { downloadIcs } from '../src/utils/icsExport.js';
+
+// 다운로드(Blob·a[download])만 막고 .ics 생성은 실제 구현을 쓴다
+vi.mock('../src/utils/icsExport.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  downloadIcs: vi.fn(),
+}));
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -92,5 +99,22 @@ describe('DailyGoalCard', () => {
   it('다가오는 일정은 최대 6일까지 보여준다', () => {
     const c = render({ examDate: '2026-10-25', onToggleDay: () => {} });
     expect(c.querySelectorAll('.goal-upcoming-item')).toHaveLength(6);
+  });
+
+  it('내보내기 버튼은 남은 일정 전체를 .ics 로 내려받는다', () => {
+    const c = render({ examDate: '2026-10-25', onToggleDay: () => {} });
+    const btn = [...c.querySelectorAll('button')].find((b) => b.textContent.includes('.ics'));
+    act(() => btn.click());
+    expect(downloadIcs).toHaveBeenCalledTimes(1);
+    const [text, filename] = downloadIcs.mock.calls[0];
+    expect(filename).toBe('jungchogi-plan-2026-10-01.ics');
+    expect(text.startsWith('BEGIN:VCALENDAR')).toBe(true);
+    expect(text.match(/BEGIN:VEVENT/g)).toHaveLength(25); // 오늘 ~ 시험 당일
+    expect(text).toContain('UID:jungchogi-2026-10-25@jungchogi-study');
+  });
+
+  it('시험일이 지났으면 내보내기 버튼이 없다', () => {
+    const c = render({ examDate: '2026-09-20', onToggleDay: () => {} });
+    expect([...c.querySelectorAll('button')].some((b) => b.textContent.includes('.ics'))).toBe(false);
   });
 });

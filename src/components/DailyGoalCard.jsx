@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Icon from './Icon';
 import { buildDailyPlan, daysUntil } from '../domain/dailyPlan';
 import { STUDY_DAYS } from '../domain/studyDays';
+import { buildIcs, downloadIcs } from '../utils/icsExport';
 import { toLocalDateKey } from '../utils/storage';
 
 const ICON_BY_DAY = new Map(STUDY_DAYS.map((d) => [d.day, d.icon]));
@@ -55,6 +56,10 @@ export default function DailyGoalCard({ examDate, dayChecks, onToggleDay }) {
 
   const upcoming = schedule.slice(1, 1 + UPCOMING_COUNT);
   const paceDays = daysUntil(plan.examDate, today);
+
+  // 지금 시점의 남은 일정을 .ics 로 내려받는다. 날짜별 UID 가 고정이라 다시 가져와도
+  // 새 이벤트가 쌓이지 않는다(완료 체크로 일정이 바뀐 뒤 다시 내보내면 갱신).
+  const handleExport = () => downloadIcs(buildIcs(schedule), `jungchogi-plan-${today}.ics`);
 
   return (
     <section className="card goal-card" aria-labelledby="daily-goal-title">
@@ -156,6 +161,13 @@ export default function DailyGoalCard({ examDate, dayChecks, onToggleDay }) {
               </ol>
             </details>
           ) : null}
+
+          <button type="button" className="btn-outline goal-export" onClick={handleExport}>
+            <Icon name="calendar" size={14} /> 캘린더로 내보내기 (.ics)
+          </button>
+          <p className="goal-hint goal-export-hint">
+            Google 캘린더 · 애플 캘린더 · 아웃룩의 &quot;가져오기&quot;로 열 수 있습니다.
+          </p>
         </>
       ) : null}
     </section>
