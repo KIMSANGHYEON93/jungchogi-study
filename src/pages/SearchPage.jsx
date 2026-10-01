@@ -27,6 +27,8 @@ export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const [allItems, setAllItems] = useState([]);
   const [noteItems, setNoteItems] = useState([]);
+  // 학습 노트는 문제 은행보다 늦게 색인된다 — 끝나기 전의 "결과 없음"은 사실이 아니다
+  const [notesReady, setNotesReady] = useState(false);
   // `/search?q=...` 로 들어오면 그 검색어로 연다.
   // 첫 렌더에만 읽는다 — 이후 입력은 사용자가 소유한다.
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
@@ -85,6 +87,7 @@ export default function SearchPage() {
           : []
       );
       setNoteItems(items);
+      setNotesReady(true);
     });
     return () => { cancelled = true; };
   }, []);
@@ -173,7 +176,7 @@ export default function SearchPage() {
       </div>
 
       {/* 결과 수 */}
-      {query.trim() && (
+      {query.trim() && (results.length > 0 || notesReady) && (
         <div style={{ marginBottom: 16, color: 'var(--text-dim)', fontSize: '0.9rem' }} aria-live="polite">
           {results.length}개 결과
         </div>
@@ -187,6 +190,10 @@ export default function SearchPage() {
             단답형 100선, 코드 트레이싱 40문제, 암기 119선 보강<br />
             학습 노트 {noteItems.length}개 섹션을 포함해 총 {searchable.length}개 항목에서 검색합니다
           </p>
+        </div>
+      ) : results.length === 0 && !notesReady ? (
+        <div className="card" style={{ textAlign: 'center', padding: 60 }} role="status">
+          <p style={{ color: 'var(--text-dim)' }}>학습 노트를 불러오는 중입니다…</p>
         </div>
       ) : results.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 60 }}>
