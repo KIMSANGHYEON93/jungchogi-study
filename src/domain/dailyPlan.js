@@ -1,6 +1,6 @@
 // 단계별 일일 학습 플랜의 도메인 계층 — 서버·AI 없이 순수하게 동작한다.
 //
-// 상위 원리: 시험일에서 거꾸로 계산한 "남은 일수"에 남은 학습 단위를 균등 분배한다.
+// 상위 원리: 시험일에서 거꾸로 계산한 "남은 일수"에 남은 학습 단위를 균등 분배한다(앞날 우선).
 //  - 학습 단위 = Day01~14 학습 문서 (`studyDays.js`)
 //  - Day13(시험 전날)·Day14(시험 당일)는 실제 그 날짜에 고정한다.
 //  - Day01~12 중 아직 완료 체크하지 않은 것만 오늘~시험 이틀 전에 균등 분배한다.
@@ -88,8 +88,10 @@ export function resolveExamDate(stored, today) {
 }
 
 /**
- * n 개 단위를 k 일에 균등 분배한다. i 번째 날의 몫은 [floor(i·n/k), floor((i+1)·n/k)).
+ * n 개 단위를 k 일에 균등 분배한다. i 번째 날의 몫은 [ceil(i·n/k), ceil((i+1)·n/k)).
  * 몫의 차이는 최대 1 이고, k > n 이면 단위 없는 날이 생긴다.
+ * floor 가 아니라 ceil 인 이유: floor 는 첫날 몫이 항상 비어(0 ≤ i·n/k < 1) 접속 직후
+ * "오늘의 목표"가 복습일로 나온다. ceil 은 단위가 남아 있는 한 첫날부터 일을 배정한다.
  * @template T
  * @param {T[]} units
  * @param {number} k 1 이상
@@ -98,7 +100,7 @@ export function resolveExamDate(stored, today) {
 export function splitEvenly(units, k) {
   const n = units.length;
   return Array.from({ length: k }, (_, i) =>
-    units.slice(Math.floor((i * n) / k), Math.floor(((i + 1) * n) / k))
+    units.slice(Math.ceil((i * n) / k), Math.ceil(((i + 1) * n) / k))
   );
 }
 

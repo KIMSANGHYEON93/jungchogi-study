@@ -129,6 +129,18 @@ describe('buildDailyPlan — 오늘 2026-10-01, 시험 10/25', () => {
   it('하루 몫은 0 또는 1 단위 (12 단위 / 23일)', () => {
     for (const e of plan.schedule.slice(0, -2)) expect(e.units.length).toBeLessThanOrEqual(1);
   });
+
+  it('접속 첫날(오늘)부터 목표 Day 가 배정된다 — 복습일로 시작하지 않는다', () => {
+    expect(plan.today.kind).toBe('study');
+    expect(days(plan.today)).toEqual([1]);
+  });
+
+  it('Day01~12 가 남아 있는 한 오늘 몫은 어떤 기간에서도 비지 않는다', () => {
+    for (let left = 2; left <= 40; left++) {
+      const p = buildDailyPlan({ examDate: addDays('2026-10-01', left), today: '2026-10-01' });
+      expect(p.today.units.length).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('buildDailyPlan — 완료 체크 반영', () => {

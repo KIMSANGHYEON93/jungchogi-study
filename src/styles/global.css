@@ -2255,3 +2255,172 @@ html { scroll-behavior: smooth; }
   font-size: 0.82rem;
   color: var(--text-dim);
 }
+
+/* ─── 오늘의 목표 단계 카드 (일일 학습 플랜) ─── */
+
+.goal-card {
+  margin-bottom: var(--space-lg);
+}
+
+.goal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.goal-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.goal-date {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.goal-hint {
+  margin: 0 0 var(--space-sm);
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.goal-done {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  font-weight: 600;
+  color: var(--success, var(--primary));
+}
+
+.goal-units {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.goal-unit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.goal-unit.is-done {
+  opacity: 0.65;
+}
+
+.goal-unit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.goal-unit-phase {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+.goal-unit-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+}
+
+.goal-unit-title:hover {
+  color: var(--primary);
+}
+
+.goal-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+  padding: 6px 14px;
+  font-size: 0.85rem;
+}
+
+.goal-review {
+  padding: var(--space-md);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.goal-review-links {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+}
+
+.goal-review-link {
+  text-decoration: none;
+  font-size: 0.85rem;
+  padding: 6px 14px;
+}
+
+.goal-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.goal-upcoming {
+  margin-top: var(--space-md);
+  font-size: 0.88rem;
+}
+
+.goal-upcoming summary {
+  cursor: pointer;
+  color: var(--text-dim);
+}
+
+.goal-upcoming-list {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.goal-upcoming-item {
+  display: grid;
+  grid-template-columns: 5.5rem 3.2rem 1fr;
+  gap: var(--space-sm);
+  align-items: baseline;
+}
+
+.goal-upcoming-date {
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-upcoming-dday {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 480px) {
+  .goal-unit {
+    flex-wrap: wrap;
+  }
+  .goal-check {
+    width: 100%;
+    justify-content: center;
+  }
+}

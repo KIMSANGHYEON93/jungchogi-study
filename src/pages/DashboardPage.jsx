@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loadProgress, saveProgress, getWrongNotes, getExamDate, setExamDate, getWeeklyStudyTime, addStudyTime, getSpacedRepetitionDue, getStorageUsage, formatBytes } from '../utils/storage';
 import Icon from '../components/Icon';
+import DailyGoalCard from '../components/DailyGoalCard';
 import TodayPlanCard from '../components/TodayPlanCard';
 import UsageSummaryCard from '../components/UsageSummaryCard';
 import { summarizeQuizResults } from '../domain/grading';
@@ -177,6 +178,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* 오늘의 목표 단계 (남은 일수 기반 일일 플랜 — 서버 불필요) */}
+      <DailyGoalCard examDate={examDate} dayChecks={dayChecks} onToggleDay={toggleDay} />
 
       {/* 오늘의 계획 (AI 학습 플래너) */}
       <TodayPlanCard />
