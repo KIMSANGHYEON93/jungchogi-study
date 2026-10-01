@@ -212,7 +212,7 @@ export default function SearchPage() {
                   <p style={{ fontSize: '0.85rem', color: 'var(--text-dim)', margin: '4px 0 8px' }}>
                     {makeSnippet(item.text, keywords)}
                   </p>
-                  <Link className="plan-item-link" to={`/study?doc=${item.fileIdx}`}>
+                  <Link className="note-link" to={`/study?doc=${item.fileIdx}`}>
                     학습 노트에서 열기 <Icon name="chevron-right" size={14} />
                   </Link>
                 </div>

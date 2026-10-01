@@ -49,7 +49,7 @@ function entrySummary(entry) {
  * 대시보드 "오늘의 목표 단계" 카드.
  *
  * 시험일까지 남은 일수에 남은 학습 단위(Day)를 균등 분배해 오늘 할 몫을 보여준다.
- * AI·서버를 쓰지 않으므로 항상 즉시 뜨고, 완료 체크가 바뀌면 남은 분량이 재분배된다.
+ * 서버를 쓰지 않으므로 항상 즉시 뜨고, 완료 체크가 바뀌면 남은 분량이 재분배된다.
  * 완료 체크 상태는 대시보드가 소유한다 — 여기서는 props 로 받고 토글만 위임한다.
  *
  * @param {{examDate: string, dayChecks: Record<string, boolean>, onToggleDay: (day: number) => void}} props
