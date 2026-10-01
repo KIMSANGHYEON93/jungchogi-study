@@ -52,9 +52,9 @@ const DAYS = [
   { d: 22, title: 'Java ①', topics: [{ text: 'Java — 클래스 · 상속 · 오버라이딩', scope: COMMON, study: 2, to: '/quiz' }] },
   { d: 21, title: 'Java ②', topics: [{ text: 'Java — 예외 · static · 인터페이스 · 추상 클래스', scope: COMMON, study: 2, to: '/quiz' }] },
   { d: 20, title: 'Python', topics: [{ text: 'Python — 리스트 · 딕셔너리 · 슬라이싱 · 클래스', scope: COMMON, study: 3, to: '/quiz' }] },
-  { d: 19, title: 'SQL ①', topics: [{ text: 'SQL — SELECT · JOIN · GROUP BY · HAVING', scope: COMMON, study: 3, to: '/practice' }] },
+  { d: 19, title: 'SQL ①', topics: [{ text: 'SQL — SELECT · JOIN · GROUP BY · HAVING', scope: COMMON, study: 3, to: '/practice?tab=sql' }] },
   { d: 18, title: 'SQL ②', topics: [{ text: 'SQL — 서브쿼리 · DDL · DCL · 트리거 · 프로시저', scope: COMMON, study: 4, query: '트리거' }] },
-  { d: 17, title: '코드 트레이싱 종합', topics: [{ text: '변수 추적표로 C · Java · Python 섞어 풀기', scope: COMMON, to: '/practice' }] },
+  { d: 17, title: '코드 트레이싱 종합', topics: [{ text: '변수 추적표로 C · Java · Python 섞어 풀기', scope: COMMON, to: '/practice?tab=trace' }] },
   { d: 16, title: '1단계 점검', topics: [{ text: '코딩 · SQL 오답노트 복습', scope: COMMON, to: '/wrong' }] },
 
   // ── 2단계: 인프라 · 테스트 ──
@@ -78,7 +78,7 @@ const DAYS = [
     d: 8,
     title: '디자인패턴 ①',
     topics: [
-      { text: '공통 복습 — SQL 쿼리 3문제', scope: COMMON, to: '/practice' },
+      { text: '공통 복습 — SQL 쿼리 3문제', scope: COMMON, to: '/practice?tab=sql' },
       { text: '디자인패턴 — 생성 · 구조 패턴', scope: ENGINEER, study: 5 },
     ],
   },
@@ -222,6 +222,6 @@ export function topicLinks(topic) {
   const links = [];
   if (topic.study !== undefined) links.push({ to: `/study?day=${topic.study}`, label: `학습 노트 Day ${topic.study}` });
   if (topic.query) links.push({ to: `/search?q=${encodeURIComponent(topic.query)}`, label: `자료 검색 · ${topic.query}` });
-  if (topic.to) links.push({ to: topic.to, label: ROUTE_LABEL[topic.to] ?? topic.to });
+  if (topic.to) links.push({ to: topic.to, label: ROUTE_LABEL[topic.to.split('?')[0]] ?? topic.to });
   return links;
 }

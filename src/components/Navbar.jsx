@@ -18,7 +18,7 @@ const MoonIcon = () => (
   </svg>
 );
 
-export default function Navbar() {
+export default function Navbar({ onOpenCheatSheet }) {
   const { theme, toggle } = useThemeContext();
 
   return (
@@ -32,8 +32,12 @@ export default function Navbar() {
         <NavLink to="/exam">모의고사</NavLink>
         <NavLink to="/wrong">오답노트</NavLink>
         <NavLink to="/roadmap">로드맵</NavLink>
+        <NavLink to="/practice">실기연습</NavLink>
         <NavLink to="/guide">영역안내</NavLink>
         <NavLink to="/search">검색</NavLink>
+        <button type="button" className="btn-outline cheat-nav-button" onClick={onOpenCheatSheet}>
+          공식
+        </button>
         <button
           className="theme-toggle"
           onClick={toggle}

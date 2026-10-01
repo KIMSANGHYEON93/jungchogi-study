@@ -176,7 +176,7 @@ describe('주제 링크', () => {
         expect(t.study).toBeGreaterThanOrEqual(1);
         expect(t.study).toBeLessThanOrEqual(14);
       }
-      if (t.to) expect(ROUTES.has(t.to), t.to).toBe(true);
+      if (t.to) expect(ROUTES.has(t.to.split('?')[0]), t.to).toBe(true);
     }
   });
 

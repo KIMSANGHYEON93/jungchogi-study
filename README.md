@@ -12,12 +12,17 @@ Vite + React 19 기반 순수 클라이언트 SPA. 14일 학습 문서, 플래�
 | `/exam` | 모의고사 (타이머, 코드/단답 혼합, 제출 후 직접 채점) |
 | `/wrong` | 오답노트 (복습 횟수, 1/3/7일 간격 반복) |
 | `/search` | 전체 학습 자료 검색 (문제 은행 + 학습 노트 본문) |
+| `/roadmap` | 25일 D-Day 로드맵 — 목표 시험 토글(동시 대비·기사·산업기사), 4단계 일정, 일자별 완료 체크와 진도 게이지 |
+| `/practice` | 실기 연습 — 변수 추적표(C·Java·Python), SQL 빈칸 채우기, 단답·약술 키워드 채점 |
+| `/guide` | 시험 영역 안내 — 개요, 출제기준 12개 영역, 출제 비중 |
+| (모든 화면) | 공식 치트시트 모달 — 헤더의 "공식" 버튼 또는 오른쪽 아래 플로팅 버튼 (서브넷·순환 복잡도·HRN·페이지 교체) |
 
 ## 구조
 ```
 public/data/*.md      학습 콘텐츠 18개 (런타임 fetch)
 src/pages/            페이지 (lazy 로딩)
-src/domain/           순수 도메인 로직 — dailyPlan(일일 플랜), calendarBusy, grading, studyDays, studyFiles
+src/domain/           순수 도메인 로직 — dailyPlan, roadmap, calendarBusy, grading, examAreas,
+                      traces(변수 추적표 데이터), sqlBlanks, shortAnswer, formulas, studyDays, studyFiles
 src/services/         외부 연동 — googleCalendar (Google 캘린더 조회)
 src/utils/            parse*.js(md → 문항 파서), storage.js(localStorage 계층), icsExport.js
 src/hooks/            useTheme, useStudyTimer, useSwipe, useDeepLink
@@ -56,7 +61,9 @@ npm run build       # dist/ 생성
 |---|---|
 | 문항 파서 | `parseQuiz` · `parseBogang` · `parseCodeDrill` · `parseStudyNotes` |
 | 저장 계층 | `storage` · `edge-storage` · `edge-time` · `exam-results` · `quizResultsCompat` |
-| 일일 플랜·캘린더 | `dailyPlan` · `calendarBusy` · `icsExport` · `googleCalendar` · `DailyGoalCard*` |
+| 일일 플랜·로드맵·캘린더 | `dailyPlan` · `roadmap` · `RoadmapPage` · `calendarBusy` · `icsExport` · `googleCalendar` · `DailyGoalCard*` |
+| 실기 연습 | `traces` · `CodeTracingTable` · `sqlBlanks` · `SqlQuizCard` · `shortAnswer` · `ShortAnswerGrader` · `PracticePage` |
+| 공식 치트시트 | `formulas` · `FormulaCheatSheetModal` · `App.cheatsheet` |
 | 채점 | `grading` · `QuizPage.grade` · `QuizPage.autoMatch` · `ExamPage.grade` |
 | 화면·딥링크 | `StudyPage.planned` · `SearchPage.notes` · `deepLink-*` |
 

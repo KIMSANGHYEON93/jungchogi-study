@@ -202,7 +202,8 @@ button:active { transform: scale(0.97); }
 .page {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 32px 24px;
+  /* 아래쪽은 오른쪽 아래에 떠 있는 '공식' 버튼이 마지막 내용을 가리지 않도록 비워 둔다 */
+  padding: 32px 24px 96px;
 }
 
 .page h1 {
@@ -2379,3 +2380,370 @@ html { scroll-behavior: smooth; }
     overflow-x: auto;
   }
 }
+
+/* ─── 실기 연습: 변수 추적표 · SQL 빈칸 ─── */
+
+/* 실습 컴포넌트(CodeTracingTable, SqlQuizCard) 전용 스타일 — global.css 에 합쳐 쓴다 */
+
+/* ── CodeTracingTable ── */
+.trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+.trace-empty {
+  color: var(--text-dim);
+}
+.trace-modes,
+.trace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.trace-code {
+  margin: 0;
+  padding: var(--space-sm) 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 100%;
+}
+.trace-line {
+  display: block;
+  padding: 0 var(--space-md) 0 0;
+  white-space: pre;
+}
+.trace-line--active {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.trace-ln {
+  display: inline-block;
+  width: 2.5em;
+  margin-right: var(--space-sm);
+  text-align: right;
+  color: var(--text-dim);
+  user-select: none;
+}
+.trace-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.trace-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+.trace-table th,
+.trace-table td {
+  border: 1px solid var(--border);
+  padding: 4px var(--space-sm);
+  text-align: left;
+  vertical-align: top;
+}
+.trace-table thead th {
+  white-space: nowrap;
+}
+.trace-row--current {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.trace-cell--unset {
+  color: var(--text-dim);
+  text-align: center;
+}
+.trace-cell--ok {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+}
+.trace-cell--bad {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.trace-cell--revealed {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.trace-input {
+  width: 100%;
+  min-width: 5em;
+  box-sizing: border-box;
+}
+.trace-output code {
+  white-space: pre-wrap;
+}
+.trace-status {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--text-dim);
+}
+
+/* ── SqlQuizCard ── */
+.sqlq {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.sqlq-title {
+  margin: 0;
+}
+.sqlq-prompt {
+  margin: 0;
+}
+.sqlq-tables {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.sqlq-columns {
+  margin-left: 4px;
+  color: var(--text-dim);
+}
+.sqlq-code {
+  margin: 0;
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 2.2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.sqlq-input {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 6px;
+  margin: 0 2px;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+.sqlq-input--ok {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+}
+.sqlq-input--bad {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.sqlq-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.sqlq-status {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--text-dim);
+}
+.sqlq-solution {
+  margin: 0;
+  padding: var(--space-md);
+  border: 1px solid var(--success);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .trace-table {
+    font-size: 0.8rem;
+  }
+}
+
+/* ─── 실기 연습: 단답 채점기 · 공식 치트시트 ─── */
+
+/* ShortAnswerGrader(sag-*) 와 FormulaCheatSheetModal(cheat-*) 스타일.
+   색은 전역 토큰만 써서 다크모드에서 따로 손볼 곳이 없다. global.css 에 합쳐 쓴다. */
+
+/* ---------- ShortAnswerGrader ---------- */
+.sag { display: flex; flex-direction: column; gap: var(--space-sm); }
+.sag-topic { font-size: 0.8rem; color: var(--text-dim); }
+.sag-question { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+.sag-label { margin: 0; font-size: 0.85rem; color: var(--text-dim); }
+.sag-textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+.sag-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.sag-answer {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* 매칭 구간: 배경은 성공색을 옅게 섞어 라이트·다크 모두에서 글자색이 읽힌다 */
+.sag-hit {
+  background: color-mix(in srgb, var(--success) 28%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.sag-score { margin: 0; font-weight: 700; }
+.sag-keywords { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.sag-kw {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.sag-kw-hit { color: var(--success); border-color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+.sag-kw-miss { color: var(--danger); border-color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.sag-model {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-left: 3px solid var(--primary);
+  background: var(--bg-hover);
+  overflow-wrap: anywhere;
+}
+/* 화면에는 숨기고 스크린리더에만 읽히는 보조 문구 */
+.sag-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- FormulaCheatSheetModal ---------- */
+.cheat-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.55);
+}
+.cheat-modal {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-md);
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.cheat-head {
+  position: sticky;
+  top: calc(var(--space-md) * -1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin: calc(var(--space-md) * -1) calc(var(--space-md) * -1) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+.cheat-title { margin: 0; font-size: 1.15rem; }
+.cheat-section { padding: var(--space-sm) 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.cheat-section:last-child { border-bottom: 0; }
+.cheat-section h3 { margin: 0 0 var(--space-sm); font-size: 1rem; color: var(--primary); }
+.cheat-section p { margin: var(--space-xs) 0; }
+.cheat-note { color: var(--text-dim); font-size: 0.85rem; }
+.cheat-formula {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-hover);
+  border-radius: 8px;
+  font-weight: 700;
+  text-align: center;
+}
+.cheat-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.cheat-table th,
+.cheat-table td { padding: var(--space-xs) var(--space-sm); border-bottom: 1px solid var(--border); text-align: left; }
+.cheat-table td:last-child,
+.cheat-table th:last-child { text-align: right; }
+.cheat-list,
+.cheat-faults { margin: var(--space-xs) 0; padding-left: var(--space-md); }
+.cheat-hrn { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-sm); }
+.cheat-frac { display: inline-flex; flex-direction: column; align-items: center; }
+.cheat-frac-num { padding: 0 var(--space-sm) 2px; border-bottom: 2px solid var(--text); }
+.cheat-frac-den { padding: 2px var(--space-sm) 0; }
+
+@media (max-width: 480px) {
+  .cheat-backdrop { padding: var(--space-sm); }
+  .cheat-table { font-size: 0.8rem; }
+  .cheat-table th,
+  .cheat-table td { padding: var(--space-xs); }
+}
+
+/* 공식 치트시트 열기 — 모든 화면 오른쪽 아래에 떠 있는 버튼. 모바일에서는 하단 탭바 위로 올린다 */
+.cheat-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 20px;
+  z-index: 90;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--primary);
+  background: var(--bg-card);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.88rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.cheat-fab:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .cheat-fab {
+    bottom: 76px;
+  }
+}
+
+.navbar .cheat-nav-button {
+  margin-left: auto;
+  margin-right: var(--space-sm);
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+/* 실기 연습 화면 */
+.practice-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.practice-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.practice-picker .btn-outline {
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+.practice-title {
+  margin: 0 0 var(--space-sm);
+  font-size: 1.05rem;
+}
+

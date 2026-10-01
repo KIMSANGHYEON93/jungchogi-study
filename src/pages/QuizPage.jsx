@@ -13,6 +13,8 @@ import {
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
 import Icon from '../components/Icon';
+import CodeTracingTable from '../components/CodeTracingTable';
+import { traceFor } from '../domain/traces';
 import ProblemContext from '../components/ProblemContext';
 import {
   QUIZ_RESULT,
@@ -254,6 +256,16 @@ export default function QuizPage() {
                 </div>
               </div>
             )}
+
+            {/* 변수 추적표 — 풀이를 공개한 뒤에만 보인다(정답 출력이 이미 나와 있다). 데이터가 있는 문제만. */}
+            {submitted && traceFor(current.id) ? (
+              <CodeTracingTable
+                key={`trace-${current.id}`}
+                code={current.code}
+                lang={current.lang}
+                steps={traceFor(current.id).steps}
+              />
+            ) : null}
 
             {/* 자기 채점 — 출력이 달라 보여도, 틀렸어도 여기서 끝낼 수 있다 */}
             {submitted && (
