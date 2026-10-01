@@ -2352,23 +2352,6 @@ html { scroll-behavior: smooth; }
   }
 }
 
-/* 내비게이션 항목이 늘어 좁은 데스크톱 폭에서 글자가 두 줄로 깨지지 않게 여백을 줄이고,
-   그래도 모자라면 가로 스크롤로 넘긴다 */
-@media (min-width: 769px) and (max-width: 1100px) {
-  .navbar {
-    padding: 0 12px;
-  }
-  .navbar a {
-    padding: 16px 10px;
-    font-size: 0.88rem;
-  }
-}
-
-@media (min-width: 769px) and (max-width: 900px) {
-  .navbar.desktop-nav {
-    overflow-x: auto;
-  }
-}
 
 /* ─── 실기 연습: 변수 추적표 · SQL 빈칸 ─── */
 
@@ -2734,5 +2717,85 @@ html { scroll-behavior: smooth; }
 .practice-title {
   margin: 0 0 var(--space-sm);
   font-size: 1.05rem;
+}
+
+/* 모의고사 결과의 '정답 확인' — 문제와 정답을 나란히 */
+.exam-review-problem {
+  margin-top: var(--space-sm);
+}
+
+.exam-review-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.exam-review-question {
+  margin: 4px 0 0;
+  line-height: 1.6;
+}
+
+/* ─── 상단 내비게이션 드롭다운 ─── */
+
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown-toggle {
+  padding: 16px 20px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.nav-dropdown-toggle:hover,
+.nav-dropdown-toggle.is-open {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.nav-dropdown-toggle.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.nav-dropdown-caret {
+  font-size: 0.7rem;
+  margin-left: 2px;
+}
+
+.nav-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 110;
+  min-width: 160px;
+  margin: 0;
+  padding: var(--space-xs) 0;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+/* `.navbar a` 의 상단 탭 스타일(큰 여백·아래 밑줄)을 메뉴 항목에서는 덮어쓴다 */
+.navbar .nav-dropdown-menu a {
+  display: block;
+  padding: 10px 18px;
+  border-bottom: 0;
+}
+
+.navbar .nav-dropdown-menu a.active {
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.1);
 }
 

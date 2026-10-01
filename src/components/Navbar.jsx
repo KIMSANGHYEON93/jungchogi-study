@@ -1,4 +1,6 @@
+import { useCallback, useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import NavDropdown from './NavDropdown';
 import { useThemeContext } from '../hooks/useTheme';
 import Icon from './Icon';
 
@@ -18,23 +20,60 @@ const MoonIcon = () => (
   </svg>
 );
 
+/** 상단 탭이 늘어 드롭다운으로 묶는다. 한 군데에서만 고치도록 목록을 위로 뺐다. */
+const NAV_GROUPS = [
+  {
+    id: 'study',
+    label: '학습',
+    items: [
+      { to: '/study', label: '학습노트' },
+      { to: '/flashcard', label: '플래시카드' },
+      { to: '/search', label: '검색' },
+    ],
+  },
+  {
+    id: 'practice',
+    label: '실전',
+    items: [
+      { to: '/quiz', label: '코드퀴즈' },
+      { to: '/practice', label: '실기연습' },
+      { to: '/exam', label: '모의고사' },
+      { to: '/wrong', label: '오답노트' },
+    ],
+  },
+  {
+    id: 'plan',
+    label: '계획',
+    items: [
+      { to: '/roadmap', label: '로드맵' },
+      { to: '/guide', label: '영역안내' },
+    ],
+  },
+];
+
 export default function Navbar({ onOpenCheatSheet }) {
   const { theme, toggle } = useThemeContext();
+  // 열린 드롭다운 id (한 번에 하나)
+  const [openGroup, setOpenGroup] = useState(null);
+  const closeMenu = useCallback(() => setOpenGroup(null), []);
+  const toggleMenu = useCallback((id) => setOpenGroup((current) => (current === id ? null : id)), []);
 
   return (
     <>
       {/* Desktop: top bar */}
       <nav className="navbar desktop-nav" role="navigation" aria-label="메인 네비게이션">
         <NavLink to="/" className="logo-link"><span className="logo">정처기 학습</span></NavLink>
-        <NavLink to="/flashcard">플래시카드</NavLink>
-        <NavLink to="/quiz">코드퀴즈</NavLink>
-        <NavLink to="/study">학습노트</NavLink>
-        <NavLink to="/exam">모의고사</NavLink>
-        <NavLink to="/wrong">오답노트</NavLink>
-        <NavLink to="/roadmap">로드맵</NavLink>
-        <NavLink to="/practice">실기연습</NavLink>
-        <NavLink to="/guide">영역안내</NavLink>
-        <NavLink to="/search">검색</NavLink>
+        {NAV_GROUPS.map((group) => (
+          <NavDropdown
+            key={group.id}
+            id={group.id}
+            label={group.label}
+            items={group.items}
+            open={openGroup === group.id}
+            onToggle={toggleMenu}
+            onClose={closeMenu}
+          />
+        ))}
         <button type="button" className="btn-outline cheat-nav-button" onClick={onOpenCheatSheet}>
           공식
         </button>
