@@ -31,6 +31,7 @@ export default function Navbar() {
         <NavLink to="/study">학습노트</NavLink>
         <NavLink to="/exam">모의고사</NavLink>
         <NavLink to="/wrong">오답노트</NavLink>
+        <NavLink to="/guide">영역안내</NavLink>
         <NavLink to="/search">검색</NavLink>
         <button
           className="theme-toggle"

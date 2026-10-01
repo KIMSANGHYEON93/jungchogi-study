@@ -12,6 +12,7 @@ const StudyPage = lazy(() => import('./pages/StudyPage'));
 const ExamPage = lazy(() => import('./pages/ExamPage'));
 const WrongNotePage = lazy(() => import('./pages/WrongNotePage'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
+const GuidePage = lazy(() => import('./pages/GuidePage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function PageLoader() {
@@ -41,6 +42,7 @@ function AppLayout() {
           <Route path="/exam" element={<ExamPage />} />
           <Route path="/wrong" element={<WrongNotePage />} />
           <Route path="/search" element={<SearchPage />} />
+          <Route path="/guide" element={<GuidePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { loadProgress, saveProgress, getWrongNotes, getExamDate, setExamDate, getWeeklyStudyTime, addStudyTime, getSpacedRepetitionDue, getStorageUsage, formatBytes } from '../utils/storage';
 import Icon from '../components/Icon';
 import DailyGoalCard from '../components/DailyGoalCard';
@@ -112,7 +112,9 @@ export default function DashboardPage() {
   return (
     <div className="page">
       <h1>학습 대시보드</h1>
-      <p className="subtitle">정보처리기사 실기 학습 현황</p>
+      <p className="subtitle">
+        정보처리기사 실기 학습 현황 · <Link to="/guide">시험 영역 안내</Link>
+      </p>
 
       {/* D-Day + 추천 학습 영역 */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>

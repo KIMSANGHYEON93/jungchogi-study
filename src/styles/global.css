@@ -2075,3 +2075,128 @@ html { scroll-behavior: smooth; }
   flex-basis: 100%;
   margin: 0;
 }
+
+/* ─── 영역 안내 ─── */
+
+.guide-section {
+  margin-bottom: var(--space-lg);
+}
+
+.guide-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-md);
+  font-size: 1.1rem;
+}
+
+.guide-overview {
+  margin: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.guide-overview-row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-overview-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.guide-overview dt {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+
+.guide-overview dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.guide-areas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.guide-area {
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.guide-area.is-core {
+  border-color: var(--danger);
+}
+
+.guide-area.is-calc {
+  border-color: var(--warning);
+}
+
+.guide-area-no {
+  flex-shrink: 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+}
+
+.guide-area-body {
+  min-width: 0;
+}
+
+.guide-area-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.guide-area-detail {
+  margin: var(--space-xs) 0 0;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.guide-weights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-md);
+}
+
+.guide-weight {
+  padding: var(--space-md);
+  border-left: 4px solid var(--border);
+  border-radius: 4px;
+  background: rgba(var(--primary-rgb), 0.06);
+}
+
+.guide-weight.is-core {
+  border-left-color: var(--danger);
+}
+
+.guide-weight.is-calc {
+  border-left-color: var(--warning);
+}
+
+.guide-weight p {
+  margin: var(--space-xs) 0 0;
+}
+
+@media (max-width: 480px) {
+  .guide-overview-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
