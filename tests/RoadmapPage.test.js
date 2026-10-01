@@ -88,7 +88,7 @@ describe('25일 로드맵 화면', () => {
     expect(dayCard(c, 'D-24').className).toContain('is-done');
 
     await act(async () => { dayCard(c, 'D-24').querySelector('input[type="checkbox"]').click(); });
-    expect(loadProgress('roadmap_checks', {})).toEqual({ 24: false });
+    expect(loadProgress('roadmap_checks', {})).toEqual({});
     expect(c.querySelector('.road-gauge-label').textContent).toContain('0/24일 완료');
   });
 
@@ -121,3 +121,42 @@ describe('25일 로드맵 화면', () => {
     expect(render().textContent).toContain('설정한 시험일이 지났습니다');
   });
 });
+
+describe('1단계 레슨 목록', () => {
+  it('D-24 · D-23 · D-17 레슨 카드와 일차 카드의 레슨 링크를 보여준다', () => {
+    const c = render();
+    const shelf = c.querySelector('#road-lessons').closest('section');
+    expect([...shelf.querySelectorAll('article h3')].map((h) => h.textContent)).toEqual([
+      'C언어 연산자', 'C언어 제어문', 'SQL — JOIN · GROUP BY · HAVING · 서브쿼리',
+    ]);
+    expect(dayCard(c, 'D-24').querySelector('a[href="/lesson/24"]')).not.toBeNull();
+    expect(dayCard(c, 'D-17').querySelector('a[href="/lesson/17"]')).not.toBeNull();
+    expect(dayCard(c, 'D-22').querySelector('a[href^="/lesson/"]')).toBeNull();
+  });
+
+  it('북마크하면 저장되고 "북마크만 보기"로 걸러진다', async () => {
+    const c = render();
+    const shelf = c.querySelector('#road-lessons').closest('section');
+    await act(async () => { shelf.querySelectorAll('article button[aria-pressed]')[1].click(); });
+    expect(loadProgress('lesson_bookmarks', {})).toEqual({ 'c-control-flow': true });
+
+    await act(async () => { shelf.querySelector('input[type="checkbox"]').click(); });
+    expect([...shelf.querySelectorAll('article h3')].map((h) => h.textContent)).toEqual(['C언어 제어문']);
+  });
+
+  it('북마크가 없으면 빈 안내를 보여준다', async () => {
+    const c = render();
+    const shelf = c.querySelector('#road-lessons').closest('section');
+    await act(async () => { shelf.querySelector('input[type="checkbox"]').click(); });
+    expect(shelf.querySelectorAll('article')).toHaveLength(0);
+    expect(shelf.textContent).toContain('북마크한 레슨이 없습니다');
+  });
+
+  it('레슨 카드의 완료 표시는 로드맵 완료 체크와 같은 기록을 본다', () => {
+    saveProgress('roadmap_checks', { 24: true });
+    const c = render();
+    const first = c.querySelector('#road-lessons').closest('section').querySelector('article');
+    expect(first.textContent).toContain('완료');
+  });
+});
+

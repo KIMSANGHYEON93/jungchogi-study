@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../components/Icon';
+import LessonCard from '../components/ui/LessonCard';
+import { LESSONS, lessonByDay } from '../domain/lessons';
 import { buildRoadmap, topicLinks } from '../domain/roadmap';
-import { getExamDate, loadProgress, saveProgress, toLocalDateKey } from '../utils/storage';
-
-const CHECKS_KEY = 'roadmap_checks';
+import useStudyState from '../hooks/useStudyState';
+import { getExamDate, toLocalDateKey } from '../utils/storage';
 
 const SCOPE_LABEL = { common: '공통', engineer: '기사 특화' };
 
@@ -16,18 +17,15 @@ function formatDate(dateKey) {
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${WEEKDAY[d.getUTCDay()]})`;
 }
 
-function loadChecks() {
-  const stored = loadProgress(CHECKS_KEY, {});
-  return stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {};
-}
-
 export default function RoadmapPage() {
   const [today] = useState(() => toLocalDateKey());
-  const [checks, setChecks] = useState(loadChecks);
+  const study = useStudyState();
+  const [onlyBookmarks, setOnlyBookmarks] = useState(false);
   const todayRef = useRef(null);
 
-  const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks });
+  const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks: study.checks });
   const { progress } = roadmap;
+  const shelf = onlyBookmarks ? LESSONS.filter((l) => study.isBookmarked(l.id)) : LESSONS;
 
   // 오늘 카드가 목록 아래쪽이면 화면 밖이다. 첫 렌더 뒤 한 번만 끌어온다.
   useEffect(() => {
@@ -35,12 +33,6 @@ export default function RoadmapPage() {
     // 구현이 없는 환경(jsdom 등)에서는 건너뛴다
     if (typeof el?.scrollIntoView === 'function') el.scrollIntoView({ block: 'center' });
   }, []);
-
-  const toggleDay = (d) => {
-    const next = { ...checks, [d]: !checks[d] };
-    setChecks(next);
-    saveProgress(CHECKS_KEY, next);
-  };
 
   const renderDay = (day) => (
     <li
@@ -53,12 +45,17 @@ export default function RoadmapPage() {
         <span className="road-day-date">{formatDate(day.date)}</span>
         {day.isToday ? <span className="badge badge-primary">오늘</span> : null}
         <strong className="road-day-title">{day.title}</strong>
+        {lessonByDay(day.d) ? (
+          <Link className="note-link" to={`/lesson/${day.d}`}>
+            레슨 <Icon name="chevron-right" size={14} />
+          </Link>
+        ) : null}
         {day.d > 0 ? (
           <label className="road-check">
             <input
               type="checkbox"
               checked={day.done}
-              onChange={() => toggleDay(day.d)}
+              onChange={() => study.toggleDone(day.d)}
               aria-label={`${day.label} 학습 완료`}
             />
             <span>완료</span>
@@ -117,6 +114,40 @@ export default function RoadmapPage() {
             <strong>{progress.percent}%</strong> · {progress.done}/{progress.total}일 완료
           </p>
         </div>
+      </section>
+
+      <section className="tw:mb-6 tw:flex tw:flex-col tw:gap-3" aria-labelledby="road-lessons">
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
+          <h2 id="road-lessons" className="tw:text-lg tw:font-bold tw:text-ink">
+            1단계 레슨 <span className="tw:text-sm tw:font-normal tw:text-dim">({LESSONS.length}개 공개)</span>
+          </h2>
+          <label className="tw:inline-flex tw:cursor-pointer tw:items-center tw:gap-2 tw:text-sm tw:text-ink">
+            <input
+              type="checkbox"
+              checked={onlyBookmarks}
+              onChange={(e) => setOnlyBookmarks(e.target.checked)}
+              className="tw:size-4 tw:accent-primary"
+            />
+            북마크만 보기
+          </label>
+        </div>
+        {shelf.length === 0 ? (
+          <p className="tw:rounded-lg tw:border tw:border-dashed tw:border-line tw:p-4 tw:text-sm tw:text-dim">
+            북마크한 레슨이 없습니다. 카드 오른쪽의 북마크 버튼으로 추가해 보세요.
+          </p>
+        ) : (
+          <div className="tw:grid tw:gap-3 tw:md:grid-cols-2 tw:xl:grid-cols-3">
+            {shelf.map((lesson) => (
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                done={study.isDone(lesson.d)}
+                bookmarked={study.isBookmarked(lesson.id)}
+                onToggleBookmark={() => study.toggleBookmark(lesson.id)}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {roadmap.isDefaultExamDate && roadmap.examDate ? (

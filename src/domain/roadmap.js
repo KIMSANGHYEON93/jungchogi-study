@@ -33,15 +33,22 @@ const ENGINEER = 'engineer';
 
 const DAYS = [
   // ── 1단계: 코딩 · SQL ──
-  { d: 24, title: 'C언어 ①', topics: [{ text: 'C언어 — 포인터 · 배열 · 문자열', scope: COMMON, study: 1, to: '/quiz' }] },
-  { d: 23, title: 'C언어 ②', topics: [{ text: 'C언어 — 구조체 · 재귀 · 비트 연산', scope: COMMON, study: 1, to: '/quiz' }] },
-  { d: 22, title: 'Java ①', topics: [{ text: 'Java — 클래스 · 상속 · 오버라이딩', scope: COMMON, study: 2, to: '/quiz' }] },
-  { d: 21, title: 'Java ②', topics: [{ text: 'Java — 예외 · static · 인터페이스 · 추상 클래스', scope: COMMON, study: 2, to: '/quiz' }] },
-  { d: 20, title: 'Python', topics: [{ text: 'Python — 리스트 · 딕셔너리 · 슬라이싱 · 클래스', scope: COMMON, study: 3, to: '/quiz' }] },
-  { d: 19, title: 'SQL ①', topics: [{ text: 'SQL — SELECT · JOIN · GROUP BY · HAVING', scope: COMMON, study: 3, to: '/practice?tab=sql' }] },
-  { d: 18, title: 'SQL ②', topics: [{ text: 'SQL — 서브쿼리 · DDL · DCL · 트리거 · 프로시저', scope: COMMON, study: 4, query: '트리거' }] },
-  { d: 17, title: '코드 트레이싱 종합', topics: [{ text: '변수 추적표로 C · Java · Python 섞어 풀기', scope: COMMON, to: '/practice?tab=trace' }] },
-  { d: 16, title: '1단계 점검', topics: [{ text: '코딩 · SQL 오답노트 복습', scope: COMMON, to: '/wrong' }] },
+  { d: 24, title: 'C언어 연산자', topics: [{ text: 'C언어 — 산술 · 증감 · 비트 · 논리 연산자', scope: COMMON, study: 1, to: '/quiz' }] },
+  { d: 23, title: 'C언어 제어문', topics: [{ text: 'C언어 — for · while · switch · break/continue', scope: COMMON, study: 1, to: '/quiz' }] },
+  { d: 22, title: 'C언어 포인터 · 구조체', topics: [{ text: 'C언어 — 포인터 · 배열 · 문자열 · 구조체 · 재귀', scope: COMMON, study: 1, to: '/quiz' }] },
+  { d: 21, title: 'Java ①', topics: [{ text: 'Java — 클래스 · 상속 · 오버라이딩', scope: COMMON, study: 2, to: '/quiz' }] },
+  { d: 20, title: 'Java ②', topics: [{ text: 'Java — 예외 · static · 인터페이스 · 추상 클래스', scope: COMMON, study: 2, to: '/quiz' }] },
+  { d: 19, title: 'Python', topics: [{ text: 'Python — 리스트 · 딕셔너리 · 슬라이싱 · 클래스', scope: COMMON, study: 3, to: '/quiz' }] },
+  { d: 18, title: 'SQL ① 기본 · DDL', topics: [{ text: 'SQL — SELECT · WHERE · 집계 · DDL · DCL · 트리거 · 프로시저', scope: COMMON, study: 4, query: '트리거', to: '/practice?tab=sql' }] },
+  { d: 17, title: 'SQL ② JOIN · 그룹 · 서브쿼리', topics: [{ text: 'SQL — JOIN · GROUP BY · HAVING · 서브쿼리', scope: COMMON, study: 3, to: '/practice?tab=sql' }] },
+  {
+    d: 16,
+    title: '1단계 점검',
+    topics: [
+      { text: '변수 추적표로 C · Java · Python 섞어 풀기', scope: COMMON, to: '/practice?tab=trace' },
+      { text: '코딩 · SQL 오답노트 복습', scope: COMMON, to: '/wrong' },
+    ],
+  },
 
   // ── 2단계: 인프라 · 테스트 ──
   { d: 15, title: '프로세스 스케줄링', topics: [{ text: 'OS — 스케줄링 계산 (FCFS · SJF · HRN · RR)', scope: COMMON, study: 6, query: '스케줄링' }] },

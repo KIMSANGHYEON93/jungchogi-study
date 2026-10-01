@@ -58,7 +58,7 @@
   --code-bg: #1e2030;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+/* 전역 리셋은 reset.css 로 옮겼다 — 레이어(base)에 두어 Tailwind 유틸리티(`tw:p-4` 등)가 이길 수 있게 한다. */
 
 *:focus-visible {
   outline: 2px solid var(--ring);
