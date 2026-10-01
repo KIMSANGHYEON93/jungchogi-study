@@ -137,3 +137,51 @@ describe('결과 화면', () => {
     unmount();
   });
 });
+
+describe('정답 확인에서 문제도 함께 보인다', () => {
+  async function toResult() {
+    const { container, unmount } = render();
+    await startExam(container);
+    await submitExam(container);
+    return { container, unmount };
+  }
+
+  it('모든 문항의 정답 확인 안에 문제와 정답이 나란히 있다', async () => {
+    const { container, unmount } = await toResult();
+    const cards = questionCards(container);
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      const details = card.querySelector('details');
+      expect(details.querySelector('.exam-review-problem')).not.toBeNull();
+      const labels = [...details.querySelectorAll('.exam-review-label')].map((e) => e.textContent);
+      expect(labels).toEqual(['문제', '정답']);
+    }
+    unmount();
+  });
+
+  it('단답형은 문제 문장을, 코드 문항은 코드를 보여 준다', async () => {
+    const { container, unmount } = await toResult();
+    const cards = questionCards(container);
+    const quizCard = cards.find((c) => c.textContent.includes('단답형'));
+    const codeCard = cards.find((c) => !c.textContent.includes('단답형') && c.querySelector('details pre'));
+
+    const headerText = quizCard.querySelector('strong').textContent; // '문제 N. <문제 문장>'
+    const question = quizCard.querySelector('.exam-review-question').textContent;
+    expect(question.length).toBeGreaterThan(0);
+    expect(headerText).toContain(question);
+
+    expect(codeCard).toBeTruthy();
+    expect(codeCard.querySelector('.exam-review-problem pre').textContent.length).toBeGreaterThan(0);
+    expect(codeCard.querySelector('.exam-review-question')).toBeNull();
+    unmount();
+  });
+
+  it('정답의 마크다운 코드 펜스가 그대로 노출되지 않는다', async () => {
+    const { container, unmount } = await toResult();
+    const codeCard = questionCards(container).find((c) => !c.textContent.includes('단답형') && c.querySelector('details pre'));
+    const answer = codeCard.querySelector('details .md-content');
+    expect(answer.textContent).not.toContain('```');
+    expect(answer.textContent.length).toBeGreaterThan(0);
+    unmount();
+  });
+});

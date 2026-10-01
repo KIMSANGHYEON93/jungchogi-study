@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { parseQuiz } from '../utils/parseQuiz';
@@ -270,8 +271,24 @@ export default function ExamPage() {
           </div>
           <details style={{ marginTop: 8 }}>
             <summary style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: 600 }}>정답 확인</summary>
-            <div className="md-content" style={{ marginTop: 8, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
-              {q.answer}
+            {/* 정답만 펼치면 코드 문제는 지문·코드를 다시 볼 수 없어 풀이를 대조하기 어렵다 — 문제를 함께 보여 준다 */}
+            <div className="exam-review-problem">
+              <div className="exam-review-label">문제</div>
+              {q.type === 'quiz' ? (
+                <p className="exam-review-question">{q.question}</p>
+              ) : (
+                <>
+                  <ProblemContext text={q.context} fontSize="0.9rem" />
+                  <SyntaxHighlighter language={q.lang} style={syntaxTheme} customStyle={{ borderRadius: 8, fontSize: '0.85rem' }}>
+                    {q.code}
+                  </SyntaxHighlighter>
+                </>
+              )}
+            </div>
+            <div className="exam-review-label" style={{ marginTop: 12 }}>정답</div>
+            {/* 정답 원문은 마크다운(코드 펜스·표)이라 코드 퀴즈와 같이 렌더링한다 */}
+            <div className="md-content" style={{ marginTop: 4, fontSize: '0.9rem' }}>
+              <ReactMarkdown>{q.answer}</ReactMarkdown>
             </div>
           </details>
           {/* 자기 채점. 카드가 20장 늘어서므로 버튼마다 문항 번호를 붙인다.
