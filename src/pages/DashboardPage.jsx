@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { loadProgress, saveProgress, getWrongNotes, getExamDate, setExamDate, getWeeklyStudyTime, addStudyTime, getSpacedRepetitionDue, getStorageUsage, formatBytes } from '../utils/storage';
 import Icon from '../components/Icon';
 import DailyGoalCard from '../components/DailyGoalCard';
-import TodayPlanCard from '../components/TodayPlanCard';
-import UsageSummaryCard from '../components/UsageSummaryCard';
 import { summarizeQuizResults } from '../domain/grading';
 
 import { STUDY_DAYS } from '../domain/studyDays';
@@ -179,11 +177,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 오늘의 목표 단계 (남은 일수 기반 일일 플랜 — 서버 불필요) */}
+      {/* 오늘의 목표 단계 (남은 일수 기반 일일 플랜) */}
       <DailyGoalCard examDate={examDate} dayChecks={dayChecks} onToggleDay={toggleDay} />
-
-      {/* 오늘의 계획 (AI 학습 플래너) */}
-      <TodayPlanCard />
 
       {/* 간격 반복 알림 상세 */}
       {spacedDue.length > 0 && (
@@ -368,9 +363,6 @@ export default function DashboardPage() {
       <div style={{ textAlign: 'center', marginTop: 16, color: 'var(--text-dim)', fontSize: '0.85rem' }}>
         {daysCompleted}/14일 완료 — 클릭하여 완료 표시
       </div>
-
-      {/* AI 사용량 — 본인 API 키로 도는 앱이라 비용이 곧 사용자 지갑이다 */}
-      <UsageSummaryCard />
 
       {/* 데이터 관리 */}
       <div className="card" style={{ marginTop: 32 }}>

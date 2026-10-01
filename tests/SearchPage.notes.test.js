@@ -8,7 +8,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import SearchPage from '../src/pages/SearchPage.jsx';
-import { clearGeneratedCache } from '../src/utils/generatedDeck.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -46,7 +45,6 @@ async function search(container, query) {
 
 beforeEach(() => {
   localStorage.clear();
-  clearGeneratedCache();
   notesFail = false;
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.stubGlobal(

@@ -9,20 +9,14 @@ import { parseBogang } from '../utils/parseBogang';
 import { parseStudyNotes, makeSnippet } from '../utils/parseStudyNotes';
 import { STUDY_FILES } from '../domain/studyFiles';
 import { fetchMarkdown } from '../utils/mdCache';
-import { applyGeneratedItems } from '../utils/generatedDeck';
-import useVariantPreference from '../hooks/useVariantPreference';
 import Icon from '../components/Icon';
 import ProblemContext from '../components/ProblemContext';
-import GeneratedBadge, { GeneratedAnswerNotice } from '../components/GeneratedBadge';
-import VariantToggle from '../components/VariantToggle';
 import { useThemeContext } from '../hooks/useTheme';
 
-// `generatedSource` 는 생성물 파일 이름(BLUEPRINT §4.4)이다.
-// 이 화면의 필터 키(codeDrill)와 교재 출처 이름(codedrill)이 달라 한 곳에서 맞춰 둔다.
 const SOURCE_CONFIG = {
-  quiz100: { label: '단답형 100선', badge: 'badge-primary', file: '정처기_단답형_100선.md', parser: 'quiz', generatedSource: 'quiz100' },
-  codeDrill: { label: '코드 트레이싱', badge: 'badge-warning', file: '정처기_코드트레이싱_드릴.md', parser: 'code', generatedSource: 'codedrill' },
-  bogang: { label: '암기 119선', badge: 'badge-danger', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', generatedSource: 'bogang' },
+  quiz100: { label: '단답형 100선', badge: 'badge-primary', file: '정처기_단답형_100선.md', parser: 'quiz' },
+  codeDrill: { label: '코드 트레이싱', badge: 'badge-warning', file: '정처기_코드트레이싱_드릴.md', parser: 'code' },
+  bogang: { label: '암기 119선', badge: 'badge-danger', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang' },
   // 문제 은행이 아니라 Day 문서 등 학습 노트 본문 — 제목(#~###) 단위 섹션으로 색인한다
   notes: { label: '학습 노트', badge: 'badge-success' },
 };
@@ -33,7 +27,7 @@ export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const [allItems, setAllItems] = useState([]);
   const [noteItems, setNoteItems] = useState([]);
-  // `/search?q=...` 로 들어오면 그 검색어로 연다 (오늘의 계획의 섹션 링크).
+  // `/search?q=...` 로 들어오면 그 검색어로 연다.
   // 첫 렌더에만 읽는다 — 이후 입력은 사용자가 소유한다.
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
   const [results, setResults] = useState([]);
@@ -41,17 +35,12 @@ export default function SearchPage() {
   const [sourceFilter, setSourceFilter] = useState('전체');
   const [showCount, setShowCount] = useState(20);
   const [loading, setLoading] = useState(true);
-  const [includeVariants, changeIncludeVariants] = useVariantPreference();
-  const [variantsAvailable, setVariantsAvailable] = useState(0);
   const inputRef = useRef(null);
 
   // 전체 데이터 로드
   useEffect(() => {
     let cancelled = false;
-    const load = (key, parse) =>
-      fetchMarkdown(SOURCE_CONFIG[key].file).then((md) =>
-        applyGeneratedItems(parse(md), SOURCE_CONFIG[key].generatedSource, includeVariants)
-      );
+    const load = (key, parse) => fetchMarkdown(SOURCE_CONFIG[key].file).then(parse);
 
     Promise.all([
       load('quiz100', parseQuiz),
@@ -59,27 +48,26 @@ export default function SearchPage() {
       load('bogang', parseBogang),
     ]).then(([quiz, code, bogang]) => {
       if (cancelled) return;
-      const quizItems = quiz.items.map((q) => ({
+      const quizItems = quiz.map((q) => ({
         ...q,
         source: 'quiz100',
         searchText: `${q.question} ${q.answer} ${q.category}`.toLowerCase(),
       }));
-      const codeItems = code.items.map((q) => ({
+      const codeItems = code.map((q) => ({
         ...q,
         source: 'codeDrill',
         searchText: `${q.title} ${q.context} ${q.code} ${q.answer} ${q.pitfall || ''} ${q.lang}`.toLowerCase(),
       }));
-      const bogangItems = bogang.items.map((q) => ({
+      const bogangItems = bogang.map((q) => ({
         ...q,
         source: 'bogang',
         searchText: `${q.question} ${q.answer} ${q.category}`.toLowerCase(),
       }));
       setAllItems([...quizItems, ...codeItems, ...bogangItems]);
-      setVariantsAvailable(quiz.available + code.available + bogang.available);
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [includeVariants]);
+  }, []);
 
   // 학습 노트 색인. 문제 은행과 따로 불러 — 노트 문서 하나가 실패해도 문제 검색은 그대로 동작한다.
   useEffect(() => {
@@ -182,11 +170,6 @@ export default function SearchPage() {
             {f}
           </button>
         ))}
-        <VariantToggle
-          enabled={includeVariants}
-          available={variantsAvailable}
-          onChange={changeIncludeVariants}
-        />
       </div>
 
       {/* 결과 수 */}
@@ -249,7 +232,6 @@ export default function SearchPage() {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                       <span className={`badge ${config.badge}`}>{config.label}</span>
-                      <GeneratedBadge item={item} />
                       {item.category && <span className="badge badge-success">{item.category}</span>}
                       {item.lang && <span className="badge badge-warning">{item.lang.toUpperCase()}</span>}
                     </div>
@@ -276,7 +258,6 @@ export default function SearchPage() {
                     )}
                     <div className="quiz-result correct" style={{ marginTop: item.code ? 12 : 0 }}>
                       <h4 style={{ marginBottom: 8, color: 'var(--success)' }}>정답 / 해설</h4>
-                      <GeneratedAnswerNotice item={item} />
                       <div className="md-content" style={{ fontSize: '0.85rem' }}>
                         <ReactMarkdown>{highlightText(item.answer, query)}</ReactMarkdown>
                       </div>

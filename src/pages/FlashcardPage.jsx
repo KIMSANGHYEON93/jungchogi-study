@@ -2,16 +2,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { parseQuiz } from '../utils/parseQuiz';
 import { parseBogang } from '../utils/parseBogang';
-import { saveProgress, loadProgress, variantKnownKey } from '../utils/storage';
+import { saveProgress, loadProgress } from '../utils/storage';
 import useSwipe from '../hooks/useSwipe';
 import useStudyTimer from '../hooks/useStudyTimer';
-import useVariantPreference from '../hooks/useVariantPreference';
 import { fetchMarkdown } from '../utils/mdCache';
-import { applyGeneratedItems } from '../utils/generatedDeck';
 import Icon from '../components/Icon';
-import GeneratedBadge, { GeneratedAnswerNotice } from '../components/GeneratedBadge';
-import VariantToggle from '../components/VariantToggle';
-import { isGeneratedItem } from '../domain/generatedItems';
 import {
   useDeepLinkId,
   useDeepLinkedIndex,
@@ -21,12 +16,10 @@ import {
 
 const CATEGORIES = ['전체', '데이터베이스', '소프트웨어공학', '디자인패턴/UML', '테스트', '보안/네트워크', 'OS/기타'];
 
-// `source` 는 생성물 파일 이름(BLUEPRINT §4.4)이다.
-// 덱 키(bogang119)와 교재 출처 이름(bogang)이 달라 한 곳에서 맞춰 둔다.
-// `idPattern` 은 서버 guard 의 ID_PATTERN 과 같은 형식에 변형 접미사(`-v1`)를 붙인 것이다.
+// `idPattern` 은 교재 카드 id 형식이다 — 딥링크가 어느 덱을 가리키는지 모양으로 가른다.
 const DECKS = [
-  { key: 'quiz100', label: '단답형 100선', file: '정처기_단답형_100선.md', parser: 'quiz', source: 'quiz100', idPattern: /^\d{3}(-v\d+)?$/ },
-  { key: 'bogang119', label: '암기 119선 보강', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', source: 'bogang', idPattern: /^B\d{2,3}(-v\d+)?$/ },
+  { key: 'quiz100', label: '단답형 100선', file: '정처기_단답형_100선.md', parser: 'quiz', idPattern: /^\d{3}$/ },
+  { key: 'bogang119', label: '암기 119선 보강', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', idPattern: /^B\d{2,3}$/ },
 ];
 
 const DEFAULT_DECK = 'quiz100';
@@ -56,11 +49,7 @@ export default function FlashcardPage() {
   const [flipped, setFlipped] = useState(false);
   const [category, setCategory] = useState('전체');
   const [known, setKnown] = useState({});
-  // 변형 카드의 "외움"은 별도 맵에 쌓는다 — 아래 markKnown 주석 참조
-  const [variantKnown, setVariantKnown] = useState({});
   const [filterMode, setFilterMode] = useState('all');
-  const [includeVariants, changeIncludeVariants] = useVariantPreference();
-  const [variantsAvailable, setVariantsAvailable] = useState(0);
 
   // 덱 변경 시 데이터 로드
   useEffect(() => {
@@ -68,25 +57,14 @@ export default function FlashcardPage() {
     const deckInfo = DECKS.find((d) => d.key === deck);
     fetchMarkdown(deckInfo.file)
       .then((text) => {
-        const parsed = deckInfo.parser === 'quiz' ? parseQuiz(text) : parseBogang(text);
-        return applyGeneratedItems(parsed, deckInfo.source, includeVariants);
-      })
-      .then(({ items, available }) => {
         if (cancelled) return;
-        setAllCards(items);
-        setVariantsAvailable(available);
+        setAllCards(deckInfo.parser === 'quiz' ? parseQuiz(text) : parseBogang(text));
         setKnown(loadProgress(`flashcard_known_${deck}`, {}));
-        setVariantKnown(loadProgress(variantKnownKey(deck), {}));
       });
     return () => { cancelled = true; };
-  }, [deck, includeVariants]);
+  }, [deck]);
 
-  // 외움 여부는 교재 카드와 변형 카드가 서로 다른 맵에 있다.
-  // id 는 겹치지 않도록 병합 단계에서 보장되므로 카드가 어느 쪽인지만 보면 된다.
-  const isKnown = useCallback(
-    (card) => !!(isGeneratedItem(card) ? variantKnown : known)[card.id],
-    [known, variantKnown]
-  );
+  const isKnown = useCallback((card) => !!known[card.id], [known]);
 
   // 필터 결과는 파생 상태 — effect 없이 렌더 중 계산한다
   const filtered = useMemo(() => {
@@ -103,23 +81,13 @@ export default function FlashcardPage() {
   // 목록이 줄어 커서가 범위를 벗어나는 경우(모르는 것만 필터에서 외움 처리)도
   // 이 훅이 첫 카드로 되돌린다.
   const { index: idx, setIndex, missedId } = useDeepLinkedIndex(cards, requestedId);
-  const deepLinkNotice = deckDeepLinkNotice(missedId, { variantsOff: !includeVariants });
+  const deepLinkNotice = deckDeepLinkNotice(missedId);
 
-  // 변형 카드의 진도는 교재 진도와 **다른 키**에 쌓는다.
-  // 대시보드는 `flashcard_known_<deck>` 의 값 개수를 분모 100(단답형)·24(보강)에
-  // 나눠 진도를 낸다. 변형 id 가 같은 맵에 들어가면 진도가 100% 를 넘고
-  // 종합 달성률까지 부풀려진다. 그래서 키를 갈라 둔다.
   const markKnown = useCallback((card, val) => {
-    if (isGeneratedItem(card)) {
-      const next = { ...variantKnown, [card.id]: val };
-      setVariantKnown(next);
-      saveProgress(variantKnownKey(deck), next);
-      return;
-    }
     const next = { ...known, [card.id]: val };
     setKnown(next);
     saveProgress(`flashcard_known_${deck}`, next);
-  }, [known, variantKnown, deck]);
+  }, [known, deck]);
 
   const next = useCallback(() => { setFlipped(false); setIndex(Math.min(idx + 1, cards.length - 1)); }, [idx, cards.length, setIndex]);
   const prev = useCallback(() => { setFlipped(false); setIndex(Math.max(idx - 1, 0)); }, [idx, setIndex]);
@@ -166,9 +134,7 @@ export default function FlashcardPage() {
     onSwipeRight: prev,
   });
 
-  // 진도는 **교재 카드만** 센다 — 변형은 덤이지 진도의 분모가 아니다
-  const baseCards = allCards.filter((c) => !isGeneratedItem(c));
-  const knownCount = baseCards.filter((c) => known[c.id]).length;
+  const knownCount = allCards.filter((c) => known[c.id]).length;
   const current = cards[idx];
 
   return (
@@ -191,7 +157,7 @@ export default function FlashcardPage() {
 
       <div className="stats">
         <div className="stat-box">
-          <div className="value">{baseCards.length}</div>
+          <div className="value">{allCards.length}</div>
           <div className="label">전체 문제</div>
         </div>
         <div className="stat-box">
@@ -199,13 +165,13 @@ export default function FlashcardPage() {
           <div className="label">외운 문제</div>
         </div>
         <div className="stat-box">
-          <div className="value" style={{ color: 'var(--warning)' }}>{baseCards.length - knownCount}</div>
+          <div className="value" style={{ color: 'var(--warning)' }}>{allCards.length - knownCount}</div>
           <div className="label">남은 문제</div>
         </div>
       </div>
 
       <div className="progress-bar">
-        <div className="fill" style={{ width: `${baseCards.length ? (knownCount / baseCards.length) * 100 : 0}%` }} />
+        <div className="fill" style={{ width: `${allCards.length ? (knownCount / allCards.length) * 100 : 0}%` }} />
       </div>
 
       <div className="filter-bar">
@@ -219,11 +185,6 @@ export default function FlashcardPage() {
         <button className={`btn-outline ${filterMode === 'unknown' ? 'active' : ''}`} onClick={() => changeFilterMode('unknown')}>모르는 것만</button>
         <span style={{ margin: '0 8px', borderLeft: '1px solid var(--border)', height: 28 }} />
         <button className="btn-outline" onClick={shuffle} title="카드 순서 섞기"><Icon name="refresh" size={14}/> 섞기</button>
-        <VariantToggle
-          enabled={includeVariants}
-          available={variantsAvailable}
-          onChange={(next) => { changeIncludeVariants(next); setIndex(0); setFlipped(false); }}
-        />
       </div>
 
       {/* 지목받은 카드를 못 찾았을 때. 조용히 다른 카드를 열면 사용자는
@@ -245,7 +206,6 @@ export default function FlashcardPage() {
               <div className="flashcard-face">
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                   <span className="badge badge-primary">{current.category}</span>
-                  <GeneratedBadge item={current} />
                 </div>
                 <h2 style={{ fontSize: '1.3rem', textAlign: 'center', lineHeight: 1.6 }}>
                   {current.id}. {current.question}
@@ -254,7 +214,6 @@ export default function FlashcardPage() {
               </div>
               <div className="flashcard-face flashcard-back">
                 <div className="md-content" style={{ width: '100%', fontSize: deck === 'bogang119' ? '0.85rem' : '0.95rem' }}>
-                  <GeneratedAnswerNotice item={current} />
                   <ReactMarkdown>{current.answer}</ReactMarkdown>
                 </div>
               </div>

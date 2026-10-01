@@ -12,7 +12,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import QuizPage from '../src/pages/QuizPage.jsx';
 import { loadProgress } from '../src/utils/storage.js';
-import { clearGeneratedCache } from '../src/utils/generatedDeck.js';
 import { matchesExpectedOutput } from '../src/domain/grading.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -59,7 +58,6 @@ async function answer(container, value) {
 
 beforeEach(() => {
   localStorage.clear();
-  clearGeneratedCache();
   vi.stubGlobal(
     'fetch',
     vi.fn((url) =>

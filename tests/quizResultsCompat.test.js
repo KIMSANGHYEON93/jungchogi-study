@@ -12,7 +12,6 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import DashboardPage from '../src/pages/DashboardPage.jsx';
-import { buildPlanSnapshot } from '../src/domain/studyPlan.js';
 import { saveProgress } from '../src/utils/storage.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -117,17 +116,5 @@ describe('대시보드 정답률 — 레거시를 정답으로도 오답으로�
     expect(quizCard(container).textContent).toContain('정답률 100%');
 
     unmount();
-  });
-});
-
-describe('플래너 스냅샷', () => {
-  it('세 값이 그대로 서버로 실려 간다 — 채점 결과가 약점 분석에 닿는다', () => {
-    saveProgress('quiz_results', { 'C-01': 'correct', 'C-02': 'incorrect', 'C-03': 'answered' });
-
-    expect(buildPlanSnapshot({}).quizResults).toEqual({
-      'C-01': 'correct',
-      'C-02': 'incorrect',
-      'C-03': 'answered',
-    });
   });
 });

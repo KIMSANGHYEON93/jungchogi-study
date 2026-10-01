@@ -1,8 +1,7 @@
 // 문항 단위 딥링크 (`/quiz?id=`, `/flashcard?id=`, `/wrong?id=`).
 //
-// 학습 플래너(BLUEPRINT §4.3)의 계획 항목은 `ids: ["042","C-07"]` 처럼 **문항을**
-// 지목한다. 화면 단위(`/study?day=N`)까지만 열어 주면 사용자가 그 문항을 목록에서
-// 직접 찾아야 한다. 여기서 URL 을 문항 커서로 승격시킨다.
+// URL 이 문항(`042`, `C-07`)을 지목하면 목록에서 직접 찾게 하지 않고
+// 여기서 URL 을 문항 커서로 승격시킨다.
 //
 // 상태 소유권 규칙은 `StudyPage`(`?day=`)·`SearchPage`(`?q=`)의 선례를 따른다:
 // **URL 은 첫 렌더에서 한 번만 읽고, 그 뒤로는 사용자 조작이 커서를 소유한다.**
@@ -10,7 +9,6 @@
 
 import { useCallback, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { isGeneratedItem } from '../domain/generatedItems.js';
 
 /** 안내 문구에 실을 id 의 최대 길이. 주소창에는 아무 값이나 들어올 수 있다. */
 const DISPLAY_LIMIT = 24;
@@ -22,8 +20,8 @@ const DISPLAY_LIMIT = 24;
  * 상태라 화면은 지금까지와 똑같이 동작해야 하고, 있으면 — 그 값이 아무리 이상해도 —
  * 찾아본 뒤 결과를 사용자에게 말해 줘야 한다.
  *
- * 이 값으로 fetch 경로나 저장 키를 만들지 않는다(배열을 훑을 뿐이다). 그래서 서버
- * guard 처럼 형식을 강제하지 않는다 — 거절하는 대신 "못 찾았다"고 알리는 쪽이
+ * 이 값으로 fetch 경로나 저장 키를 만들지 않는다(배열을 훑을 뿐이다). 그래서 형식을
+ * 강제하지 않는다 — 거절하는 대신 "못 찾았다"고 알리는 쪽이
  * 사용자에게 더 정확한 정보다.
  *
  * @param {unknown} raw
@@ -109,19 +107,12 @@ export const DEEP_LINK_NOTICE_STYLE = {
 
 /**
  * 코드 퀴즈·플래시카드가 함께 쓰는 안내 문구.
- * 두 화면 모두 "첫 문항으로 떨어졌다"가 폴백이고 변형 토글을 갖고 있어 문구가 같다.
+ * 두 화면 모두 "첫 문항으로 떨어졌다"가 폴백이라 문구가 같다.
  *
  * @param {string|null} missedId
- * @param {{variantsOff?: boolean}} [options]
  * @returns {string} 안내가 필요 없으면 빈 문자열
  */
-export function deckDeepLinkNotice(missedId, { variantsOff = false } = {}) {
+export function deckDeepLinkNotice(missedId) {
   if (!missedId) return '';
-  // 변형 id 는 토글이 꺼져 있으면 덱에 아예 없다. "없는 문항"과 원인이 달라
-  // 사용자가 할 수 있는 일(토글을 켠다)을 함께 알려 준다.
-  const hint =
-    variantsOff && isGeneratedItem({ id: missedId })
-      ? ' AI 변형 문항입니다 — "변형 포함"을 켜면 나타납니다.'
-      : '';
-  return `URL 이 지정한 ${formatDeepLinkId(missedId)} 문항을 찾지 못해 첫 문항부터 시작합니다.${hint}`;
+  return `URL 이 지정한 ${formatDeepLinkId(missedId)} 문항을 찾지 못해 첫 문항부터 시작합니다.`;
 }
