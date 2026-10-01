@@ -182,6 +182,7 @@ button:active { transform: scale(0.97); }
   color: var(--text-dim);
   font-weight: 500;
   font-size: 0.95rem;
+  white-space: nowrap;
   border-bottom: 3px solid transparent;
   transition: all 0.2s;
 }
@@ -2198,5 +2199,183 @@ html { scroll-behavior: smooth; }
   .guide-overview-row {
     grid-template-columns: 1fr;
     gap: 2px;
+  }
+}
+
+/* ─── 25일 로드맵 ─── */
+
+.road-controls {
+  margin-bottom: var(--space-lg);
+}
+
+.road-controls-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-md);
+  font-size: 1.1rem;
+}
+
+.road-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.road-toggle-default {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.road-hint {
+  margin: var(--space-sm) 0 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.road-gauge {
+  margin-top: var(--space-md);
+}
+
+.road-gauge-label {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.road-phase {
+  margin-bottom: var(--space-lg);
+}
+
+.road-phase-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.road-phase-no {
+  color: var(--primary);
+}
+
+.road-phase-range {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.road-phase-focus {
+  margin: var(--space-xs) 0 var(--space-sm);
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.road-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.road-day {
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg, transparent);
+}
+
+.road-day.is-today {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.18);
+}
+
+.road-day.is-done {
+  opacity: 0.65;
+}
+
+.road-day.is-late {
+  border-color: var(--warning);
+}
+
+.road-day-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.road-day-d {
+  font-weight: 800;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.road-day-date {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.road-day-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.road-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.road-topics {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.road-topic {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  font-size: 0.9rem;
+}
+
+.road-topic-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+@media (max-width: 480px) {
+  .road-phase-range {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
+/* 내비게이션 항목이 늘어 좁은 데스크톱 폭에서 글자가 두 줄로 깨지지 않게 여백을 줄이고,
+   그래도 모자라면 가로 스크롤로 넘긴다 */
+@media (min-width: 769px) and (max-width: 1100px) {
+  .navbar {
+    padding: 0 12px;
+  }
+  .navbar a {
+    padding: 16px 10px;
+    font-size: 0.88rem;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 900px) {
+  .navbar.desktop-nav {
+    overflow-x: auto;
   }
 }

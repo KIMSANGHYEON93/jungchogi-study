@@ -113,7 +113,8 @@ export default function DashboardPage() {
     <div className="page">
       <h1>학습 대시보드</h1>
       <p className="subtitle">
-        정보처리기사 실기 학습 현황 · <Link to="/guide">시험 영역 안내</Link>
+        정보처리기사 실기 학습 현황 · <Link to="/roadmap">25일 로드맵</Link> ·{' '}
+        <Link to="/guide">시험 영역 안내</Link>
       </p>
 
       {/* D-Day + 추천 학습 영역 */}
