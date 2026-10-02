@@ -73,7 +73,7 @@ export default function LessonPage() {
 
         {lesson.tables ? (
           <section className={card} aria-labelledby="lesson-tables">
-            <h2 id="lesson-tables" className={h2}>샘플 데이터</h2>
+            <h2 id="lesson-tables" className={h2}>{lesson.tablesTitle ?? '샘플 데이터'}</h2>
             <div className="tw:grid tw:gap-4 tw:md:grid-cols-2">
               {lesson.tables.map((t) => (
                 <DataTable key={t.name} {...t} />

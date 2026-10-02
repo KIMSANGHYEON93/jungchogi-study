@@ -23,7 +23,7 @@ export default function QuizItem({ index, question }) {
         <span className="tw:mr-2 tw:text-primary">Q{index + 1}.</span>
         {question.prompt}
       </p>
-      <CodeBlock code={question.code} lang={question.lang} />
+      {question.code ? <CodeBlock code={question.code} lang={question.lang} /> : null}
       <form onSubmit={check} className="tw:flex tw:flex-col tw:gap-2 tw:sm:flex-row">
         <label htmlFor={inputId} className="tw:sr-only">
           Q{index + 1} 답

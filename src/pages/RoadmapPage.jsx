@@ -119,7 +119,7 @@ export default function RoadmapPage() {
       <section className="tw:mb-6 tw:flex tw:flex-col tw:gap-3" aria-labelledby="road-lessons">
         <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
           <h2 id="road-lessons" className="tw:text-lg tw:font-bold tw:text-ink">
-            1단계 레슨 <span className="tw:text-sm tw:font-normal tw:text-dim">({LESSONS.length}개 공개)</span>
+            일차별 레슨 <span className="tw:text-sm tw:font-normal tw:text-dim">({LESSONS.length}개 공개)</span>
           </h2>
           <label className="tw:inline-flex tw:cursor-pointer tw:items-center tw:gap-2 tw:text-sm tw:text-ink">
             <input
