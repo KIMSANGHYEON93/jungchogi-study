@@ -759,8 +759,91 @@ button:active { transform: scale(0.97); }
     -webkit-tap-highlight-color: transparent;
   }
 
-  .mobile-tab-bar a.active {
+  .mobile-tab-bar a.active,
+  .mobile-tab-bar .mobile-more-button.active,
+  .mobile-tab-bar .mobile-more-button.open {
     color: var(--primary);
+  }
+
+  /* "더보기" 는 탭과 같은 모양의 버튼이다 */
+  .mobile-tab-bar .mobile-more-button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    transition: color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-more-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .mobile-more-sheet {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    z-index: 120;
+    padding: var(--space-sm);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .mobile-more-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-xs);
+  }
+
+  .mobile-more-list a {
+    flex: none;
+    flex-direction: row;
+    justify-content: center;
+    gap: 6px;
+    min-height: 48px;
+    padding: 8px 6px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .mobile-more-list a.active {
+    color: var(--primary);
+    background: var(--bg-hover);
+  }
+
+  .mobile-more-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--border);
+  }
+
+  .mobile-more-actions button {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 0.85rem;
   }
 
   .mobile-tab-bar .tab-icon {

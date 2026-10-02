@@ -17,7 +17,7 @@ Vite + React 19 기반 순수 클라이언트 SPA. 14일 학습 문서, 플래�
 | `/bookmarks` | 북마크 — 레슨 · 플래시카드 · 코드 퀴즈 · 학습 노트 북마크 모아 보기 (종류별 필터, 해제). 각 화면의 북마크 버튼으로 추가한다. 플래시카드는 "북마크만" 필터도 있다 |
 | `/practice` | 실기 연습 — 변수 추적표(C·Java·Python), SQL 빈칸 채우기, 단답·약술 키워드 채점 |
 | `/guide` | 시험 영역 안내 — 개요, 출제기준 12개 영역, 출제 비중 |
-| (상단 내비게이션) | 학습 · 실전 · 계획 드롭다운 3개로 묶여 있다 (학습: 학습노트·플래시카드·검색·북마크 / 실전: 코드퀴즈·실기연습·모의고사·오답노트 / 계획: 로드맵·영역안내) |
+| (상단 내비게이션) | 학습 · 실전 · 계획 드롭다운 3개로 묶여 있다 (학습: 학습노트·플래시카드·검색·북마크 / 실전: 코드퀴즈·실기연습·모의고사·오답노트 / 계획: 로드맵·영역안내). 모바일은 하단 탭 6개 + **더보기**(로드맵·북마크·실기연습·영역안내·검색, 공식 치트시트, 다크 모드 전환) |
 | (모든 화면) | 공식 치트시트 모달 — 헤더의 "공식" 버튼 또는 오른쪽 아래 플로팅 버튼 (서브넷·순환 복잡도·HRN·페이지 교체) |
 
 ## 구조
@@ -32,6 +32,14 @@ src/utils/            studyState.js(완료·북마크 공유 저장소), parse*.
 src/hooks/            useTheme, useStudyTimer, useSwipe, useDeepLink
 design-system/vivara/ 디자인 토큰·규칙
 ```
+
+## 학습 데이터 백업 · 폰/PC 합치기
+대시보드 "데이터 관리"에서 내보내고 가져온다. 서버가 없어 기기마다 진도가 따로 쌓이므로, 폰과 PC 를 함께 쓴다면 한쪽에서 **내보내** 다른 쪽에서 **가져오기 (합치기)** 를 한다.
+
+- 가져오기 (합치기): 이 기기의 기록을 지우지 않고 합친다 — 완료·외움은 합집합, 북마크는 더 최근 시각, 퀴즈·모의고사 결과는 채점된 쪽, 오답노트는 복습을 더 한 쪽, 학습 시간은 날짜별 큰 값(같은 파일을 두 번 가져와도 두 배가 되지 않는다). 시험일 같은 설정은 이 기기 값을 지킨다.
+- 가져오기 (덮어쓰기): 백업에 있는 항목을 백업 값으로 덮어쓴다(없는 항목은 그대로).
+- 가져오기 전에 파일을 **전부 검증**한다(형식·키별 모양). 쓰는 도중 실패하면(저장 공간 부족 등) 이미 쓴 항목까지 **원래대로 되돌린다**.
+- 백업 파일은 `{ schema, exportedAt, data }` 형식이고 옛 형식도 읽는다. 테마는 기기마다 다르게 쓰도록 백업에 넣지 않는다. 로직은 `src/utils/backup.js`.
 
 ## 학습 데이터 구성
 저장소 구성·위험·개선 계획(P0~P3)은 [`docs/data-architecture-review.md`](docs/data-architecture-review.md) 에 정리했다. 북마크는 `bookmarks` 키 하나에 `{ "<종류>:<id>": 시각 }` 로 모은다.
@@ -73,7 +81,7 @@ npm run build       # dist/ 생성
 | 대상 | 파일 |
 |---|---|
 | 문항 파서 | `parseQuiz` · `parseBogang` · `bogangDeck` · `parseCodeDrill` · `parseStudyNotes` |
-| 저장 계층 | `storage` · `edge-storage` · `edge-time` · `exam-results` · `quizResultsCompat` |
+| 저장 계층 | `storage` · `edge-storage` · `edge-time` · `exam-results` · `quizResultsCompat` · `backup` · `studyState` |
 | 로드맵·캘린더 | `dailyPlan`(날짜 유틸) · `roadmap` · `RoadmapPage` · `TodayRoadmapCard*` · `DashboardPage.roadmap` · `calendarBusy` · `icsExport` · `googleCalendar` |
 | 레슨·학습 상태·북마크 | `lessons` · `LessonPage` · `studyState` · `bookmarks` |
 | 실기 연습 | `traces` · `CodeTracingTable` · `sqlBlanks` · `SqlQuizCard` · `shortAnswer` · `ShortAnswerGrader` · `PracticePage` |

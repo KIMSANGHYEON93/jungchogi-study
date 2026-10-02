@@ -7,6 +7,7 @@ import useStudyState from '../hooks/useStudyState';
 import { buildRoadmap, ROADMAP_DAYS } from '../domain/roadmap';
 import { lessonByDay } from '../domain/lessons';
 import { loadStoredBusy } from '../utils/busyStore';
+import { applyBackup, buildBackup, failureMessage, parseBackup, successMessage } from '../utils/backup';
 import { summarizeQuizResults } from '../domain/grading';
 
 import { BOGANG_CARD_COUNT } from '../domain/bogangDeck';
@@ -49,6 +50,42 @@ export default function DashboardPage() {
       if (elapsed >= 1) addStudyTime(elapsed);
     };
   }, []);
+
+  // 학습 데이터 백업 — 형식 검증·합치기·실패 시 되돌리기는 utils/backup.js
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(buildBackup(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jungchogi_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 'merge': 이 기기의 기록과 합친다(폰·PC 를 함께 쓸 때) · 'replace': 백업에 있는 항목을 백업 값으로 덮어쓴다
+  const importData = (mode) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const parsed = parseBackup(await file.text());
+      if (!parsed.ok) {
+        window.alert(failureMessage(parsed.reason));
+        return;
+      }
+      if (mode === 'replace' && !window.confirm(`이 기기의 학습 기록 ${Object.keys(parsed.items).length}개 항목을 백업 값으로 덮어씁니다.\n(백업에 없는 항목은 그대로입니다) 계속할까요?`)) return;
+      const result = applyBackup(parsed, mode);
+      if (!result.ok) {
+        window.alert(failureMessage(result.reason));
+        return;
+      }
+      window.alert(successMessage(result, mode));
+      window.location.reload();
+    };
+    input.click();
+  };
 
   const handleExamDateSave = (val) => {
     setExamDateState(val);
@@ -383,59 +420,14 @@ export default function DashboardPage() {
           })()}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            className="btn-outline"
-            onClick={() => {
-              const data = {};
-              for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('jungchogi_')) {
-                  data[key] = localStorage.getItem(key);
-                }
-              }
-              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `jungchogi_backup_${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-          >
+          <button className="btn-outline" onClick={exportData}>
             학습 데이터 내보내기
           </button>
-          <button
-            className="btn-outline"
-            onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = '.json';
-              input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  try {
-                    const data = JSON.parse(ev.target.result);
-                    let count = 0;
-                    for (const [key, value] of Object.entries(data)) {
-                      if (key.startsWith('jungchogi_')) {
-                        localStorage.setItem(key, value);
-                        count++;
-                      }
-                    }
-                    window.alert(`${count}개 항목을 복원했습니다.`);
-                    window.location.reload();
-                  } catch {
-                    window.alert('유효하지 않은 백업 파일입니다.');
-                  }
-                };
-                reader.readAsText(file);
-              };
-              input.click();
-            }}
-          >
-            데이터 가져오기
+          <button className="btn-outline" onClick={() => importData('merge')}>
+            가져오기 (합치기)
+          </button>
+          <button className="btn-outline" onClick={() => importData('replace')}>
+            가져오기 (덮어쓰기)
           </button>
           <button
             className="btn-outline"
