@@ -1,7 +1,7 @@
 // 로드맵 일차별 레슨 — 개념 요약 · 예제 코드 · 확인 퀴즈.
 //
-// 1단계 프로토타입으로 D-24(C 연산자) · D-23(C 제어문) · D-17(SQL) 세 일차만 담는다.
-// 예제의 출력·퀴즈 정답은 직접 실행해 확인했다(C 는 gcc, SQL 은 SQLite 로 아래 표를 만들어 실행).
+// 1단계(D-24 ~ D-17)의 8개 일차를 담는다. D-16 은 점검일이라 레슨 대신 연습·오답노트를 쓴다.
+// 예제의 출력·퀴즈 정답은 직접 실행해 확인했다(C 는 gcc, Java 는 javac, Python 은 python3, SQL 은 SQLite).
 // 일차를 더 늘릴 때는 LESSONS 에 같은 모양의 항목을 추가하면 로드맵·레슨 화면이 그대로 따라온다.
 //
 // @typedef {Object} LessonQuestion
@@ -14,6 +14,10 @@
 // @typedef {Object} Lesson
 //   id, d(일차), title, track('C'|'SQL'), minutes(예상 소요), summary, goals[],
 //   sections[{heading, body, code?, lang?, output?}], pitfalls[], questions[]
+
+/** 템플릿 문자열의 앞 줄바꿈과 끝 공백을 걷어 코드 본문만 남긴다. 역슬래시는 그대로 둔다(String.raw). */
+const code = (strings, ...values) =>
+  String.raw({ raw: strings.raw }, ...values).replace(/^\n/, '').replace(/\s+$/, '');
 
 export const LESSONS = [
   {
@@ -179,6 +183,623 @@ export const LESSONS = [
         code: 'int m = 0;\ndo { m += 3; } while (m < 10);\nprintf("%d", m);',
         answer: '12',
         explain: 'm 이 3, 6, 9, 12 가 되고 12 에서 조건이 거짓이라 끝난다.',
+      },
+    ],
+  },
+  {
+    id: 'c-pointer-struct',
+    d: 22,
+    title: 'C언어 포인터 · 배열 · 구조체',
+    track: 'C',
+    minutes: 60,
+    summary: '포인터가 가리키는 주소와 값, 배열·문자열과의 관계, 구조체 접근과 재귀 호출을 추적한다.',
+    goals: [
+      '& 와 * 로 주소와 값을 오가며 계산한다',
+      '배열 이름과 포인터 산술(p+1, p[i])의 관계를 설명한다',
+      '문자열의 끝 문자와 strlen/sizeof 의 차이를 안다',
+      '값 전달과 주소 전달의 차이, 구조체 포인터(->)를 구분한다',
+    ],
+    sections: [
+      {
+        heading: '포인터 기본 — 주소와 값',
+        body: '&a 는 a 의 주소, *p 는 p 가 가리키는 값이다. *p 를 바꾸면 원래 변수 a 가 바뀐다.',
+        lang: 'c',
+        code: code`
+#include <stdio.h>
+int main(void) {
+    int a = 10;
+    int *p = &a;
+    *p += 5;                 /* a 가 15 로 바뀐다 */
+    printf("%d %d\n", a, *p);
+    return 0;
+}`,
+        output: '15 15',
+      },
+      {
+        heading: '배열과 포인터',
+        body: '배열 이름은 첫 원소의 주소처럼 쓰인다. *(p+2) 와 p[2] 는 같은 값이다. 포인터에 1을 더하면 자료형 크기만큼 이동한다. sizeof(arr)/sizeof(arr[0]) 은 원소 개수다.',
+        lang: 'c',
+        code: code`
+#include <stdio.h>
+int main(void) {
+    int arr[5] = {10, 20, 30, 40, 50};
+    int *q = arr;
+    printf("%d %d %d\n", *(q + 2), q[3], (int)(sizeof(arr) / sizeof(arr[0])));
+    return 0;
+}`,
+        output: '30 40 5',
+      },
+      {
+        heading: '문자열 — 널 문자',
+        body: '문자열은 끝에 널 문자(\\0)가 붙는다. "HELLO" 는 5글자지만 배열 크기는 6. strlen 은 널 문자를 세지 않는다. s+2 는 세 번째 글자부터 시작하는 문자열이다.',
+        lang: 'c',
+        code: code`
+#include <stdio.h>
+#include <string.h>
+int main(void) {
+    char s[] = "HELLO";
+    printf("%zu %zu %s\n", strlen(s), sizeof(s), s + 2);
+    return 0;
+}`,
+        output: '5 6 LLO',
+      },
+      {
+        heading: '구조체 — . 과 ->',
+        body: '구조체 변수는 . 으로, 구조체 포인터는 -> 로 멤버에 접근한다. q->x 는 (*q).x 와 같다.',
+        lang: 'c',
+        code: code`
+#include <stdio.h>
+struct P { int x; int y; };
+int main(void) {
+    struct P pt = {1, 2};
+    struct P *pp = &pt;
+    pp->x += 10;
+    printf("%d %d\n", pt.x, pt.y);
+    return 0;
+}`,
+        output: '11 2',
+      },
+      {
+        heading: '재귀 호출',
+        body: '재귀는 "종료 조건 → 자기 자신 호출" 순서로 따라간다. fact(5) = 5×4×3×2×1, fib(6) 은 앞의 두 값의 합(0,1,1,2,3,5,8).',
+        lang: 'c',
+        code: code`
+#include <stdio.h>
+int fact(int n) { return n <= 1 ? 1 : n * fact(n - 1); }
+int fib(int n)  { if (n <= 1) return n; return fib(n - 1) + fib(n - 2); }
+int main(void) {
+    printf("%d %d\n", fact(5), fib(6));
+    return 0;
+}`,
+        output: '120 8',
+      },
+    ],
+    pitfalls: [
+      'C 는 값 전달이다 — 함수에 변수를 넘기면 복사본이 바뀐다. 원본을 바꾸려면 주소(&)를 넘긴다',
+      'sizeof(포인터) 는 배열 크기가 아니라 포인터 자체의 크기다 (함수 인자로 넘어온 배열 포함)',
+      '재귀는 종료 조건이 없으면 무한 호출 — 반환값을 어떻게 곱하고 더하는지 호출 스택 순서로 계산한다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '출력 결과는?',
+        lang: 'c',
+        code: code`
+int a[] = {3, 6, 9, 12};
+int *p = a + 1;
+printf("%d %d", *p, *(p + 2));`,
+        answer: '6 12',
+        explain: 'p 는 a[1] 을 가리킨다. *p = 6, p+2 는 a[3] 이므로 12.',
+      },
+      {
+        id: 'q2',
+        prompt: '출력 결과는?',
+        lang: 'c',
+        code: code`
+int x = 5;
+int *p = &x;
+int **pp = &p;
+**pp = 9;
+printf("%d", x);`,
+        answer: '9',
+        explain: '**pp 는 p 가 가리키는 x 자체다. 거기에 9 를 넣었으므로 x = 9.',
+      },
+      {
+        id: 'q3',
+        prompt: '출력 결과는?',
+        lang: 'c',
+        code: code`
+char t[] = "ABCDE";
+char *tp = t + 1;
+printf("%c %s", *tp, tp + 2);`,
+        answer: 'B DE',
+        explain: 'tp 는 "BCDE" 의 시작. *tp = B, tp+2 는 "DE".',
+      },
+      {
+        id: 'q4',
+        prompt: '출력 결과는?',
+        lang: 'c',
+        code: code`
+void f(int v)  { v = 10; }
+void g(int *v) { *v = 10; }
+int main(void) {
+    int m = 1, n = 1;
+    f(m);
+    g(&n);
+    printf("%d %d", m, n);
+}`,
+        answer: '1 10',
+        explain: 'f 는 복사본만 바꾸므로 m 은 그대로 1. g 는 주소로 접근해 n 을 10 으로 바꾼다.',
+      },
+    ],
+  },
+  {
+    id: 'java-class-inherit',
+    d: 21,
+    title: 'Java 클래스 · 상속 · 오버라이딩',
+    track: 'Java',
+    minutes: 60,
+    summary: '생성자 호출 순서, 오버라이딩과 동적 바인딩, 필드·오버로딩의 정적 바인딩을 구분한다.',
+    goals: [
+      '상속에서 부모 → 자식 순서의 생성자 호출을 추적한다',
+      '오버라이딩된 메서드가 실제 객체 타입으로 실행됨을 설명한다',
+      '필드와 오버로딩은 참조 변수의 선언 타입으로 정해짐을 안다',
+      'super 와 super(...) 를 구분한다',
+    ],
+    sections: [
+      {
+        heading: '생성자 호출 순서',
+        body: '자식 객체를 만들면 부모 생성자가 먼저 실행된다. 자식 생성자 첫 줄에 super(...) 가 없으면 부모의 기본 생성자 super() 가 자동으로 들어간다.',
+        lang: 'java',
+        code: code`
+class A { A() { System.out.print("A"); } }
+class B extends A { B() { System.out.print("B"); } }
+// new B();`,
+        output: 'AB',
+      },
+      {
+        heading: '오버라이딩과 동적 바인딩',
+        body: '변수의 타입이 Animal 이어도 실제 객체가 Dog 이면 Dog 의 오버라이딩 메서드가 실행된다(실행 시점에 결정).',
+        lang: 'java',
+        code: code`
+class Animal { void sound() { System.out.print("Animal"); } }
+class Dog extends Animal { void sound() { System.out.print("Dog"); } }
+// Animal a = new Dog();
+// a.sound();`,
+        output: 'Dog',
+      },
+      {
+        heading: '필드는 오버라이딩되지 않는다',
+        body: '필드 접근은 참조 변수의 선언 타입을 따른다. 부모 타입 변수로 v 를 읽으면 부모의 v, get() 은 오버라이딩되어 자식 것이 실행된다.',
+        lang: 'java',
+        code: code`
+class P { int v = 1; int get() { return v; } }
+class C extends P { int v = 2; int get() { return v; } }
+// P p = new C();
+// System.out.println(p.v + " " + p.get());`,
+        output: '1 2',
+      },
+      {
+        heading: '오버로딩은 선언 타입으로 고른다',
+        body: '오버로딩된 메서드 중 어느 것을 부를지는 컴파일 시점에 인자의 선언 타입으로 정한다. 실제 객체가 String 이어도 Object 로 선언했다면 Object 버전이 호출된다.',
+        lang: 'java',
+        code: code`
+static void f(Object o) { System.out.print("O"); }
+static void f(String s) { System.out.print("S"); }
+// Object o = "x";
+// f(o); f("x");`,
+        output: 'OS',
+      },
+    ],
+    pitfalls: [
+      '메서드는 실제 객체 타입(동적), 필드·static 메서드·오버로딩은 선언 타입(정적)으로 결정된다',
+      '오버라이딩은 이름·매개변수가 같아야 하고, 접근 제어자는 더 좁아질 수 없다',
+      '부모에 기본 생성자가 없으면 자식 생성자에서 super(인자) 를 직접 호출해야 한다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '출력 결과는?',
+        lang: 'java',
+        code: code`
+class A {
+    A()      { System.out.print("A"); }
+    A(int x) { System.out.print("a" + x); }
+}
+class B extends A {
+    B() { super(5); System.out.print("B"); }
+}
+// new B();`,
+        answer: 'a5B',
+        explain: 'super(5) 로 부모의 A(int) 가 먼저 실행되어 a5, 이어서 B.',
+      },
+      {
+        id: 'q2',
+        prompt: '출력 결과는?',
+        lang: 'java',
+        code: code`
+class P { int v = 10; int get() { return v; } }
+class C extends P { int v = 20; int get() { return v; } }
+// P p = new C();
+System.out.println(p.v + " " + p.get());`,
+        answer: '10 20',
+        explain: 'p.v 는 선언 타입 P 의 필드 10, p.get() 은 C 가 오버라이딩해 20.',
+      },
+      {
+        id: 'q3',
+        prompt: '출력 결과는?',
+        lang: 'java',
+        code: code`
+static void f(Object o) { System.out.print("O"); }
+static void f(String s) { System.out.print("S"); }
+// ...
+Object o2 = "hi";
+f(o2);
+f("hi");`,
+        answer: 'OS',
+        explain: 'f(o2) 는 선언 타입 Object 라 Object 버전, f("hi") 는 String 버전.',
+      },
+      {
+        id: 'q4',
+        prompt: '출력 결과는? (공백 포함)',
+        lang: 'java',
+        code: code`
+class Animal { String name() { return "Animal"; } }
+class Dog extends Animal { String name() { return "Dog"; } }
+class Cat extends Animal { }
+// ...
+Animal[] arr = { new Dog(), new Cat(), new Animal() };
+for (Animal an : arr) System.out.print(an.name() + " ");`,
+        answer: 'Dog Animal Animal',
+        explain: 'Dog 는 오버라이딩한 "Dog", Cat 은 오버라이딩하지 않아 부모의 "Animal".',
+      },
+    ],
+  },
+  {
+    id: 'java-exception-static',
+    d: 20,
+    title: 'Java 예외 · static · 인터페이스 · 추상 클래스',
+    track: 'Java',
+    minutes: 60,
+    summary: 'try/catch/finally 실행 흐름, static 멤버의 공유, 인터페이스·추상 클래스 다형성을 추적한다.',
+    goals: [
+      'try / catch / finally 의 실행 순서를 추적한다',
+      'finally 와 return 이 함께 있을 때의 값을 계산한다',
+      'static 변수는 객체 간에 공유됨을 설명한다',
+      '인터페이스·추상 클래스를 통한 다형성 호출을 계산한다',
+    ],
+    sections: [
+      {
+        heading: 'try / catch / finally 흐름',
+        body: '예외가 나면 그 줄 이후의 try 코드는 건너뛰고 맞는 catch 로 간다. finally 는 예외 여부와 상관없이 항상 실행된다. 예외가 처리되면 그다음 코드는 계속 실행된다.',
+        lang: 'java',
+        code: code`
+try {
+    System.out.print("A");
+    int x = 1 / 0;          // ArithmeticException
+    System.out.print("B");  // 실행되지 않음
+} catch (ArithmeticException e) {
+    System.out.print("C");
+} finally {
+    System.out.print("D");
+}
+System.out.print("E");`,
+        output: 'ACDE',
+      },
+      {
+        heading: 'finally 와 return',
+        body: 'return 값을 정한 뒤 finally 가 실행된다. finally 의 출력은 반환값보다 먼저 나온다.',
+        lang: 'java',
+        code: code`
+static int ff() {
+    try { return 1; }
+    finally { System.out.print("F"); }
+}
+// System.out.println(ff());`,
+        output: 'F1',
+      },
+      {
+        heading: 'static — 모든 객체가 공유',
+        body: 'static 변수는 클래스에 하나만 있다. 객체를 만들 때마다 증가시키면 마지막 객체의 id 와 cnt 는 같다.',
+        lang: 'java',
+        code: code`
+class Counter {
+    static int cnt = 0;
+    int id;
+    Counter() { id = ++cnt; }
+}
+// Counter c1 = new Counter(), c2 = new Counter(), c3 = new Counter();
+// System.out.println(c3.id + " " + Counter.cnt);`,
+        output: '3 3',
+      },
+      {
+        heading: '추상 클래스와 인터페이스',
+        body: '추상 클래스는 직접 객체를 만들 수 없고 abstract 메서드를 자식이 구현해야 한다. 인터페이스는 구현 클래스가 메서드를 모두 구현한다. 부모 타입으로 호출해도 실제 객체의 구현이 실행된다.',
+        lang: 'java',
+        code: code`
+abstract class Shape { abstract int area(); }
+class Rect extends Shape { int area() { return 2 * 3; } }
+// Shape s = new Rect();
+// System.out.println(s.area());`,
+        output: '6',
+      },
+    ],
+    pitfalls: [
+      'catch 는 위에서부터 맞는 첫 번째만 실행된다 — 부모 예외를 위에 두면 자식 catch 는 도달 불가(컴파일 오류)',
+      'finally 안에서 지역 변수를 바꿔도 이미 정해진 return 값(기본형)은 바뀌지 않는다',
+      'static 메서드는 this 를 쓸 수 없고 인스턴스 멤버에 직접 접근할 수 없다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '출력 결과는?',
+        lang: 'java',
+        code: code`
+try {
+    int[] a = new int[2];
+    a[2] = 1;
+    System.out.print("A");
+} catch (ArrayIndexOutOfBoundsException e) {
+    System.out.print("B");
+} catch (Exception e) {
+    System.out.print("C");
+} finally {
+    System.out.print("D");
+}`,
+        answer: 'BD',
+        explain: 'a[2] 에서 예외 → A 는 출력되지 않고 첫 번째 catch 가 실행(B), finally 가 D.',
+      },
+      {
+        id: 'q2',
+        prompt: '출력 결과는?',
+        lang: 'java',
+        code: code`
+class Counter {
+    static int cnt = 0;
+    int id;
+    Counter() { id = ++cnt; }
+}
+// ...
+Counter a = new Counter();
+Counter b = new Counter();
+System.out.println(a.id + " " + b.id + " " + Counter.cnt);`,
+        answer: '1 2 2',
+        explain: '첫 객체 id = 1, 둘째 id = 2, 공유되는 cnt 는 2.',
+      },
+      {
+        id: 'q3',
+        prompt: '출력 결과는?',
+        lang: 'java',
+        code: code`
+static int f() {
+    int x = 1;
+    try { return x; }
+    finally { x = 2; }
+}
+// ...
+System.out.println(f());`,
+        answer: '1',
+        explain: 'return 시점에 값 1 이 정해진다. finally 에서 x 를 2 로 바꿔도 반환값은 그대로 1.',
+      },
+      {
+        id: 'q4',
+        prompt: '출력 결과는?',
+        lang: 'java',
+        code: code`
+interface Calc { int run(int a); }
+class Dbl implements Calc { public int run(int a) { return a * 2; } }
+class Inc implements Calc { public int run(int a) { return a + 1; } }
+// ...
+Calc[] cs = { new Dbl(), new Inc() };
+int v = 3;
+for (Calc c : cs) v = c.run(v);
+System.out.println(v);`,
+        answer: '7',
+        explain: 'v = 3 → Dbl 로 6 → Inc 로 7.',
+      },
+    ],
+  },
+  {
+    id: 'python-basics',
+    d: 19,
+    title: 'Python 리스트 · 딕셔너리 · 슬라이싱 · 클래스',
+    track: 'Python',
+    minutes: 60,
+    summary: '슬라이싱 규칙, 가변 객체 참조, 딕셔너리 집계, 상속 초기화의 결과를 직접 계산한다.',
+    goals: [
+      '슬라이싱 a[start:stop:step] 의 범위와 음수 인덱스를 계산한다',
+      '리스트 대입은 복사가 아니라 참조임을 설명한다',
+      'dict.get 과 컴프리헨션의 결과를 계산한다',
+      'super().__init__() 호출 후 속성 변화를 추적한다',
+    ],
+    sections: [
+      {
+        heading: '슬라이싱',
+        body: 'a[start:stop] 은 stop 직전까지. 음수는 뒤에서부터, step 이 음수면 거꾸로다. 범위를 벗어나도 오류 없이 잘린다.',
+        lang: 'python',
+        code: code`
+a = [0, 1, 2, 3, 4, 5]
+print(a[1:4], a[::-1], a[-2:], a[::2])`,
+        output: '[1, 2, 3] [5, 4, 3, 2, 1, 0] [4, 5] [0, 2, 4]',
+      },
+      {
+        heading: '딕셔너리',
+        body: 'd[키] = 값 으로 추가·수정한다. d.get(키, 기본값) 은 키가 없어도 오류 없이 기본값을 돌려준다. 키 순서는 삽입 순서다.',
+        lang: 'python',
+        code: code`
+d = {'a': 1, 'b': 2}
+d['c'] = 3
+print(len(d), d.get('z', 0), list(d.keys()))`,
+        output: "3 0 ['a', 'b', 'c']",
+      },
+      {
+        heading: '참조와 복사',
+        body: 'b = a 는 같은 리스트를 가리킨다. 한쪽을 바꾸면 다른 쪽도 바뀐다. a[:] 는 새 리스트(얕은 복사)를 만든다.',
+        lang: 'python',
+        code: code`
+a = [1, 2]
+b = a
+b.append(3)
+print(a)          # b 와 같은 객체
+c = a[:]
+c.append(4)
+print(a, c)`,
+        output: '[1, 2, 3] / [1, 2, 3] [1, 2, 3, 4]',
+      },
+      {
+        heading: '클래스 상속',
+        body: '자식 __init__ 에서 super().__init__() 으로 부모를 먼저 초기화하면 부모가 만든 속성을 자식이 이어서 바꿀 수 있다.',
+        lang: 'python',
+        code: code`
+class P:
+    def __init__(self): self.n = 1
+    def show(self): print(self.n)
+class C(P):
+    def __init__(self):
+        super().__init__()
+        self.n += 1
+C().show()`,
+        output: '2',
+      },
+    ],
+    pitfalls: [
+      '함수 기본 인자에 리스트·딕셔너리를 쓰면 호출마다 공유된다 (def f(x, lst=[]) 의 함정)',
+      '슬라이싱 a[1:4] 에서 4번 인덱스는 포함되지 않는다',
+      '들여쓰기가 곧 블록이다 — 같은 줄 위치의 코드만 같은 블록에서 실행된다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '출력 결과는?',
+        lang: 'python',
+        code: 'print([i * i for i in range(5) if i % 2 == 0])',
+        answer: '[0, 4, 16]',
+        explain: 'i 가 0, 2, 4 일 때만 제곱: 0, 4, 16.',
+      },
+      {
+        id: 'q2',
+        prompt: '출력 결과는?',
+        lang: 'python',
+        code: code`
+s = "python"
+print(s[1:4], s[::-1][:2])`,
+        answer: 'yth no',
+        explain: 's[1:4] = "yth". s[::-1] = "nohtyp" 의 앞 두 글자 "no".',
+      },
+      {
+        id: 'q3',
+        prompt: '출력 결과는?',
+        lang: 'python',
+        code: code`
+def f(v, lst=[]):
+    lst.append(v)
+    return lst
+f(1)
+print(f(2))`,
+        answer: '[1, 2]',
+        explain: '기본 인자 리스트는 함수 정의 때 한 번만 만들어져 호출마다 공유된다.',
+      },
+      {
+        id: 'q4',
+        prompt: '출력 결과는?',
+        lang: 'python',
+        code: code`
+words = ["a", "b", "a", "c", "a"]
+d = {}
+for w in words:
+    d[w] = d.get(w, 0) + 1
+print(d["a"], len(d))`,
+        answer: '3 3',
+        explain: 'a 는 3번 나오고, 서로 다른 키는 a, b, c 세 개.',
+      },
+    ],
+  },
+  {
+    id: 'sql-basic-ddl',
+    d: 18,
+    title: 'SQL — SELECT · WHERE · 집계 · DDL/DML/DCL',
+    track: 'SQL',
+    minutes: 60,
+    summary: '조건 검색과 NULL 처리, 집계 함수, DDL·DML·DCL 구분을 결과 표로 확인한다.',
+    goals: [
+      'WHERE 의 IN · BETWEEN · LIKE · IS NULL 을 구분한다',
+      '집계 함수가 NULL 을 무시하는 규칙을 안다',
+      'NULL 이 포함된 산술은 NULL 이 됨을 안다',
+      'DDL · DML · DCL · TCL 의 대표 명령을 구분한다',
+    ],
+    tables: [
+      {
+        name: 'STUDENT',
+        columns: ['id', 'name', 'grade', 'score'],
+        rows: [[1, '김', 1, 80], [2, '이', 2, 95], [3, '박', 2, 70], [4, '최', 3, 85], [5, '정', 1, null]],
+      },
+    ],
+    sections: [
+      {
+        heading: 'SELECT · WHERE · ORDER BY',
+        body: 'WHERE 로 행을 거르고 ORDER BY 로 정렬한다(DESC 는 내림차순). NULL 은 비교 결과가 참이 아니라서 score >= 80 에도 걸리지 않는다.',
+        lang: 'sql',
+        code: 'SELECT name FROM STUDENT\nWHERE score >= 80\nORDER BY score DESC;',
+        output: '이 / 최 / 김',
+      },
+      {
+        heading: 'IN · BETWEEN · IS NULL',
+        body: 'IN 은 목록 중 하나, BETWEEN a AND b 는 양 끝을 포함한 범위다. NULL 검사는 = 가 아니라 IS NULL / IS NOT NULL 을 쓴다.',
+        lang: 'sql',
+        code: 'SELECT name FROM STUDENT\nWHERE grade IN (1, 2) AND score IS NOT NULL;   -- 김 / 이 / 박\nSELECT COUNT(*) FROM STUDENT\nWHERE grade BETWEEN 2 AND 3;                    -- 3',
+        output: '김 이 박 / 3',
+      },
+      {
+        heading: '집계 함수와 NULL',
+        body: 'COUNT(*) 는 행 수, COUNT(컬럼) 과 AVG 는 NULL 을 제외한다. 정(NULL)을 뺀 네 명의 평균은 (80+95+70+85) / 4 = 82.5.',
+        lang: 'sql',
+        code: 'SELECT COUNT(*), COUNT(score), AVG(score) FROM STUDENT;',
+        output: '5 4 82.5',
+      },
+      {
+        heading: 'DDL · DML · DCL · TCL',
+        body: 'DDL(정의): CREATE · ALTER · DROP · TRUNCATE. DML(조작): SELECT · INSERT · UPDATE · DELETE. DCL(제어): GRANT · REVOKE. TCL(트랜잭션): COMMIT · ROLLBACK. DELETE 는 조건 행만 지우고 롤백할 수 있으며, TRUNCATE 는 전체를 지운다.',
+        lang: 'sql',
+        code: 'CREATE TABLE STUDENT (id INT, name VARCHAR(20), grade INT, score INT);\nALTER TABLE STUDENT ADD email VARCHAR(50);\nDELETE FROM STUDENT WHERE grade = 1;   -- 1학년 행만 삭제\nGRANT SELECT ON STUDENT TO user1;      -- 권한 부여(DCL)\nCOMMIT;',
+      },
+    ],
+    pitfalls: [
+      '= NULL 은 항상 거짓이다 — IS NULL 을 쓴다',
+      'AVG 는 NULL 을 분모에서도 뺀다 (5명 중 NULL 1명이면 4로 나눈다)',
+      'NULL 과의 산술(score + 10)은 NULL 이다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '출력되는 값은?',
+        lang: 'sql',
+        code: 'SELECT COUNT(*) FROM STUDENT\nWHERE score < 90;',
+        answer: '3',
+        explain: '80, 70, 85 세 행. 95 는 90 이상이고, NULL 은 비교가 참이 아니라 제외된다.',
+      },
+      {
+        id: 'q2',
+        prompt: '출력되는 값은?',
+        lang: 'sql',
+        code: 'SELECT AVG(score) FROM STUDENT;',
+        answer: '82.5',
+        explain: 'NULL 을 제외한 네 점수의 평균 (80+95+70+85)/4 = 82.5.',
+      },
+      {
+        id: 'q3',
+        prompt: '출력되는 값은?',
+        lang: 'sql',
+        code: 'SELECT name FROM STUDENT\nWHERE score = (SELECT MAX(score) FROM STUDENT);',
+        answer: '이',
+        explain: '서브쿼리가 최고점 95 를 돌려주고, 95 를 받은 학생은 이.',
+      },
+      {
+        id: 'q4',
+        prompt: '출력되는 값은? (NULL 이면 NULL)',
+        lang: 'sql',
+        code: 'UPDATE STUDENT SET score = score + 10\nWHERE grade = 1;\nSELECT score FROM STUDENT WHERE id = 5;',
+        answer: 'NULL',
+        explain: '정(id 5)은 1학년이지만 score 가 NULL 이고, NULL + 10 은 NULL 이다.',
       },
     ],
   },

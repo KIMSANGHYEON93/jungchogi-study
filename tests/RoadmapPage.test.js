@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import { LESSONS } from '../src/domain/lessons.js';
 import RoadmapPage from '../src/pages/RoadmapPage.jsx';
 import { loadProgress, saveProgress, setExamDate } from '../src/utils/storage.js';
 
@@ -123,15 +124,17 @@ describe('25일 로드맵 화면', () => {
 });
 
 describe('1단계 레슨 목록', () => {
-  it('D-24 · D-23 · D-17 레슨 카드와 일차 카드의 레슨 링크를 보여준다', () => {
+  it('1단계 8개 레슨 카드와 일차 카드의 레슨 링크를 보여준다 (D-16 점검일은 레슨 없음)', () => {
     const c = render();
     const shelf = c.querySelector('#road-lessons').closest('section');
-    expect([...shelf.querySelectorAll('article h3')].map((h) => h.textContent)).toEqual([
-      'C언어 연산자', 'C언어 제어문', 'SQL — JOIN · GROUP BY · HAVING · 서브쿼리',
-    ]);
+    expect([...shelf.querySelectorAll('article h3')].map((h) => h.textContent)).toEqual(LESSONS.map((l) => l.title));
+    expect(shelf.querySelectorAll('article')).toHaveLength(8);
     expect(dayCard(c, 'D-24').querySelector('a[href="/lesson/24"]')).not.toBeNull();
     expect(dayCard(c, 'D-17').querySelector('a[href="/lesson/17"]')).not.toBeNull();
-    expect(dayCard(c, 'D-22').querySelector('a[href^="/lesson/"]')).toBeNull();
+    for (const d of [24, 23, 22, 21, 20, 19, 18, 17]) {
+      expect(dayCard(c, `D-${d}`).querySelector(`a[href="/lesson/${d}"]`), `D-${d}`).not.toBeNull();
+    }
+    expect(dayCard(c, 'D-16').querySelector('a[href^="/lesson/"]')).toBeNull();
   });
 
   it('북마크하면 저장되고 "북마크만 보기"로 걸러진다', async () => {

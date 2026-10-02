@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { LESSONS } from '../src/domain/lessons.js';
 import LessonPage from '../src/pages/LessonPage.jsx';
 import { resetStudyState } from '../src/utils/studyState.js';
 
@@ -91,5 +92,21 @@ describe('레슨 화면', () => {
     const msg = second.closest('li').querySelector('[role="status"]').textContent;
     expect(msg).toContain('오답입니다');
     expect(msg).toContain('7 5 7');
+  });
+
+  it('모든 레슨의 모든 퀴즈에 자기 정답을 넣으면 정답 처리된다', () => {
+    for (const lesson of LESSONS) {
+      const c = render(`/lesson/${lesson.d}`);
+      for (const q of lesson.questions) {
+        const input = c.querySelector(`#lesson-q-${q.id}`);
+        type(input, q.answer);
+        click(input.closest('li').querySelector('button[type="submit"]'));
+        expect(input.closest('li').querySelector('[role="status"]').textContent, `${lesson.id}/${q.id}`).toContain('정답입니다');
+      }
+      // 한 화면에 한 레슨만 둔다 — 문서에 같은 id 가 남으면 jsdom 의 #id 검색이 앞 레슨의 요소를 집는다
+      const m = mounted.pop();
+      act(() => m.root.unmount());
+      m.container.remove();
+    }
   });
 });

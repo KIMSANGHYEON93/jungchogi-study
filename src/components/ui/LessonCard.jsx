@@ -3,6 +3,8 @@ import BookmarkButton from './BookmarkButton';
 
 const TRACK_STYLE = {
   C: 'tw:bg-primary/15 tw:text-primary-dim',
+  Java: 'tw:bg-warning/15 tw:text-warning',
+  Python: 'tw:bg-success/15 tw:text-success',
   SQL: 'tw:bg-accent/15 tw:text-accent',
 };
 
