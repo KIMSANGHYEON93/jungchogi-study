@@ -6,6 +6,9 @@
 // **정보처리기사·산업기사를 함께 준비하는 하나의 공통 계획이다.** 시험 종류별로 갈라지지 않고,
 // 두 시험이 겹치는 공통 모듈(코딩·SQL·OS/네트워크·테스트)을 먼저 두고 기사 특화 주제는 그 뒤에 둔다.
 //
+// 이 로드맵이 앱의 **유일한 학습 계획**이다. 예전 "일일 플랜"(Day01~14 문서를 남은 날에 균등 분배)은 없앴다.
+// 하루 일정이 날짜에 고정돼 있어 계획이 매일 바뀌지 않고, 밀리면 "밀린 일차"로 보여 준다.
+//
 // 날짜는 시험일에서 d 일을 빼서 만든다. 시험일을 바꿔도 "D-n 일차"의 의미(와 체크 기록)가
 // 그대로 이어지도록 체크는 날짜가 아니라 d 번호로 저장한다.
 
@@ -145,18 +148,21 @@ export function phaseOfD(d) {
  * @property {boolean} done
  * @property {boolean} isToday
  * @property {boolean} isPast
+ * @property {boolean} busy 캘린더에서 가져온 "일정이 많은 날"인지 (학습일만)
  */
 
 /**
- * @param {{examDate?: unknown, today: string, checks?: Record<string, unknown>}} input
+ * @param {{examDate?: unknown, today: string, checks?: Record<string, unknown>, busyDates?: Iterable<string>}} input
+ *   `busyDates` 는 표시용이다 — 일정이 많은 날에도 일차는 옮기지 않고 "가볍게" 표시만 한다.
  * @returns {{
  *   status: 'ok'|'before'|'exam-passed'|'no-date',
  *   examDate: string|null, isDefaultExamDate: boolean,
  *   todayD: number|null, phases: (typeof ROADMAP_PHASES[number] & {days: RoadmapDay[]})[],
- *   examDay: RoadmapDay|null, progress: {done: number, total: number, percent: number}
+ *   examDay: RoadmapDay|null, today: RoadmapDay|null, late: number[],
+ *   progress: {done: number, total: number, percent: number}
  * }}
  */
-export function buildRoadmap({ examDate: storedExamDate, today, checks = {} }) {
+export function buildRoadmap({ examDate: storedExamDate, today, checks = {}, busyDates = [] }) {
   const { examDate, isDefault } = resolveExamDate(storedExamDate, today);
   const empty = (status) => ({
     status,
@@ -165,11 +171,14 @@ export function buildRoadmap({ examDate: storedExamDate, today, checks = {} }) {
     todayD: null,
     phases: [],
     examDay: null,
+    today: null,
+    late: [],
     progress: { done: 0, total: DAYS.length, percent: 0 },
   });
   if (examDate === null) return empty('no-date');
 
   const todayD = daysUntil(examDate, today);
+  const busy = new Set(busyDates);
   const toDay = (day) => {
     const date = addDays(examDate, -day.d);
     return {
@@ -182,10 +191,12 @@ export function buildRoadmap({ examDate: storedExamDate, today, checks = {} }) {
       done: day.d > 0 && !!checks?.[day.d],
       isToday: todayD === day.d,
       isPast: todayD !== null && todayD < day.d,
+      busy: day.d > 0 && busy.has(date),
     };
   };
 
   const days = DAYS.map(toDay);
+  const examDay = toDay(EXAM_DAY);
   const done = days.filter((x) => x.done).length;
   const base = {
     status: todayD < 0 ? 'exam-passed' : todayD > ROADMAP_START_D ? 'before' : 'ok',
@@ -193,10 +204,60 @@ export function buildRoadmap({ examDate: storedExamDate, today, checks = {} }) {
     isDefaultExamDate: isDefault,
     todayD,
     phases: ROADMAP_PHASES.map((p) => ({ ...p, days: days.filter((x) => x.phaseNo === p.no) })),
-    examDay: toDay(EXAM_DAY),
+    examDay,
+    // 오늘에 해당하는 일차(D-24 ~ D-Day). 시작 전·시험 후면 null
+    today: todayD !== null && todayD >= 0 && todayD <= ROADMAP_START_D ? [...days, examDay].find((x) => x.d === todayD) ?? null : null,
+    // 지났는데 끝내지 못한 일차 — 큰 D 번호(오래된 날)부터
+    late: days.filter((x) => x.isPast && !x.done).map((x) => x.d),
     progress: { done, total: DAYS.length, percent: Math.round((done / DAYS.length) * 100) },
   };
   return base;
+}
+
+/**
+ * 오늘 다음 일차들(최대 count 개, D-Day 포함). 로드맵 시작 전이면 첫 일차부터, 시험 후면 빈 배열.
+ * @param {ReturnType<typeof buildRoadmap>} roadmap
+ * @param {number} count
+ * @returns {RoadmapDay[]}
+ */
+export function upcomingDays(roadmap, count) {
+  if (roadmap.status !== 'ok' && roadmap.status !== 'before') return [];
+  const all = [...roadmap.phases.flatMap((p) => p.days), ...(roadmap.examDay ? [roadmap.examDay] : [])];
+  const from = roadmap.status === 'before' ? ROADMAP_START_D + 1 : roadmap.todayD;
+  return all.filter((x) => x.d < from).slice(0, Math.max(0, count));
+}
+
+/**
+ * 학습 노트 Day N 문서를 다루는 로드맵 일차들 (D 번호 큰 순 = 일정 순).
+ * @param {ReturnType<typeof buildRoadmap>} roadmap
+ * @param {number} study 학습 노트 Day 번호
+ * @returns {RoadmapDay[]}
+ */
+export function daysForStudyDoc(roadmap, study) {
+  return roadmap.phases.flatMap((p) => p.days).filter((x) => x.topics.some((t) => t.study === study));
+}
+
+/**
+ * 캘린더 내보내기용 일정: 오늘부터의 학습일(완료한 날은 뺀다)과 시험 당일.
+ * `utils/icsExport.buildIcs` 가 받는 모양이다 — 하루마다 이벤트 하나, `title` 이 이벤트 제목이다.
+ * @param {ReturnType<typeof buildRoadmap>} roadmap
+ * @returns {{date: string, dDay: number, kind: 'study'|'exam', title?: string, units: {label: string, phase: {label: string}}[], busy: boolean}[]}
+ */
+export function roadmapSchedule(roadmap) {
+  if (roadmap.status !== 'ok' && roadmap.status !== 'before') return [];
+  const phaseName = new Map(ROADMAP_PHASES.map((p) => [p.no, p.name]));
+  const fromD = roadmap.status === 'before' ? ROADMAP_START_D : roadmap.todayD;
+  const days = [...roadmap.phases.flatMap((p) => p.days), ...(roadmap.examDay ? [roadmap.examDay] : [])];
+  return days
+    .filter((x) => x.d <= fromD && (x.d === 0 || !x.done))
+    .map((x) => ({
+      date: x.date,
+      dDay: x.d,
+      kind: x.d === 0 ? 'exam' : 'study',
+      title: x.d === 0 ? undefined : `${x.label} ${x.title}`,
+      units: x.topics.map((t) => ({ label: t.text, phase: { label: phaseName.get(x.phaseNo) ?? '' } })),
+      busy: x.busy,
+    }));
 }
 
 /** 테스트와 화면이 같은 원본을 본다 */

@@ -5,8 +5,11 @@ import {
   ROADMAP_DAYS,
   ROADMAP_PHASES,
   buildRoadmap,
+  daysForStudyDoc,
   phaseOfD,
+  roadmapSchedule,
   topicsFor,
+  upcomingDays,
 } from '../src/domain/roadmap.js';
 
 const base = { examDate: '2026-10-25', today: '2026-10-01' };
@@ -197,5 +200,109 @@ describe('기사·산업기사 공통 계획', () => {
     const before = day.topics.map((t) => t.text);
     topicsFor(day);
     expect(day.topics.map((t) => t.text)).toEqual(before);
+  });
+});
+
+describe('오늘 일차(today) · 밀린 일차(late)', () => {
+  it('오늘 일차를 돌려준다 (D-24 ~ D-Day)', () => {
+    expect(buildRoadmap(base).today).toMatchObject({ d: 24, label: 'D-24', title: 'C언어 연산자' });
+    expect(buildRoadmap({ ...base, today: '2026-10-25' }).today).toMatchObject({ d: 0, label: 'D-Day' });
+  });
+
+  it('시작 전·시험 후·시험일 없음에는 오늘 일차가 없다', () => {
+    expect(buildRoadmap({ ...base, today: '2026-09-20' }).today).toBeNull();
+    expect(buildRoadmap({ ...base, today: '2026-10-26' }).today).toBeNull();
+  });
+
+  it('지났는데 끝내지 못한 일차가 late 이고, 큰 D 번호(오래된 날)부터다', () => {
+    const r = buildRoadmap({ ...base, today: '2026-10-04', checks: { 24: true } }); // D-21
+    expect(r.late).toEqual([23, 22]);
+    expect(buildRoadmap(base).late).toEqual([]);
+    expect(buildRoadmap({ ...base, today: '2026-09-20' }).late).toEqual([]);
+  });
+
+  it('오늘 일차는 아직 밀린 것이 아니다', () => {
+    const r = buildRoadmap({ ...base, today: '2026-10-04' });
+    expect(r.late).not.toContain(21);
+  });
+});
+
+describe('일정이 많은 날(busyDates)', () => {
+  it('날짜에 맞는 일차에 busy 를 표시하고 일차 자체는 옮기지 않는다', () => {
+    const plain = buildRoadmap(base);
+    const r = buildRoadmap({ ...base, busyDates: ['2026-10-01', '2026-10-03', '2026-10-25'] });
+    expect(allDays(r).filter((d) => d.busy).map((d) => d.d)).toEqual([24, 22]);
+    expect(allDays(r).map((d) => [d.d, d.date, d.title])).toEqual(allDays(plain).map((d) => [d.d, d.date, d.title]));
+    expect(r.examDay.busy).toBe(false); // 시험 당일은 표시하지 않는다
+    expect(allDays(plain).every((d) => d.busy === false)).toBe(true);
+  });
+
+  it('깨진 날짜는 무시한다', () => {
+    expect(allDays(buildRoadmap({ ...base, busyDates: ['x', '', '2026-13-45'] })).some((d) => d.busy)).toBe(false);
+  });
+});
+
+describe('upcomingDays', () => {
+  it('오늘 다음 일차부터 최대 count 개, D-Day 도 포함한다', () => {
+    expect(upcomingDays(buildRoadmap(base), 3).map((d) => d.d)).toEqual([23, 22, 21]);
+    expect(upcomingDays(buildRoadmap({ ...base, today: '2026-10-22' }), 6).map((d) => d.d)).toEqual([2, 1, 0]);
+  });
+
+  it('시작 전이면 첫 일차부터, 시험 당일·시험 후면 비어 있다', () => {
+    expect(upcomingDays(buildRoadmap({ ...base, today: '2026-09-20' }), 2).map((d) => d.d)).toEqual([24, 23]);
+    expect(upcomingDays(buildRoadmap({ ...base, today: '2026-10-25' }), 6)).toEqual([]);
+    expect(upcomingDays(buildRoadmap({ ...base, today: '2026-10-26' }), 6)).toEqual([]);
+    expect(upcomingDays(buildRoadmap(base), 0)).toEqual([]);
+  });
+});
+
+describe('roadmapSchedule (캘린더 내보내기용)', () => {
+  it('오늘부터의 학습일 24일 + 시험 당일 = 25개, 날짜순이다', () => {
+    const s = roadmapSchedule(buildRoadmap(base));
+    expect(s).toHaveLength(25);
+    expect(s.map((e) => e.date)).toEqual([...s.map((e) => e.date)].sort());
+    expect(s[0]).toMatchObject({ date: '2026-10-01', dDay: 24, kind: 'study', title: 'D-24 C언어 연산자', busy: false });
+    expect(s.at(-1)).toMatchObject({ date: '2026-10-25', dDay: 0, kind: 'exam' });
+    expect(s.at(-1).title).toBeUndefined();
+  });
+
+  it('완료한 일차와 지난 일차는 빠지고 시험 당일은 항상 남는다', () => {
+    const s = roadmapSchedule(buildRoadmap({ ...base, today: '2026-10-04', checks: { 21: true, 20: true } }));
+    expect(s.map((e) => e.dDay)).toEqual([19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
+  });
+
+  it('시작 전이면 전체를 내보내고, 시험 후·날짜 없음이면 비어 있다', () => {
+    expect(roadmapSchedule(buildRoadmap({ ...base, today: '2026-09-20' }))).toHaveLength(25);
+    expect(roadmapSchedule(buildRoadmap({ ...base, today: '2026-10-26' }))).toEqual([]);
+  });
+
+  it('학습 항목은 단계 이름과 함께 units 로 담긴다', () => {
+    const [first] = roadmapSchedule(buildRoadmap(base));
+    expect(first.units).toEqual([
+      { label: 'C언어 — 산술 · 증감 · 비트 · 논리 연산자', phase: { label: '코딩 · SQL 집중' } },
+    ]);
+  });
+
+  it('busy 를 그대로 전한다', () => {
+    const s = roadmapSchedule(buildRoadmap({ ...base, busyDates: ['2026-10-02'] }));
+    expect(s.filter((e) => e.busy).map((e) => e.dDay)).toEqual([23]);
+  });
+});
+
+describe('daysForStudyDoc', () => {
+  const r = buildRoadmap(base);
+
+  it('학습 노트 Day 1 을 다루는 일차를 일정 순으로 돌려준다', () => {
+    expect(daysForStudyDoc(r, 1).map((d) => d.d)).toEqual([24, 23, 22]);
+  });
+
+  it('로드맵에 없는 Day 는 빈 배열이다', () => {
+    expect(daysForStudyDoc(r, 7)).toEqual([]);
+    expect(daysForStudyDoc(r, 99)).toEqual([]);
+  });
+
+  it('완료 여부가 일차에 실린다', () => {
+    const done = buildRoadmap({ ...base, checks: { 24: true } });
+    expect(daysForStudyDoc(done, 1).map((d) => d.done)).toEqual([true, false, false]);
   });
 });

@@ -5,9 +5,9 @@ Vite + React 19 기반 순수 클라이언트 SPA. 14일 학습 문서, 플래�
 ## 기능
 | 경로 | 기능 |
 |---|---|
-| `/` | 대시보드 — D-Day, 오늘의 목표 단계, 종합 진도, 주간 학습 시간, 오답 유형 분석, 간격 반복 대기, 14일 체크리스트, 데이터 관리 |
-| `/study` | Day01~14 학습 문서 뷰어 (인라인 정답 확인, 시험일 기준 예정일 표시) |
-| `/flashcard` | 단답형 100선 · 암기 119선 플래시카드 (셔플, 아는 카드 표시) |
+| `/` | 대시보드 — D-Day, 오늘의 로드맵, 종합 진도, 주간 학습 시간, 오답 유형 분석, 간격 반복 대기, 로드맵 진도, 데이터 관리 |
+| `/study` | Day01~14 학습 문서 뷰어 (인라인 정답 확인, 로드맵 일차 표시) |
+| `/flashcard` | 단답형 100선(100장) · 암기 119선 보강(80장) 플래시카드 (셔플, 아는 카드 표시, 북마크만 보기) |
 | `/quiz` | 코드 트레이싱 퀴즈 (출력 자동 일치 판정, 직접 채점 → 오답노트 연동) |
 | `/exam` | 모의고사 (타이머, 코드/단답 혼합, 제출 후 직접 채점) |
 | `/wrong` | 오답노트 (복습 횟수, 1/3/7일 간격 반복) |
@@ -24,8 +24,8 @@ Vite + React 19 기반 순수 클라이언트 SPA. 14일 학습 문서, 플래�
 ```
 public/data/*.md      학습 콘텐츠 18개 (런타임 fetch)
 src/pages/            페이지 (lazy 로딩)
-src/domain/           순수 도메인 로직 — dailyPlan, roadmap, calendarBusy, grading, examAreas,
-                      traces(변수 추적표 데이터), sqlBlanks, shortAnswer, formulas, studyDays, studyFiles
+src/domain/           순수 도메인 로직 — roadmap(학습 계획), dailyPlan(날짜 유틸), calendarBusy, grading, examAreas,
+                      lessons, bookmarks, bogangDeck, traces(변수 추적표 데이터), sqlBlanks, shortAnswer, formulas, studyFiles
 src/services/         외부 연동 — googleCalendar (Google 캘린더 조회)
 src/components/ui/    Tailwind 로 만든 재사용 UI (BookmarkButton · CompleteToggle · LessonCard · QuizItem · CodeBlock · DataTable · ProgressMeter)
 src/utils/            studyState.js(완료·북마크 공유 저장소), parse*.js(md → 문항 파서), storage.js(localStorage 계층), icsExport.js
@@ -51,17 +51,20 @@ npm run build       # dist/ 생성
 
 배포: Vercel. `vercel.json`이 `/data/`를 제외한 모든 경로를 `index.html`로 rewrite한다.
 
-## 일일 학습 플랜 (시험일 기준)
+## 학습 계획 — 25일 로드맵 하나
 
-대시보드 "오늘의 목표 단계" 카드. 서버 없이 동작한다.
+앱의 계획은 로드맵(`/roadmap`) 하나다. 예전의 "일일 플랜"(Day01~14 문서를 남은 날에 균등 분배)은 로드맵으로 합쳤다.
 
 - 시험일은 대시보드 D-Day 카드에서 저장한 값을 쓰고, 없으면 10/25 를 기본값으로 쓴다(지났으면 내년).
-- Day01~12 중 완료하지 않은 것을 오늘~시험 이틀 전에 균등 분배하고, Day13·14 는 시험 전날·당일에 고정한다.
-  완료 체크가 바뀔 때마다 남은 분량을 다시 나눈다. 로직은 `src/domain/dailyPlan.js`.
-- `.ics` 내보내기: 남은 일정을 캘린더 파일로 내려받는다(날짜별 고정 UID — 다시 가져와도 중복되지 않는다).
+- 일차는 시험일에서 거꾸로 센 **날짜에 고정**돼 있다(D-24 = 10/1). 매일 계획이 바뀌지 않고, 지났는데 못 끝낸 일차는 "밀린 일차"로 보인다.
+- 대시보드 "오늘의 로드맵" 카드: 오늘 일차의 주제 · 학습 노트/검색/연습 링크 · 레슨 · 완료 체크 · 밀린 일차 · 다가오는 6일.
+  완료 체크는 로드맵·레슨 화면과 같은 기록(`roadmap_checks`)이라 어느 화면에서 눌러도 같이 바뀐다.
+- 학습 노트의 Day 문서에는 그 문서를 다루는 로드맵 일차가 배너로 표시된다.
+- `.ics` 내보내기: 오늘부터의 남은 일차(완료한 일차 제외)와 시험 당일을 캘린더 파일로 내려받는다(날짜별 고정 UID — 다시 가져와도 중복되지 않는다).
   `.ics` 는 삭제를 전달하지 못하므로 전용 캘린더로 가져오는 것을 권한다.
-- Google 캘린더 가져오기: 일정이 많은 날(하루 6시간 이상)을 피해 분량을 나눈다.
+- Google 캘린더 가져오기: 일정이 많은 날(하루 6시간 이상)을 로드맵에 "일정 많음"으로 표시한다(일차를 옮기지는 않는다).
   `VITE_GOOGLE_CLIENT_ID` 설정이 필요하다 — 절차는 [`.env.example`](.env.example) 참조.
+- 옛 `day_checks`(Day 문서 완료 기록)는 더 이상 읽지 않는다. 로드맵 일차와 1:1 이 아니라 옮기지 않았다.
 - 코드 퀴즈는 입력한 출력이 정답과 일치하면 자동으로 정답 처리한다(불일치는 직접 채점에 맡긴다).
 
 ## 테스트
@@ -69,9 +72,9 @@ npm run build       # dist/ 생성
 
 | 대상 | 파일 |
 |---|---|
-| 문항 파서 | `parseQuiz` · `parseBogang` · `parseCodeDrill` · `parseStudyNotes` |
+| 문항 파서 | `parseQuiz` · `parseBogang` · `bogangDeck` · `parseCodeDrill` · `parseStudyNotes` |
 | 저장 계층 | `storage` · `edge-storage` · `edge-time` · `exam-results` · `quizResultsCompat` |
-| 일일 플랜·로드맵·캘린더 | `dailyPlan` · `roadmap` · `RoadmapPage` · `calendarBusy` · `icsExport` · `googleCalendar` · `DailyGoalCard*` |
+| 로드맵·캘린더 | `dailyPlan`(날짜 유틸) · `roadmap` · `RoadmapPage` · `TodayRoadmapCard*` · `DashboardPage.roadmap` · `calendarBusy` · `icsExport` · `googleCalendar` |
 | 레슨·학습 상태·북마크 | `lessons` · `LessonPage` · `studyState` · `bookmarks` |
 | 실기 연습 | `traces` · `CodeTracingTable` · `sqlBlanks` · `SqlQuizCard` · `shortAnswer` · `ShortAnswerGrader` · `PracticePage` |
 | 공식 치트시트 | `formulas` · `FormulaCheatSheetModal` · `App.cheatsheet` |

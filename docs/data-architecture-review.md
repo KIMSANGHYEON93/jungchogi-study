@@ -35,7 +35,7 @@
 | 키 | 모양 | 무엇을 | 쓰는 곳 |
 |---|---|---|---|
 | `roadmap_checks` | `{ "24": true }` | 로드맵 D-n 일차 완료 | 로드맵 · 레슨 |
-| `day_checks` | `{ "3": true }` | 학습 노트 Day 1~14 완료 | 대시보드 목표 카드 · 학습 노트 |
+| ~~`day_checks`~~ | `{ "3": true }` | (폐기) 학습 노트 Day 1~14 완료 — 로드맵으로 합치며 더 이상 읽지 않는다 | 없음 (기존 사용자 브라우저에 남아 있을 수 있다) |
 | `exam_date` | `"2026-10-25"` | 시험일 | 대시보드 · 로드맵 |
 | `quiz_results` | `{ "C-01": "correct" }` | 코드 퀴즈 마지막 결과 | 코드 퀴즈 |
 | `exam_results` | `{ "001": "incorrect" }` | 모의고사 자기 채점 | 모의고사 |
@@ -59,7 +59,7 @@
 | 1 | **H** | **백업 가져오기에 검증이 없고, 용량 초과가 "유효하지 않은 백업 파일"로 보인다** | `DashboardPage.jsx` 의 가져오기: `jungchogi_` 로 시작하는 모든 키를 `localStorage.setItem` 으로 그대로 쓰고, 같은 `try` 안에서 예외를 삼킨다 | 손상·수기 편집된 값이 그대로 들어가 화면이 깨질 수 있고, 중간에 실패하면 **일부만 복원**된다. 오류 메시지가 원인을 가린다 |
 | 2 | **H** | **스키마 버전과 마이그레이션 체계가 없다** | 마이그레이션이 즉석 코드로 두 번 있다(`flashcard_known` 이름 변경, `lesson_bookmarks` → `bookmarks`) | 형식을 바꿀 때마다 즉석으로 처리해야 하고, 백업 파일이 어느 버전인지 알 수 없다 |
 | 3 | M | **시도(attempt) 이력이 없다 — 마지막 상태만 있다** | `quiz_results` · `exam_results` · `flashcard_known` 이 같은 "문항 상태"를 키·모양만 달리해 세 곳에 저장. 시각·횟수 없음 | 정답률 추이, "마지막으로 맞힌 지 N일", 약점 영역 분석, 오답 외 문항의 간격 반복이 불가능하다 |
-| 4 | M | **완료 체계가 둘이다** | `day_checks`(Day 문서 1~14, 시험일까지 균등 분배) vs `roadmap_checks`(D-n 로드맵) | 같은 날 해야 할 일이 두 곳에서 달라 보인다. 통합 결정이 보류 중이다 |
+| 4 | M ✅ 해결 | **완료 체계가 둘이었다** | `day_checks`(Day 문서 1~14, 시험일까지 균등 분배) vs `roadmap_checks`(D-n 로드맵) | **해결**: 로드맵으로 합쳤다. 완료는 `roadmap_checks` 하나이고 대시보드 카드·학습 노트·.ics 가 모두 로드맵을 쓴다. 옛 `day_checks` 는 일차와 1:1 이 아니라 옮기지 않았다(P0 의 미사용 키 정리 대상) |
 | 5 | M ✅ 일부 해결 | **콘텐츠 읽기가 정규식에 의존하고, 이름과 카드 수가 어긋났다** | "암기 119선" 덱은 파서가 `보강 N` 섹션 단위로 **24카드**만 만들었다. 게다가 원본은 119개 번호 중 **87개만** 섹션별로 묶어 설명하고(나머지는 Day 1~14 문서에 있다) 항목이 개별로 분리돼 있지 않다 | **해결**: 섹션을 빈 줄 덩어리로 쪼개 **80카드**로 늘렸다(본문 불변, 테스트로 보존 확인). **남은 것**: 제목 형식이 바뀌면 문항이 조용히 사라지는 구조 — P1 의 빌드 때 검증 |
 | 6 | M | **오답노트가 문제 본문을 복사해 저장한다** | `addWrongNote` 가 title · context · code · answer · pitfall 을 통째로 저장 | 원본 md 를 고쳐도 오답노트에는 반영되지 않는다 (용량 문제는 아님) |
 | 7 | L | 학습 노트 섹션 id 가 위치 기반(`파일번호-순번`) | `parseStudyNotes` | 북마크를 **문서 단위**로 한정한 이유. 섹션 단위 북마크는 문서가 바뀌면 어긋난다 |
@@ -92,7 +92,7 @@
 | **Item** | `ref = 종류:id`, 제목, 분류 | 읽기 전용 콘텐츠 | md · `lessons.js` (저장 안 함) |
 | **Attempt** | `ref`, `at`, `result(correct/incorrect/answered)`, `context(quiz/exam/flashcard/lesson)` | 추가만 하는 이력 | **없음** (`quiz_results` · `exam_results` · `flashcard_known` 가 마지막 상태만 보관) |
 | **Bookmark** | `ref`, `at` | 상태 | `bookmarks` ✅ (이번 변경) |
-| **Completion** | `scope(day / roadmap)`, `key` | 상태 | `day_checks` · `roadmap_checks` |
+| **Completion** | `roadmapDay` | 상태 | `roadmap_checks` (하나로 통합됨) |
 | **ReviewState** | `ref`, `reviewCount`, `lastReviewed`, `mastered` | 상태 | `wrong_notes` 의 일부 |
 | **StudyTime** | `date`, `minutes` | 집계 | `study_time` |
 | **Settings** | `examDate`, `theme` | 설정 | `exam_date` · `jungchogi-theme` |
@@ -105,7 +105,7 @@
 
 | 단계 | 내용 | 규모 | 위험 | 비고 |
 |---|---|---|---|---|
-| **P0** | ① 백업 가져오기: 형식 검증 → 전부 쓰기 전에 검사 → 실패 시 롤백, 용량 초과는 별도 메시지 ② 내보내기를 `{ schema, exportedAt, data }` 로 버전화(옛 형식도 읽기) ③ `schema_version` 키와 **순서 있는 마이그레이션 목록**으로 즉석 마이그레이션 대체 ④ 테마 키를 백업에 포함하거나 제외한다고 명시 ⑤ 미사용 키(`exam_type` 등) 정리 | 반나절 | 낮음 | 발견 1·2·8 |
+| **P0** | ① 백업 가져오기: 형식 검증 → 전부 쓰기 전에 검사 → 실패 시 롤백, 용량 초과는 별도 메시지 ② 내보내기를 `{ schema, exportedAt, data }` 로 버전화(옛 형식도 읽기) ③ `schema_version` 키와 **순서 있는 마이그레이션 목록**으로 즉석 마이그레이션 대체 ④ 테마 키를 백업에 포함하거나 제외한다고 명시 ⑤ 미사용 키(`exam_type` · `day_checks` 등) 정리 | 반나절 | 낮음 | 발견 1·2·8 |
 | **P1** | 콘텐츠를 빌드 때 JSON 으로 변환하고 CI 에서 **id 유일성 · 개수 · 제목 형식**을 검사. 암기 119선의 카드 단위(24카드 vs 119항목)를 정하고 이름을 바로잡거나 항목 단위로 쪼갠다 | 1일 | 중간 | 발견 5. 검색 색인도 미리 만들 수 있다 |
 | **P2** | `Attempt` 로그 도입(상한 N건의 고리 버퍼). `quiz_results` · `exam_results` · `flashcard_known` 은 읽기 호환 유지. 이후 정답률·약점·간격 반복을 이력 기반으로 | 1~2일 | 중간 | 발견 3·6 |
 | **P3** | 이력이 커지면 IndexedDB, 기기 간 동기화가 요구되면 서버 DB | 큼 | 높음 | 발견 9. 요구가 생기기 전에는 하지 않는다 |

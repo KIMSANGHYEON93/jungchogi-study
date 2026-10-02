@@ -163,3 +163,18 @@ describe('1단계 레슨 목록', () => {
   });
 });
 
+describe('밀린 일차 안내', () => {
+  it('지났는데 못 끝낸 일차를 알리고, 일차가 자동으로 옮겨지지 않는다고 설명한다', () => {
+    vi.setSystemTime(new Date(2026, 9, 4, 12, 0, 0)); // D-21
+    saveProgress('roadmap_checks', { 24: true });
+    const c = render();
+    const note = c.querySelector('.road-late');
+    expect(note.textContent).toContain('밀린 일차 2개: D-23 · D-22');
+    expect(note.textContent).toContain('자동으로');
+  });
+
+  it('밀린 일차가 없으면 안내가 없다', () => {
+    expect(render().querySelector('.road-late')).toBeNull();
+  });
+});
+

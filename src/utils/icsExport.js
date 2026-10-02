@@ -1,11 +1,11 @@
-// 일일 학습 일정(`buildDailyPlan().schedule`)을 iCalendar(.ics, RFC 5545) 파일로 내보낸다.
+// 학습 일정(`roadmapSchedule()`)을 iCalendar(.ics, RFC 5545) 파일로 내보낸다.
 //
 // 왜 Google Calendar API 가 아니라 .ics 인가:
 //  - 이 앱은 서버 없는 정적 SPA 라 OAuth 클라이언트 비밀키를 숨길 곳이 없다.
 //  - .ics 는 자격증명이 전혀 필요 없고, Google·Apple·Outlook 이 모두 'Import' 로 받아 준다.
 //
 // 같은 파일을 다시 가져와도 중복되지 않게 UID 를 **날짜로부터 결정적으로** 만든다.
-// 일정은 완료 체크가 바뀔 때마다 재분배되므로, "날짜 → 이벤트 하나" 로 고정해 두면
+// 완료 체크나 시험일이 바뀌면 일정이 달라지므로, "날짜 → 이벤트 하나" 로 고정해 두면
 // 재임포트가 새 이벤트를 쌓지 않고 같은 날짜 이벤트를 갱신하는 쪽으로 동작한다.
 //
 // 날짜는 전부 'YYYY-MM-DD' 문자열 산술로만 다룬다. `new Date('2026-10-01')` 같은 변환은
@@ -18,7 +18,7 @@ const CRLF = '\r\n';
 const MAX_LINE_OCTETS = 75;
 
 const DEFAULT_CALENDAR_NAME = '정처기 학습 플랜';
-const PRODID = '-//jungchogi-study//Daily Plan//KO';
+const PRODID = '-//jungchogi-study//Roadmap//KO';
 const UID_DOMAIN = 'jungchogi-study';
 
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -149,8 +149,9 @@ function dDayLabel(dDay) {
   return dDay > 0 ? `D-${dDay}` : `D+${-dDay}`;
 }
 
-function buildSummary(kind, unitTitles) {
+function buildSummary(kind, unitTitles, title) {
   if (kind === 'exam') return EXAM_SUMMARY;
+  if (typeof title === 'string' && title.trim()) return title.trim();
   if (kind === 'review') return REVIEW_SUMMARY;
   return unitTitles.length > 0 ? unitTitles.join(' · ') : STUDY_FALLBACK_SUMMARY;
 }
@@ -162,6 +163,10 @@ function buildDescription(entry, units) {
   ];
   const lines = [dDayLabel(entry.dDay)];
   if (phases.length > 0) lines.push(`단계: ${phases.join(' · ')}`);
+  // 제목이 따로 있으면 그날의 학습 항목은 설명에 한 줄씩 적는다
+  if (typeof entry.title === 'string' && entry.title.trim()) {
+    for (const u of units) if (typeof u?.label === 'string' && u.label.trim()) lines.push(`- ${u.label.trim()}`);
+  }
   if (entry.kind === 'review') lines.push('오답노트·플래시카드·코드퀴즈로 약점을 복습하세요.');
   return lines.filter(Boolean).join('\n');
 }
@@ -183,7 +188,7 @@ function buildEventLines(entry, stamp) {
     // 종일 이벤트는 DTEND 가 "마지막 날의 다음 날"(배타적 끝)이어야 하루로 보인다
     `DTSTART;VALUE=DATE:${toIcsDate(start)}`,
     `DTEND;VALUE=DATE:${toIcsDate(end)}`,
-    `SUMMARY:${escapeText(buildSummary(entry.kind, unitTitles))}`,
+    `SUMMARY:${escapeText(buildSummary(entry.kind, unitTitles, entry.title))}`,
     ...(description ? [`DESCRIPTION:${escapeText(description)}`] : []),
     // 종일 학습 메모가 공유 캘린더에서 "하루 종일 바쁨"으로 보이지 않게 한다
     'TRANSP:TRANSPARENT',

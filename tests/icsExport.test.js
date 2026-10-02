@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 import { buildIcs, downloadIcs } from '../src/utils/icsExport.js';
-import { buildDailyPlan } from '../src/domain/dailyPlan.js';
+import { buildRoadmap, roadmapSchedule } from '../src/domain/roadmap.js';
 
 const CRLF = '\r\n';
 const NOW = new Date('2026-10-01T15:04:05Z');
@@ -424,15 +424,56 @@ describe('buildIcs: 빈·잘못된 입력', () => {
   });
 });
 
-describe('buildIcs: 실제 buildDailyPlan 결과', () => {
-  const plan = buildDailyPlan({ examDate: '2026-10-25', today: '2026-10-01' });
-  const events = parseEvents(buildIcs(plan.schedule, { now: NOW }));
+describe('buildIcs: title 이 있는 일정', () => {
+  it('title 이 있으면 SUMMARY 가 title 이고, 학습 항목은 설명에 한 줄씩 적는다', () => {
+    const entry = {
+      date: '2026-10-01', dDay: 24, kind: 'study', title: 'D-24 C언어 연산자',
+      units: [{ label: 'C언어 — 연산자', phase: { label: '코딩 · SQL 집중' } }, { label: '  ' }, null],
+    };
+    const [event] = parseEvents(buildIcs([entry], { now: NOW }));
+    expect(unescapeText(event.SUMMARY)).toBe('D-24 C언어 연산자');
+    const desc = unescapeText(event.DESCRIPTION).split('\n');
+    expect(desc).toContain('D-24');
+    expect(desc).toContain('단계: 코딩 · SQL 집중');
+    expect(desc).toContain('- C언어 — 연산자');
+    expect(desc).toHaveLength(3);
+  });
+
+  it('title 이 비었거나 문자열이 아니면 기존 규칙(Day 라벨)을 쓴다', () => {
+    const [a, b] = parseEvents(
+      buildIcs(
+        [
+          { date: '2026-10-01', dDay: 3, kind: 'study', title: '   ', units: [unit(1, 'C언어')] },
+          { date: '2026-10-02', dDay: 2, kind: 'study', title: 42, units: [unit(2, 'Java')] },
+        ],
+        { now: NOW }
+      )
+    );
+    expect(unescapeText(a.SUMMARY)).toBe('Day01 C언어');
+    expect(unescapeText(b.SUMMARY)).toBe('Day02 Java');
+  });
+
+  it('시험 당일은 title 이 있어도 시험 문구다', () => {
+    const [event] = parseEvents(buildIcs([{ date: '2026-10-25', dDay: 0, kind: 'exam', title: 'x', units: [] }], { now: NOW }));
+    expect(unescapeText(event.SUMMARY)).toBe('정보처리기사 실기 시험');
+  });
+});
+
+describe('buildIcs: 실제 roadmapSchedule 결과', () => {
+  const roadmap = buildRoadmap({ examDate: '2026-10-25', today: '2026-10-01' });
+  const schedule = roadmapSchedule(roadmap);
+  const events = parseEvents(buildIcs(schedule, { now: NOW }));
 
   it('오늘~시험일 전부가 하루에 하나씩 이벤트가 된다', () => {
-    expect(plan.schedule).toHaveLength(25);
+    expect(schedule).toHaveLength(25);
     expect(events).toHaveLength(25);
     expect(events[0]['DTSTART;VALUE=DATE']).toBe('20261001');
     expect(new Set(events.map((e) => e.UID)).size).toBe(25);
+  });
+
+  it('제목은 D-n 과 일차 제목이다', () => {
+    expect(unescapeText(events[0].SUMMARY)).toBe('D-24 C언어 연산자');
+    expect(unescapeText(events[8].SUMMARY)).toBe('D-16 1단계 점검');
   });
 
   it('시험 당일 이벤트는 시험 문구이고 DTEND 는 다음 날이다', () => {
@@ -443,8 +484,18 @@ describe('buildIcs: 실제 buildDailyPlan 결과', () => {
     expect(unescapeText(last.DESCRIPTION)).toContain('D-Day');
   });
 
-  it('첫날 설명에 남은 일수(D-24)가 있다', () => {
-    expect(unescapeText(events[0].DESCRIPTION)).toContain('D-24');
+  it('첫날 설명에 D-24 · 단계 · 학습 항목이 있다', () => {
+    const desc = unescapeText(events[0].DESCRIPTION);
+    expect(desc).toContain('D-24');
+    expect(desc).toContain('단계: 코딩 · SQL 집중');
+    expect(desc).toContain('- C언어 — 산술 · 증감 · 비트 · 논리 연산자');
+  });
+
+  it('3단계 날은 공통 복습과 기사 특화 항목을 모두 적는다', () => {
+    const d9 = events.find((e) => unescapeText(e.SUMMARY).startsWith('D-9 '));
+    const desc = unescapeText(d9.DESCRIPTION);
+    expect(desc).toContain('- 공통 복습');
+    expect(desc).toContain('- SDLC');
   });
 
   it('연속한 날짜의 DTEND 는 다음 이벤트의 DTSTART 와 맞물린다', () => {

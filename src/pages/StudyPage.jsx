@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import MarkdownViewer from '../components/MarkdownViewer';
 import BookmarkButton from '../components/ui/BookmarkButton';
 import { BOOKMARK_TYPE } from '../domain/bookmarks';
@@ -7,8 +7,8 @@ import useStudyState from '../hooks/useStudyState';
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
 import { STUDY_FILES as FILES } from '../domain/studyFiles';
-import { buildDailyPlan, plannedEntryForDay } from '../domain/dailyPlan';
-import { getExamDate, loadProgress, toLocalDateKey } from '../utils/storage';
+import { buildRoadmap, daysForStudyDoc } from '../domain/roadmap';
+import { getExamDate, toLocalDateKey } from '../utils/storage';
 
 // `/study?day=6` → FILES 인덱스. Day N 은 FILES[N-1] 이다.
 // 오늘의 계획 카드의 study_day 항목이 이 경로로 들어온다.
@@ -46,17 +46,11 @@ export default function StudyPage() {
   const loading = loaded.idx !== selectedIdx;
   const content = loading ? '' : loaded.text;
 
-  // 이 Day 가 일정의 어느 날에 배정됐는지 — 문서 안에 날짜를 박아 두면 일정이 바뀔 때 어긋난다.
-  // 렌더마다 다시 계산하지 않도록 한 번만 읽는다(체크 변경은 대시보드에서 일어나고 이 화면은 새로 열린다).
-  const [plan] = useState(() =>
-    buildDailyPlan({
-      examDate: getExamDate(),
-      today: toLocalDateKey(),
-      dayChecks: loadProgress('day_checks', {}) || {},
-    })
-  );
-  const planned = selectedIdx < 14 ? plannedEntryForDay(plan, selectedIdx + 1) : null;
-  const dayDone = selectedIdx < 14 && !!(loadProgress('day_checks', {}) || {})[selectedIdx + 1];
+  // 이 문서가 로드맵의 어느 일차에 들어 있는지 — 문서 안에 날짜를 박아 두면 시험일이 바뀔 때 어긋난다.
+  const [today] = useState(() => toLocalDateKey());
+  const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks: study.checks });
+  const planned = selectedIdx < 14 ? daysForStudyDoc(roadmap, selectedIdx + 1) : null;
+  const plannedDone = planned !== null && planned.length > 0 && planned.every((d) => d.done);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,13 +103,14 @@ export default function StudyPage() {
                   label={`${FILES[selectedIdx].name} 북마크`}
                 />
               </div>
-              {selectedIdx < 14 ? (
+              {planned ? (
                 <p className="study-planned" role="note">
-                  {dayDone
-                    ? '완료한 Day 입니다.'
-                    : planned
-                      ? `예정일 ${formatPlannedDate(planned.date)} · ${planned.dDay === 0 ? 'D-Day' : `D-${planned.dDay}`} (시험일 ${plan.examDate?.replace(/-/g, '.')} 기준 자동 배정)`
-                      : '남은 일정에 배정된 날짜가 없습니다. 대시보드에서 시험일을 확인하세요.'}
+                  {planned.length === 0
+                    ? '로드맵의 특정 일차에 배정된 문서는 아니에요. 복습용으로 활용하세요.'
+                    : plannedDone
+                      ? `로드맵에서 완료한 문서입니다 (${planned.map((d) => d.label).join(' · ')}).`
+                      : `로드맵 ${planned.map((d) => `${d.label} ${formatPlannedDate(d.date)}`).join(' · ')} 에서 다룹니다 (시험일 ${roadmap.examDate?.replace(/-/g, '.')} 기준).`}{' '}
+                  <Link to="/roadmap">로드맵 보기</Link>
                 </p>
               ) : null}
               <MarkdownViewer content={content} />

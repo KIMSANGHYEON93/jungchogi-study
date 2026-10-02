@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { loadProgress, saveProgress, getWrongNotes, getExamDate, setExamDate, getWeeklyStudyTime, addStudyTime, getSpacedRepetitionDue, getStorageUsage, formatBytes } from '../utils/storage';
+import { loadProgress, getWrongNotes, getExamDate, setExamDate, getWeeklyStudyTime, addStudyTime, getSpacedRepetitionDue, getStorageUsage, formatBytes, toLocalDateKey } from '../utils/storage';
 import Icon from '../components/Icon';
-import DailyGoalCard from '../components/DailyGoalCard';
+import TodayRoadmapCard from '../components/TodayRoadmapCard';
+import useStudyState from '../hooks/useStudyState';
+import { buildRoadmap, ROADMAP_DAYS } from '../domain/roadmap';
+import { lessonByDay } from '../domain/lessons';
+import { loadStoredBusy } from '../utils/busyStore';
 import { summarizeQuizResults } from '../domain/grading';
 
-import { STUDY_DAYS } from '../domain/studyDays';
 import { BOGANG_CARD_COUNT } from '../domain/bogangDeck';
 
 // ─── 오답 유형 분류 ───
@@ -33,7 +36,7 @@ export default function DashboardPage() {
   const [flashcardKnown] = useState(() => loadProgress('flashcard_known_quiz100', {}));
   const [quizResults] = useState(() => loadProgress('quiz_results', {}));
   const [wrongNotes] = useState(getWrongNotes);
-  const [dayChecks, setDayChecks] = useState(() => loadProgress('day_checks', {}));
+  const study = useStudyState();
   const [examDate, setExamDateState] = useState(() => getExamDate() || '');
   const [showDateInput, setShowDateInput] = useState(false);
   const [spacedDue] = useState(getSpacedRepetitionDue);
@@ -46,12 +49,6 @@ export default function DashboardPage() {
       if (elapsed >= 1) addStudyTime(elapsed);
     };
   }, []);
-
-  const toggleDay = (day) => {
-    const next = { ...dayChecks, [day]: !dayChecks[day] };
-    setDayChecks(next);
-    saveProgress('day_checks', next);
-  };
 
   const handleExamDateSave = (val) => {
     setExamDateState(val);
@@ -71,13 +68,18 @@ export default function DashboardPage() {
   const quizTotal = 40;
   const wrongTotal = wrongNotes.length;
   const wrongReviewed = wrongNotes.filter((n) => n.reviewCount > 0).length;
-  const daysCompleted = Object.values(dayChecks).filter(Boolean).length;
+  // 계획은 25일 로드맵 하나다 — 진도는 로드맵 완료 일차(D-24~D-1)로 센다
+  const [todayKey] = useState(() => toLocalDateKey());
+  const [busy] = useState(loadStoredBusy);
+  const roadmap = buildRoadmap({ examDate: examDate || null, today: todayKey, checks: study.checks, busyDates: busy.busyDates });
+  const daysCompleted = roadmap.progress.done;
+  const daysTotal = ROADMAP_DAYS.length;
 
   const overallPercent = Math.round(
     ((flashcardDone / flashcardTotal) * 25 +
       (bogangDone / bogangTotal) * 15 +
       (quizDone / quizTotal) * 30 +
-      (daysCompleted / 14) * 30)
+      (daysCompleted / daysTotal) * 30)
   );
 
   // D-Day 계산
@@ -97,14 +99,20 @@ export default function DashboardPage() {
   // 추천 학습 결정
   const getRecommendation = () => {
     if (spacedDue.length > 0) return { text: `간격 반복 복습할 오답이 ${spacedDue.length}개 있어요!`, action: () => navigate('/wrong'), btn: '복습하기' };
-    if (daysCompleted === 0) return { text: 'Day 1부터 학습을 시작하세요!', action: () => navigate('/study'), btn: '학습 시작' };
+    // 오늘의 로드맵 일차가 있고 아직 안 끝났으면 그것부터
+    const todayDay = roadmap.today;
+    if (todayDay && todayDay.d > 0 && !todayDay.done) {
+      const lesson = lessonByDay(todayDay.d);
+      return {
+        text: `오늘의 로드맵 — ${todayDay.label} ${todayDay.title}`,
+        action: () => navigate(lesson ? `/lesson/${lesson.d}` : '/roadmap'),
+        btn: lesson ? '레슨 시작' : '로드맵 보기',
+      };
+    }
+    if (roadmap.late.length > 0) return { text: `밀린 로드맵 일차가 ${roadmap.late.length}개 있어요`, action: () => navigate('/roadmap'), btn: '이어하기' };
     if (flashcardDone < 30) return { text: '플래시카드로 기본 용어를 익히세요', action: () => navigate('/flashcard'), btn: '카드 학습' };
     if (wrongTotal > 0 && wrongReviewed < wrongTotal) return { text: `오답노트에 복습할 문제가 ${wrongTotal - wrongReviewed}개 있어요`, action: () => navigate('/wrong'), btn: '오답 복습' };
     if (quizDone < 20) return { text: '코드 트레이싱 퀴즈를 풀어보세요', action: () => navigate('/quiz'), btn: '퀴즈 풀기' };
-    if (daysCompleted < 14) {
-      const nextDay = STUDY_DAYS.find((d) => !dayChecks[d.day]);
-      return { text: `Day ${nextDay?.day} — ${nextDay?.label} 학습을 진행하세요`, action: () => navigate('/study'), btn: '학습 계속' };
-    }
     return { text: '모의고사로 실력을 점검하세요!', action: () => navigate('/exam'), btn: '모의고사' };
   };
 
@@ -166,9 +174,9 @@ export default function DashboardPage() {
         </div>
 
         {/* 추천 학습 */}
-        <div className="card recommend-card" onClick={recommendation.action} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); recommendation.action(); } }} role="button" tabIndex={0} style={{ cursor: 'pointer', flex: 1, minWidth: 200 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-            <div>
+        <div className="card recommend-card" onClick={recommendation.action} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); recommendation.action(); } }} role="button" tabIndex={0} style={{ cursor: 'pointer', flex: '1 1 240px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 160px', minWidth: 0 }}>
               <div style={{ fontSize: '0.85rem', color: 'var(--warning)', fontWeight: 600, marginBottom: 4 }}>
                 {spacedDue.length > 0 ? '간격 반복 알림' : '오늘의 추천'}
               </div>
@@ -181,8 +189,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 오늘의 목표 단계 (남은 일수 기반 일일 플랜) */}
-      <DailyGoalCard examDate={examDate} dayChecks={dayChecks} onToggleDay={toggleDay} />
+      {/* 오늘의 로드맵 (25일 로드맵의 오늘 일차) */}
+      <TodayRoadmapCard examDate={examDate} />
 
       {/* 간격 반복 알림 상세 */}
       {spacedDue.length > 0 && (
@@ -345,27 +353,18 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Day별 학습 체크리스트 */}
-      <h2 style={{ fontSize: '1.1rem', marginTop: 32, marginBottom: 16 }}>14일 학습 체크리스트</h2>
-      <div className="day-grid">
-        {STUDY_DAYS.map((d) => (
-          <div
-            key={d.day}
-            className={`card day-card ${dayChecks[d.day] ? 'completed' : ''}`}
-            onClick={() => toggleDay(d.day)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDay(d.day); } }}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="day-check">{dayChecks[d.day] ? <Icon name="check-circle" size={20}/> : <Icon name={d.icon} size={20}/>}</div>
-            <div className="day-num">Day {d.day}</div>
-            <div className="day-label">{d.label}</div>
+      {/* 로드맵 진도 — 완료 체크는 로드맵·레슨 화면과 같은 기록이다 */}
+      <div className="card" style={{ marginTop: 32, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <h2 style={{ fontSize: '1.1rem', marginBottom: 8 }}>25일 로드맵 진도</h2>
+          <div className="progress-bar" role="progressbar" aria-label="로드맵 진도" aria-valuemin={0} aria-valuemax={100} aria-valuenow={roadmap.progress.percent}>
+            <div className="fill" style={{ width: `${roadmap.progress.percent}%` }} />
           </div>
-        ))}
-      </div>
-
-      <div style={{ textAlign: 'center', marginTop: 16, color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-        {daysCompleted}/14일 완료 — 클릭하여 완료 표시
+          <div style={{ marginTop: 8, color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+            {daysCompleted}/{daysTotal}일 완료{roadmap.late.length > 0 ? ` · 밀린 일차 ${roadmap.late.length}개` : ''}
+          </div>
+        </div>
+        <Link className="btn-outline" to="/roadmap" style={{ textDecoration: 'none' }}>로드맵 열기</Link>
       </div>
 
       {/* 데이터 관리 */}

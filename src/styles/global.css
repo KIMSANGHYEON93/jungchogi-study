@@ -623,49 +623,12 @@ button:active { transform: scale(0.97); }
 }
 
 /* Day grid */
-.day-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
-}
 
-.day-card {
-  text-align: center;
-  padding: 14px 8px !important;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 0 !important;
-}
 
-.day-card:hover {
-  border-color: var(--primary-dim);
-  transform: translateY(-2px);
-}
 
-.day-card.completed {
-  border-color: var(--success);
-  background: rgba(74, 222, 128, 0.05);
-}
 
-.day-check {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary);
-  margin-bottom: 4px;
-}
 
-.day-num {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--primary);
-}
 
-.day-label {
-  font-size: 0.7rem;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
 
 .logo-link {
   text-decoration: none !important;
@@ -943,15 +906,7 @@ button:active { transform: scale(0.97); }
   .dash-stat-icon { /* SVG sized via props */ }
   .dash-stat-value { font-size: 1.4rem; }
 
-  .day-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-  }
 
-  .day-card { padding: 10px 4px !important; }
-  .day-check { /* SVG sized via props */ }
-  .day-num { font-size: 0.7rem; }
-  .day-label { font-size: 0.65rem; }
 
   /* General touch targets */
   button { min-height: 44px; }
@@ -1882,23 +1837,7 @@ html { scroll-behavior: smooth; }
   color: var(--text-dim);
 }
 
-.goal-done {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin: 0;
-  font-weight: 600;
-  color: var(--success, var(--primary));
-}
 
-.goal-units {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
 
 .goal-unit {
   display: flex;
@@ -1947,24 +1886,38 @@ html { scroll-behavior: smooth; }
   font-size: 0.85rem;
 }
 
-.goal-review {
-  padding: var(--space-md);
-  border: 1px dashed var(--border);
-  border-radius: 10px;
+.goal-roadmap-day {
+  align-items: flex-start;
 }
 
-.goal-review-links {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
+.goal-roadmap-day .road-topics {
+  margin-top: var(--space-xs);
+}
+
+.goal-lesson-link {
+  align-self: flex-start;
   margin-top: var(--space-sm);
-}
-
-.goal-review-link {
   text-decoration: none;
   font-size: 0.85rem;
   padding: 6px 14px;
 }
+
+.goal-late {
+  color: var(--warning);
+}
+
+@media (max-width: 640px) {
+  .goal-roadmap-day {
+    flex-direction: column;
+  }
+  .goal-roadmap-day .goal-check {
+    align-self: stretch;
+    justify-content: center;
+  }
+}
+
+
+
 
 .goal-meta {
   margin: 0;

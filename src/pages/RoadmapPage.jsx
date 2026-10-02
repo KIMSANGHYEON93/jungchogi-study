@@ -6,6 +6,7 @@ import { BOOKMARK_TYPE } from '../domain/bookmarks';
 import { LESSONS, lessonByDay } from '../domain/lessons';
 import { buildRoadmap, topicLinks } from '../domain/roadmap';
 import useStudyState from '../hooks/useStudyState';
+import { loadStoredBusy } from '../utils/busyStore';
 import { getExamDate, toLocalDateKey } from '../utils/storage';
 
 const SCOPE_LABEL = { common: '공통', engineer: '기사 특화' };
@@ -22,9 +23,10 @@ export default function RoadmapPage() {
   const [today] = useState(() => toLocalDateKey());
   const study = useStudyState();
   const [onlyBookmarks, setOnlyBookmarks] = useState(false);
+  const [busy] = useState(loadStoredBusy);
   const todayRef = useRef(null);
 
-  const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks: study.checks });
+  const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks: study.checks, busyDates: busy.busyDates });
   const { progress } = roadmap;
   const shelf = onlyBookmarks ? LESSONS.filter((l) => study.isBookmarked(BOOKMARK_TYPE.LESSON, l.id)) : LESSONS;
 
@@ -45,6 +47,7 @@ export default function RoadmapPage() {
         <span className="road-day-d">{day.label}</span>
         <span className="road-day-date">{formatDate(day.date)}</span>
         {day.isToday ? <span className="badge badge-primary">오늘</span> : null}
+        {day.busy ? <span className="badge badge-warning" title="캘린더에서 가져온 일정이 많은 날 — 가볍게 복습하세요">일정 많음</span> : null}
         <strong className="road-day-title">{day.title}</strong>
         {lessonByDay(day.d) ? (
           <Link className="note-link" to={`/lesson/${day.d}`}>
@@ -154,6 +157,12 @@ export default function RoadmapPage() {
       {roadmap.isDefaultExamDate && roadmap.examDate ? (
         <p className="road-hint">
           시험일을 설정하지 않아 {roadmap.examDate.replace(/-/g, '.')} 기준으로 계산했습니다. 대시보드에서 바꿀 수 있어요.
+        </p>
+      ) : null}
+      {roadmap.status === 'ok' && roadmap.late.length > 0 ? (
+        <p className="road-hint road-late" role="status">
+          밀린 일차 {roadmap.late.length}개: {roadmap.late.map((d) => `D-${d}`).join(' · ')}. 일차는 날짜에 고정돼 있어 자동으로
+          옮겨지지 않아요 — 시간이 나는 날 이어서 하고 완료 표시를 해 주세요.
         </p>
       ) : null}
       {roadmap.status === 'before' ? (
