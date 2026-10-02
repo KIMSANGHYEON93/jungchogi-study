@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../components/Icon';
 import LessonCard from '../components/ui/LessonCard';
+import { BOOKMARK_TYPE } from '../domain/bookmarks';
 import { LESSONS, lessonByDay } from '../domain/lessons';
 import { buildRoadmap, topicLinks } from '../domain/roadmap';
 import useStudyState from '../hooks/useStudyState';
@@ -25,7 +26,7 @@ export default function RoadmapPage() {
 
   const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks: study.checks });
   const { progress } = roadmap;
-  const shelf = onlyBookmarks ? LESSONS.filter((l) => study.isBookmarked(l.id)) : LESSONS;
+  const shelf = onlyBookmarks ? LESSONS.filter((l) => study.isBookmarked(BOOKMARK_TYPE.LESSON, l.id)) : LESSONS;
 
   // 오늘 카드가 목록 아래쪽이면 화면 밖이다. 첫 렌더 뒤 한 번만 끌어온다.
   useEffect(() => {
@@ -142,8 +143,8 @@ export default function RoadmapPage() {
                 key={lesson.id}
                 lesson={lesson}
                 done={study.isDone(lesson.d)}
-                bookmarked={study.isBookmarked(lesson.id)}
-                onToggleBookmark={() => study.toggleBookmark(lesson.id)}
+                bookmarked={study.isBookmarked(BOOKMARK_TYPE.LESSON, lesson.id)}
+                onToggleBookmark={() => study.toggleBookmark(BOOKMARK_TYPE.LESSON, lesson.id)}
               />
             ))}
           </div>

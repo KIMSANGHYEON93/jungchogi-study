@@ -76,7 +76,7 @@ describe('레슨 화면', () => {
     expect(btn.getAttribute('aria-pressed')).toBe('false');
     click(btn);
     expect(btn.getAttribute('aria-pressed')).toBe('true');
-    expect(JSON.parse(localStorage.getItem('jungchogi_lesson_bookmarks'))).toEqual({ 'c-operators': true });
+    expect(Object.keys(JSON.parse(localStorage.getItem('jungchogi_bookmarks')))).toEqual(['lesson:c-operators']);
   });
 
   it('퀴즈: 정답이면 정답, 오답이면 정답을 보여준다 (공백 차이는 무시)', () => {

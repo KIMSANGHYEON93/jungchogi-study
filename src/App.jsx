@@ -6,6 +6,7 @@ import FormulaCheatSheetModal from './components/FormulaCheatSheetModal';
 import { useTheme, ThemeProvider } from './hooks/useTheme';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const BookmarksPage = lazy(() => import('./pages/BookmarksPage'));
 const LessonPage = lazy(() => import('./pages/LessonPage'));
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const FlashcardPage = lazy(() => import('./pages/FlashcardPage'));
@@ -52,6 +53,7 @@ function AppLayout() {
           <Route path="/roadmap" element={<RoadmapPage />} />
           <Route path="/practice" element={<PracticePage />} />
           <Route path="/lesson/:d" element={<LessonPage />} />
+          <Route path="/bookmarks" element={<BookmarksPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>

@@ -29,6 +29,7 @@ const NAV_GROUPS = [
       { to: '/study', label: '학습노트' },
       { to: '/flashcard', label: '플래시카드' },
       { to: '/search', label: '검색' },
+      { to: '/bookmarks', label: '북마크' },
     ],
   },
   {

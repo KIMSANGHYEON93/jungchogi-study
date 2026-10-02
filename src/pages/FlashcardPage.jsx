@@ -7,6 +7,10 @@ import useSwipe from '../hooks/useSwipe';
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
 import Icon from '../components/Icon';
+import BookmarkButton from '../components/ui/BookmarkButton';
+import { DECK_BOOKMARK_TYPE } from '../domain/bookmarks';
+import useStudyState from '../hooks/useStudyState';
+import { bookmarkKey } from '../utils/studyState';
 import {
   useDeepLinkId,
   useDeepLinkedIndex,
@@ -50,6 +54,9 @@ export default function FlashcardPage() {
   const [category, setCategory] = useState('전체');
   const [known, setKnown] = useState({});
   const [filterMode, setFilterMode] = useState('all');
+  const study = useStudyState();
+  const bookmarkType = DECK_BOOKMARK_TYPE[deck];
+  const { bookmarks } = study;
 
   // 덱 변경 시 데이터 로드
   useEffect(() => {
@@ -71,8 +78,9 @@ export default function FlashcardPage() {
     let f = allCards;
     if (category !== '전체') f = f.filter((c) => c.category === category);
     if (filterMode === 'unknown') f = f.filter((c) => !isKnown(c));
+    if (filterMode === 'bookmarked') f = f.filter((c) => bookmarkKey(bookmarkType, c.id) in bookmarks);
     return f;
-  }, [allCards, category, filterMode, isKnown]);
+  }, [allCards, category, filterMode, isKnown, bookmarks, bookmarkType]);
 
   // 셔플은 그 대상이 지금의 filtered 와 같을 때만 유효하다
   const cards = shuffled && shuffled.source === filtered ? shuffled.order : filtered;
@@ -183,6 +191,7 @@ export default function FlashcardPage() {
         <span style={{ margin: '0 8px', borderLeft: '1px solid var(--border)', height: 28 }} />
         <button className={`btn-outline ${filterMode === 'all' ? 'active' : ''}`} onClick={() => changeFilterMode('all')}>전체</button>
         <button className={`btn-outline ${filterMode === 'unknown' ? 'active' : ''}`} onClick={() => changeFilterMode('unknown')}>모르는 것만</button>
+          <button className={`btn-outline ${filterMode === 'bookmarked' ? 'active' : ''}`} onClick={() => changeFilterMode('bookmarked')}>북마크만</button>
         <span style={{ margin: '0 8px', borderLeft: '1px solid var(--border)', height: 28 }} />
         <button className="btn-outline" onClick={shuffle} title="카드 순서 섞기"><Icon name="refresh" size={14}/> 섞기</button>
       </div>
@@ -197,10 +206,19 @@ export default function FlashcardPage() {
 
       {cards.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 60 }}>
-          {filterMode === 'unknown' ? <><Icon name="party" size={24}/> 모든 카드를 외웠습니다!</> : '문제를 불러오는 중...'}
+          {filterMode === 'unknown' ? <><Icon name="party" size={24}/> 모든 카드를 외웠습니다!</>
+            : filterMode === 'bookmarked' && allCards.length > 0 ? '북마크한 카드가 없습니다. 카드 위의 북마크 버튼으로 추가해 보세요.'
+            : '문제를 불러오는 중...'}
         </div>
       ) : current ? (
         <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <BookmarkButton
+              active={study.isBookmarked(bookmarkType, current.id)}
+              onToggle={() => study.toggleBookmark(bookmarkType, current.id)}
+              label={`${current.id}번 카드 북마크`}
+            />
+          </div>
           <div className="flashcard-container" {...swipeHandlers}>
             <div className={`flashcard ${flipped ? 'flipped' : ''} ${deck === 'bogang119' && flipped ? 'flashcard-tall' : ''}`} onClick={() => setFlipped(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFlipped(!flipped); } }} role="button" tabIndex={0} aria-label="카드 뒤집기">
               <div className="flashcard-face">

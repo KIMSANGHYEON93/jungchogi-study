@@ -64,7 +64,7 @@ describe('상단 내비게이션 드롭다운', () => {
       all.push(...[...desktop(c).querySelectorAll('.nav-dropdown-menu a')].map((a) => a.getAttribute('href')));
     }
     expect(all.sort()).toEqual(
-      ['/study', '/flashcard', '/search', '/quiz', '/practice', '/exam', '/wrong', '/roadmap', '/guide'].sort()
+      ['/study', '/flashcard', '/search', '/bookmarks', '/quiz', '/practice', '/exam', '/wrong', '/roadmap', '/guide'].sort()
     );
   });
 

@@ -14,9 +14,10 @@ Vite + React 19 기반 순수 클라이언트 SPA. 14일 학습 문서, 플래�
 | `/search` | 전체 학습 자료 검색 (문제 은행 + 학습 노트 본문) |
 | `/roadmap` | 25일 D-Day 로드맵 — 기사·산업기사 공통 계획(공통 모듈 먼저, 기사 특화는 3단계에서 뒤), 4단계 일정, 일자별 완료 체크와 진도 게이지 |
 | `/lesson/:d` | 일차별 레슨 13개 — 1단계 D-24~D-17(C·Java·Python·SQL)과 2단계 D-15~D-11(스케줄링·페이지 교체·서브넷·프로토콜·테스트) — 개념·예제·출력 퀴즈, 완료·북마크 저장 |
+| `/bookmarks` | 북마크 — 레슨 · 플래시카드 · 코드 퀴즈 · 학습 노트 북마크 모아 보기 (종류별 필터, 해제). 각 화면의 북마크 버튼으로 추가한다. 플래시카드는 "북마크만" 필터도 있다 |
 | `/practice` | 실기 연습 — 변수 추적표(C·Java·Python), SQL 빈칸 채우기, 단답·약술 키워드 채점 |
 | `/guide` | 시험 영역 안내 — 개요, 출제기준 12개 영역, 출제 비중 |
-| (상단 내비게이션) | 학습 · 실전 · 계획 드롭다운 3개로 묶여 있다 (학습: 학습노트·플래시카드·검색 / 실전: 코드퀴즈·실기연습·모의고사·오답노트 / 계획: 로드맵·영역안내) |
+| (상단 내비게이션) | 학습 · 실전 · 계획 드롭다운 3개로 묶여 있다 (학습: 학습노트·플래시카드·검색·북마크 / 실전: 코드퀴즈·실기연습·모의고사·오답노트 / 계획: 로드맵·영역안내) |
 | (모든 화면) | 공식 치트시트 모달 — 헤더의 "공식" 버튼 또는 오른쪽 아래 플로팅 버튼 (서브넷·순환 복잡도·HRN·페이지 교체) |
 
 ## 구조
@@ -31,6 +32,9 @@ src/utils/            studyState.js(완료·북마크 공유 저장소), parse*.
 src/hooks/            useTheme, useStudyTimer, useSwipe, useDeepLink
 design-system/vivara/ 디자인 토큰·규칙
 ```
+
+## 학습 데이터 구성
+저장소 구성·위험·개선 계획(P0~P3)은 [`docs/data-architecture-review.md`](docs/data-architecture-review.md) 에 정리했다. 북마크는 `bookmarks` 키 하나에 `{ "<종류>:<id>": 시각 }` 로 모은다.
 
 ## 스타일링
 기존 화면은 `src/styles/global.css`(디자인 토큰), 새 컴포넌트는 Tailwind CSS v4 를 쓴다. 충돌을 피하려고 리셋(preflight)을 가져오지 않고 모든 유틸리티에 `tw:` 접두사를 붙인다(`tw:flex`, `tw:md:grid-cols-2`). 색은 토큰에 연결돼 다크 모드를 그대로 따른다(`tw:bg-card`, `tw:text-dim`). `global.css` 의 비레이어 규칙(`button` 의 padding/border 등)은 유틸리티보다 우선하므로 필요하면 `tw:p-0!` 처럼 `!` 를 붙인다.
@@ -68,7 +72,7 @@ npm run build       # dist/ 생성
 | 문항 파서 | `parseQuiz` · `parseBogang` · `parseCodeDrill` · `parseStudyNotes` |
 | 저장 계층 | `storage` · `edge-storage` · `edge-time` · `exam-results` · `quizResultsCompat` |
 | 일일 플랜·로드맵·캘린더 | `dailyPlan` · `roadmap` · `RoadmapPage` · `calendarBusy` · `icsExport` · `googleCalendar` · `DailyGoalCard*` |
-| 레슨·학습 상태 | `lessons` · `LessonPage` · `studyState` |
+| 레슨·학습 상태·북마크 | `lessons` · `LessonPage` · `studyState` · `bookmarks` |
 | 실기 연습 | `traces` · `CodeTracingTable` · `sqlBlanks` · `SqlQuizCard` · `shortAnswer` · `ShortAnswerGrader` · `PracticePage` |
 | 공식 치트시트 | `formulas` · `FormulaCheatSheetModal` · `App.cheatsheet` |
 | 채점 | `grading` · `QuizPage.grade` · `QuizPage.autoMatch` · `ExamPage.grade` |

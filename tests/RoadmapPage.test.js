@@ -141,7 +141,7 @@ describe('1단계 레슨 목록', () => {
     const c = render();
     const shelf = c.querySelector('#road-lessons').closest('section');
     await act(async () => { shelf.querySelectorAll('article button[aria-pressed]')[1].click(); });
-    expect(loadProgress('lesson_bookmarks', {})).toEqual({ 'c-control-flow': true });
+    expect(Object.keys(loadProgress('bookmarks', {}))).toEqual(['lesson:c-control-flow']);
 
     await act(async () => { shelf.querySelector('input[type="checkbox"]').click(); });
     expect([...shelf.querySelectorAll('article h3')].map((h) => h.textContent)).toEqual(['C언어 제어문']);

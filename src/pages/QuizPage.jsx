@@ -13,6 +13,9 @@ import {
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
 import Icon from '../components/Icon';
+import BookmarkButton from '../components/ui/BookmarkButton';
+import { BOOKMARK_TYPE } from '../domain/bookmarks';
+import useStudyState from '../hooks/useStudyState';
 import CodeTracingTable from '../components/CodeTracingTable';
 import { traceFor } from '../domain/traces';
 import ProblemContext from '../components/ProblemContext';
@@ -52,6 +55,7 @@ export default function QuizPage() {
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState({}); // { id: 'correct'|'incorrect'|'answered' }
   const [wrongIds, setWrongIds] = useState(new Set());
+  const study = useStudyState();
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +178,11 @@ export default function QuizPage() {
             <h2 style={{ fontSize: '1.1rem' }}>{current.id}. {current.title}</h2>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
               <span className="badge badge-primary">{current.lang.toUpperCase()}</span>
+              <BookmarkButton
+                active={study.isBookmarked(BOOKMARK_TYPE.CODE_DRILL, current.id)}
+                onToggle={() => study.toggleBookmark(BOOKMARK_TYPE.CODE_DRILL, current.id)}
+                label={`${current.id} 문제 북마크`}
+              />
             </div>
           </div>
 

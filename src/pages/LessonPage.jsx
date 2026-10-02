@@ -4,6 +4,7 @@ import CodeBlock from '../components/ui/CodeBlock';
 import CompleteToggle from '../components/ui/CompleteToggle';
 import DataTable from '../components/ui/DataTable';
 import QuizItem from '../components/ui/QuizItem';
+import { BOOKMARK_TYPE } from '../domain/bookmarks';
 import { LESSONS, lessonByDay } from '../domain/lessons';
 import useStudyState from '../hooks/useStudyState';
 
@@ -48,8 +49,8 @@ export default function LessonPage() {
           </div>
           <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-2">
             <BookmarkButton
-              active={study.isBookmarked(lesson.id)}
-              onToggle={() => study.toggleBookmark(lesson.id)}
+              active={study.isBookmarked(BOOKMARK_TYPE.LESSON, lesson.id)}
+              onToggle={() => study.toggleBookmark(BOOKMARK_TYPE.LESSON, lesson.id)}
               label={`${lesson.title} 북마크`}
             />
             <CompleteToggle done={done} onToggle={() => study.toggleDone(lesson.d)} label={`D-${lesson.d} 학습 완료`} />

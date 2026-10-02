@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import MarkdownViewer from '../components/MarkdownViewer';
+import BookmarkButton from '../components/ui/BookmarkButton';
+import { BOOKMARK_TYPE } from '../domain/bookmarks';
+import useStudyState from '../hooks/useStudyState';
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
 import { STUDY_FILES as FILES } from '../domain/studyFiles';
@@ -32,6 +35,7 @@ function formatPlannedDate(dateKey) {
 export default function StudyPage() {
   useStudyTimer();
   const [searchParams] = useSearchParams();
+  const study = useStudyState();
   // 첫 렌더에만 URL 을 읽는다 — 이후 선택은 사용자 조작이 소유한다.
   // effect 로 동기화하지 않으므로 set-state-in-effect 가 생기지 않는다.
   const [selectedIdx, setSelectedIdx] = useState(
@@ -98,6 +102,13 @@ export default function StudyPage() {
             </div>
           ) : (
             <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <BookmarkButton
+                  active={study.isBookmarked(BOOKMARK_TYPE.DOC, FILES[selectedIdx].file)}
+                  onToggle={() => study.toggleBookmark(BOOKMARK_TYPE.DOC, FILES[selectedIdx].file)}
+                  label={`${FILES[selectedIdx].name} 북마크`}
+                />
+              </div>
               {selectedIdx < 14 ? (
                 <p className="study-planned" role="note">
                   {dayDone
