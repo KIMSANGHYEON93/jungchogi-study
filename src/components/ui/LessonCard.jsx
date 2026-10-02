@@ -9,6 +9,10 @@ const TRACK_STYLE = {
   OS: 'tw:bg-danger/15 tw:text-danger',
   네트워크: 'tw:bg-primary/15 tw:text-primary-dim',
   테스트: 'tw:bg-accent/15 tw:text-accent',
+  '소프트웨어 공학': 'tw:bg-warning/15 tw:text-warning',
+  디자인패턴: 'tw:bg-accent/15 tw:text-accent',
+  '통합 구현': 'tw:bg-success/15 tw:text-success',
+  보안: 'tw:bg-danger/15 tw:text-danger',
 };
 
 /** 레슨 목록 카드 — 제목·트랙·소요 시간·완료 표시와 북마크. 상태는 모두 props 로 받는다. */

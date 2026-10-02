@@ -55,7 +55,7 @@ describe('레슨 화면', () => {
   });
 
   it('없는 일차는 안내를 보여준다', () => {
-    const c = render('/lesson/5');
+    const c = render('/lesson/4');
     expect(c.textContent).toContain('찾을 수 없습니다');
   });
 
@@ -108,5 +108,17 @@ describe('레슨 화면', () => {
       act(() => m.root.unmount());
       m.container.remove();
     }
+  });
+
+  it('용어 문제는 같은 뜻의 다른 표기·대소문자도 정답으로 본다', () => {
+    const c = render('/lesson/8');
+    const input = c.querySelector('#lesson-q-q1');
+    type(input, '싱글턴');
+    click(input.closest('li').querySelector('button[type="submit"]'));
+    expect(input.closest('li').querySelector('[role="status"]').textContent).toContain('정답입니다');
+    const other = c.querySelector('#lesson-q-q3');
+    type(other, 'FACADE');
+    click(other.closest('li').querySelector('button[type="submit"]'));
+    expect(other.closest('li').querySelector('[role="status"]').textContent).toContain('정답입니다');
   });
 });

@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { LESSONS, lessonByDay, lessonById } from '../src/domain/lessons.js';
+import { LESSONS, lessonByDay, lessonById, matchesLessonAnswer } from '../src/domain/lessons.js';
 import { ROADMAP_DAYS } from '../src/domain/roadmap.js';
 import { matchesExpectedOutput } from '../src/domain/grading.js';
 import { CIDR_TABLE, cidrInfo, cyclomatic, hrn, simulatePageReplacement } from '../src/domain/formulas.js';
 
 describe('레슨 데이터', () => {
-  it('D-24 ~ D-17(1단계)와 D-15 ~ D-11(2단계) 13개 일차가 일차 내림차순으로 있다 (D-16 · D-10 은 점검일)', () => {
-    expect(LESSONS.map((l) => l.d)).toEqual([24, 23, 22, 21, 20, 19, 18, 17, 15, 14, 13, 12, 11]);
+  it('1~3단계 18개 일차가 일차 내림차순으로 있다 (D-16 · D-10 · D-4 는 점검일)', () => {
+    expect(LESSONS.map((l) => l.d)).toEqual([24, 23, 22, 21, 20, 19, 18, 17, 15, 14, 13, 12, 11, 9, 8, 7, 6, 5]);
     expect(LESSONS.map((l) => l.track)).toEqual([
       'C', 'C', 'C', 'Java', 'Java', 'Python', 'SQL', 'SQL', 'OS', 'OS', '네트워크', '네트워크', '테스트',
+      '소프트웨어 공학', '디자인패턴', '디자인패턴', '통합 구현', '보안',
     ]);
-    expect(lessonByDay(16)).toBeNull();
-    expect(lessonByDay(10)).toBeNull();
+    for (const d of [16, 10, 4]) expect(lessonByDay(d), `D-${d}`).toBeNull();
     expect(lessonByDay(24).title).toContain('연산자');
     expect(lessonByDay('23').title).toContain('제어문');
     expect(lessonByDay(17).track).toBe('SQL');
@@ -25,7 +25,7 @@ describe('레슨 데이터', () => {
     for (const l of LESSONS) {
       const day = ROADMAP_DAYS.find((x) => x.d === l.d);
       expect(day, `D-${l.d}`).toBeTruthy();
-      expect(l.d).toBeGreaterThanOrEqual(11);
+      expect(l.d).toBeGreaterThanOrEqual(5);
     }
   });
 
@@ -138,5 +138,31 @@ describe('2단계 계산 레슨 — 앱의 계산 함수와 교차 검증', () =
     const osi = lessonByDay(12).tables[0].rows;
     expect(osi.map((r) => r[0])).toEqual([7, 6, 5, 4, 3, 2, 1]);
     expect(String(osi.find((r) => r[1] === '네트워크')[0])).toBe(q(12, 'q2'));
+  });
+});
+
+describe('matchesLessonAnswer', () => {
+  it('정답과 alt 표기를 모두 받고, 공백 차이는 무시한다', () => {
+    const q = { answer: 'Hub & Spoke', alt: ['허브 앤 스포크'], ignoreCase: true };
+    expect(matchesLessonAnswer(q, 'hub & spoke')).toBe(true);
+    expect(matchesLessonAnswer(q, '  HUB   &  SPOKE ')).toBe(true);
+    expect(matchesLessonAnswer(q, '허브 앤 스포크')).toBe(true);
+    expect(matchesLessonAnswer(q, '메시지 버스')).toBe(false);
+    expect(matchesLessonAnswer(q, '')).toBe(false);
+  });
+
+  it('ignoreCase 가 없으면 대소문자를 구분한다 (출력값 문제)', () => {
+    expect(matchesLessonAnswer({ answer: 'NULL' }, 'null')).toBe(false);
+    expect(matchesLessonAnswer({ answer: 'NULL' }, 'NULL')).toBe(true);
+  });
+
+  it('용어 문제는 모두 ignoreCase 이고, 모든 정답·alt 가 자기 자신과 일치한다', () => {
+    const term = (q) => /[가-힣A-Za-z]/.test(q.answer) && !q.code;
+    for (const l of LESSONS) {
+      for (const q of l.questions) {
+        for (const a of [q.answer, ...(q.alt ?? [])]) expect(matchesLessonAnswer(q, a), `${l.id}/${q.id}/${a}`).toBe(true);
+        if (term(q) && l.d <= 9) expect(q.ignoreCase, `${l.id}/${q.id}`).toBe(true);
+      }
+    }
   });
 });

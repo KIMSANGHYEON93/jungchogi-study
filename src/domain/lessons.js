@@ -1,6 +1,6 @@
 // 로드맵 일차별 레슨 — 개념 요약 · 예제 코드 · 확인 퀴즈.
 //
-// 1단계(D-24 ~ D-17) 8개와 2단계(D-15 ~ D-11) 5개 일차를 담는다. D-16 · D-10 은 점검일이라 레슨 대신 연습·오답노트를 쓴다.
+// 1단계(D-24 ~ D-17) 8개 · 2단계(D-15 ~ D-11) 5개 · 3단계(D-9 ~ D-5) 5개 일차를 담는다. D-16 · D-10 · D-4 는 점검일이라 레슨 대신 연습·오답노트를 쓴다.
 // 예제의 출력·퀴즈 정답은 직접 실행해 확인했다(C 는 gcc, Java 는 javac, Python 은 python3, SQL 은 SQLite).
 // 일차를 더 늘릴 때는 LESSONS 에 같은 모양의 항목을 추가하면 로드맵·레슨 화면이 그대로 따라온다.
 //
@@ -8,12 +8,15 @@
 //   id        레슨 안에서 유일한 문항 id
 //   prompt    문제 문장
 //   code      (선택) 문제 코드 — 없으면 문장형 문제  ·  lang  코드 언어
+//   alt       (선택) 같은 뜻의 다른 표기 목록  ·  ignoreCase  true 면 대소문자 무시(용어 문제)
 //   answer    정답(출력값·숫자·짧은 단어). 채점은 공백·줄바꿈 차이를 무시한다(grading.matchesExpectedOutput)
 //   explain   해설
 //
 // @typedef {Object} Lesson
-//   id, d(일차), title, tablesTitle?, tables?[{name, columns, rows}], track('C'|'Java'|'Python'|'SQL'|'OS'|'네트워크'|'테스트'), minutes(예상 소요), summary, goals[],
+//   id, d(일차), title, tablesTitle?, tables?[{name, columns, rows}], track('C'|'Java'|'Python'|'SQL'|'OS'|'네트워크'|'테스트'|'소프트웨어 공학'|'디자인패턴'|'통합 구현'|'보안'), minutes(예상 소요), summary, goals[],
 //   sections[{heading, body, code?, lang?, output?}], pitfalls[], questions[]
+
+import { matchesExpectedOutput } from './grading';
 
 /** 템플릿 문자열의 앞 줄바꿈과 끝 공백을 걷어 코드 본문만 남긴다. 역슬래시는 그대로 둔다(String.raw). */
 const code = (strings, ...values) =>
@@ -1358,7 +1361,493 @@ while (k > 0) k--;`,
       },
     ],
   },
+  {
+    id: 'sdlc-requirements',
+    d: 9,
+    title: 'SDLC · 개발 방법론 · 요구사항 · UML',
+    track: '소프트웨어 공학',
+    minutes: 60,
+    summary: '개발 방법론을 비교하고, 요구공학 단계와 UML 다이어그램의 종류를 구분한다.',
+    goals: [
+      '폭포수 · 프로토타입 · 나선형 · 애자일의 특징을 비교한다',
+      '스크럼의 역할과 XP 의 실천 방법을 구분한다',
+      '요구공학의 단계와 기능/비기능 요구사항을 구분한다',
+      'UML 의 구조 다이어그램과 행위 다이어그램을 분류한다',
+    ],
+    tablesTitle: '핵심 표',
+    tables: [
+      {
+        name: '개발 방법론',
+        columns: ['모델', '핵심', '특징'],
+        rows: [
+          ['폭포수', '순차적 단계', '단계별 산출물, 요구 변경 어려움'],
+          ['프로토타입', '시제품 → 피드백', '요구사항이 불명확할 때 유리'],
+          ['나선형', '계획 → 위험 분석 → 개발 → 평가 반복', '위험 분석 중심, 대규모 시스템'],
+          ['애자일', '짧은 반복과 협업', '변화 수용 (스크럼 · XP · 칸반)'],
+        ],
+      },
+      {
+        name: 'UML 다이어그램',
+        columns: ['분류', '다이어그램'],
+        rows: [
+          ['구조', '클래스 · 객체 · 컴포넌트 · 배치 · 복합체 구조 · 패키지'],
+          ['행위', '유스케이스 · 시퀀스 · 상태 · 활동 · 커뮤니케이션 · 타이밍'],
+        ],
+      },
+    ],
+    sections: [
+      {
+        heading: '애자일 — 스크럼과 XP',
+        body: '스크럼: 역할은 제품 책임자(PO) · 스크럼 마스터 · 개발팀, 산출물은 제품 백로그 · 스프린트 백로그, 반복 기간은 스프린트(보통 1~4주), 매일 15분 데일리 스크럼. XP(익스트림 프로그래밍): 짝 프로그래밍, 테스트 주도 개발(TDD), 리팩토링, 소규모 릴리즈, 지속적 통합. XP 의 5가지 가치는 의사소통 · 단순성 · 피드백 · 용기 · 존중이다.',
+      },
+      {
+        heading: '요구공학',
+        body: '요구사항 도출(Elicitation) → 분석 → 명세 → 확인(검증) 순으로 진행한다. 기능 요구사항은 "시스템이 무엇을 해야 하는가"(로그인, 결제), 비기능 요구사항은 성능 · 보안 · 가용성 · 사용성 같은 품질 제약이다.',
+      },
+      {
+        heading: '유스케이스와 시퀀스',
+        body: '유스케이스 다이어그램은 액터(사용자)와 시스템 기능의 관계를, 시퀀스 다이어그램은 객체 사이의 메시지를 시간 순서로 보여 준다. 클래스 다이어그램의 관계는 연관 · 집약 · 합성 · 일반화(상속) · 의존 · 실체화이다.',
+      },
+    ],
+    pitfalls: [
+      '나선형은 "위험 분석"이 핵심 키워드, 폭포수는 "순차·산출물", 애자일은 "변화 수용"이다',
+      '시퀀스 · 유스케이스 · 상태 · 활동은 행위 다이어그램, 클래스 · 객체 · 컴포넌트 · 배치는 구조 다이어그램이다',
+      '요구공학의 첫 단계는 도출이고 확인(검증)이 마지막이다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '반복 단계마다 위험 분석을 수행하는 점진적 개발 모델은?',
+        answer: '나선형',
+        alt: ['나선형 모델', '스파이럴', '스파이럴 모델', 'spiral', 'spiral model'],
+        ignoreCase: true,
+        explain: '계획 → 위험 분석 → 개발 → 평가를 반복하는 나선형(스파이럴) 모델이다.',
+      },
+      {
+        id: 'q2',
+        prompt: 'XP 의 실천 방법 중 두 명의 개발자가 한 컴퓨터에서 함께 코딩하는 방식은?',
+        answer: '짝 프로그래밍',
+        alt: ['페어 프로그래밍', '짝프로그래밍', 'pair programming'],
+        ignoreCase: true,
+        explain: '코드 품질과 지식 공유를 높이기 위한 XP 의 짝 프로그래밍(페어 프로그래밍)이다.',
+      },
+      {
+        id: 'q3',
+        prompt: '객체 간 메시지를 시간 순서대로 표현하는 UML 행위 다이어그램은?',
+        answer: '시퀀스 다이어그램',
+        alt: ['시퀀스', '순차 다이어그램', 'sequence diagram', 'sequence'],
+        ignoreCase: true,
+        explain: '시퀀스 다이어그램은 생명선과 메시지로 상호작용의 시간 순서를 나타낸다.',
+      },
+      {
+        id: 'q4',
+        prompt: '스크럼에서 한 번의 반복 개발 기간(보통 1~4주)을 무엇이라 하는가?',
+        answer: '스프린트',
+        alt: ['sprint'],
+        ignoreCase: true,
+        explain: '스프린트 계획 → 개발 → 리뷰 → 회고를 한 사이클로 반복한다.',
+      },
+    ],
+  },
+  {
+    id: 'pattern-creational-structural',
+    d: 8,
+    title: '디자인패턴 ① 생성 · 구조 패턴',
+    track: '디자인패턴',
+    minutes: 60,
+    summary: 'GoF 23개 패턴의 분류를 외우고, 생성 5 · 구조 7 패턴의 의도를 구분한다.',
+    goals: [
+      'GoF 패턴이 생성 5 · 구조 7 · 행위 11 로 나뉨을 안다',
+      '싱글톤의 인스턴스 하나 보장 방식을 코드로 확인한다',
+      '어댑터 · 퍼사드 · 프록시 · 데코레이터를 의도로 구분한다',
+    ],
+    tablesTitle: 'GoF 23개 패턴',
+    tables: [
+      {
+        name: '분류별 패턴',
+        columns: ['분류', '개수', '패턴'],
+        rows: [
+          ['생성', 5, 'Abstract Factory · Builder · Factory Method · Prototype · Singleton'],
+          ['구조', 7, 'Adapter · Bridge · Composite · Decorator · Facade · Flyweight · Proxy'],
+          ['행위', 11, 'Chain of Responsibility · Command · Interpreter · Iterator · Mediator · Memento · Observer · State · Strategy · Template Method · Visitor'],
+        ],
+      },
+    ],
+    sections: [
+      {
+        heading: '생성 패턴',
+        body: '객체 생성 방식을 캡슐화한다. 싱글톤: 인스턴스를 하나만 만들고 전역 접근점을 제공. 팩토리 메서드: 객체 생성을 서브클래스에 위임. 추상 팩토리: 관련 객체군을 한 번에 생성. 빌더: 복잡한 객체를 단계적으로 조립. 프로토타입: 기존 객체를 복제해 생성.',
+      },
+      {
+        heading: '싱글톤 코드',
+        body: '생성자를 private 으로 막고 getInstance() 로만 얻게 한다. 여러 번 호출해도 같은 객체이므로 == 비교가 참이다.',
+        lang: 'java',
+        code: code`
+class Singleton {
+    private static Singleton inst;
+    private Singleton() { }
+    static Singleton getInstance() {
+        if (inst == null) inst = new Singleton();
+        return inst;
+    }
+}
+// Singleton a = Singleton.getInstance();
+// Singleton b = Singleton.getInstance();
+// System.out.println(a == b);`,
+        output: 'true',
+      },
+      {
+        heading: '구조 패턴 구분',
+        body: '어댑터: 호환되지 않는 인터페이스를 변환해 연결. 퍼사드: 복잡한 서브시스템에 단순한 통합 창구 제공. 프록시: 대리 객체가 접근을 제어(지연 로딩 · 접근 제어). 데코레이터: 기존 객체에 기능을 동적으로 추가. 컴포지트: 부분-전체를 같은 방식으로 다루는 트리 구조. 브리지: 추상과 구현을 분리. 플라이웨이트: 공유로 메모리 절약.',
+      },
+    ],
+    pitfalls: [
+      '어댑터는 "인터페이스 변환", 퍼사드는 "인터페이스 단순화" — 목적이 다르다',
+      '팩토리 메서드(서브클래스가 결정)와 추상 팩토리(관련 객체군 생성)를 구분한다',
+      '프록시는 접근 제어, 데코레이터는 기능 추가 — 구조는 비슷해도 의도가 다르다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '인스턴스를 하나만 만들고 전역 접근점을 제공하는 생성 패턴은?',
+        answer: '싱글톤',
+        alt: ['싱글톤 패턴', '싱글턴', 'singleton'],
+        ignoreCase: true,
+        explain: 'private 생성자와 정적 getInstance() 로 하나의 인스턴스만 유지한다.',
+      },
+      {
+        id: 'q2',
+        prompt: '호환되지 않는 인터페이스를 가진 클래스를 함께 쓰도록 변환해 주는 구조 패턴은?',
+        answer: '어댑터',
+        alt: ['어댑터 패턴', 'adapter'],
+        ignoreCase: true,
+        explain: '콘센트 어댑터처럼 한쪽 인터페이스를 다른 쪽이 기대하는 형태로 바꿔 준다.',
+      },
+      {
+        id: 'q3',
+        prompt: '복잡한 서브시스템에 대해 단순한 하나의 통합 인터페이스를 제공하는 구조 패턴은?',
+        answer: '퍼사드',
+        alt: ['파사드', '퍼사드 패턴', 'facade'],
+        ignoreCase: true,
+        explain: '퍼사드는 여러 클래스를 감싼 단순한 창구다.',
+      },
+      {
+        id: 'q4',
+        prompt: '출력 결과는? (true 또는 false)',
+        lang: 'java',
+        code: code`
+Singleton a = Singleton.getInstance();
+Singleton b = Singleton.getInstance();
+System.out.println(a == b);`,
+        answer: 'true',
+        explain: '같은 정적 인스턴스를 돌려주므로 두 참조가 같은 객체다.',
+      },
+    ],
+  },
+  {
+    id: 'pattern-behavioral-coupling',
+    d: 7,
+    title: '디자인패턴 ② 행위 패턴 · 결합도 · 응집도',
+    track: '디자인패턴',
+    minutes: 60,
+    summary: '옵저버 · 전략 · 상태 같은 행위 패턴과 결합도·응집도의 강약 순서를 정리한다.',
+    goals: [
+      '옵저버 · 전략 · 상태 · 템플릿 메서드 · 이터레이터의 의도를 구분한다',
+      '옵저버 코드의 통지 흐름을 추적한다',
+      '결합도와 응집도의 종류를 강약 순서로 나열한다',
+    ],
+    tablesTitle: '결합도 · 응집도 순서',
+    tables: [
+      {
+        name: '결합도 (좋음 → 나쁨)',
+        columns: ['순위', '종류', '설명'],
+        rows: [
+          [1, '자료 결합도', '필요한 데이터만 매개변수로 전달'],
+          [2, '스탬프 결합도', '구조체(복합 자료) 전체 전달'],
+          [3, '제어 결합도', '제어 신호(플래그)로 동작 제어'],
+          [4, '외부 결합도', '외부 변수·인터페이스 공유'],
+          [5, '공통 결합도', '전역 변수 공유'],
+          [6, '내용 결합도', '다른 모듈의 내부를 직접 참조'],
+        ],
+      },
+      {
+        name: '응집도 (좋음 → 나쁨)',
+        columns: ['순위', '종류'],
+        rows: [
+          [1, '기능적'], [2, '순차적'], [3, '통신적'], [4, '절차적'], [5, '시간적'], [6, '논리적'], [7, '우연적'],
+        ],
+      },
+    ],
+    sections: [
+      {
+        heading: '행위 패턴 핵심',
+        body: '옵저버: 상태가 변하면 등록된 구독자에게 자동 통지. 전략: 알고리즘을 캡슐화해 교체 가능하게 함. 상태: 상태에 따라 객체 행동을 바꿈. 템플릿 메서드: 알고리즘의 뼈대는 상위 클래스, 세부는 하위 클래스. 이터레이터: 내부 구조를 노출하지 않고 순차 접근. 커맨드: 요청을 객체로 캡슐화(실행 취소). 중재자: 객체 간 통신을 한곳에 모음.',
+      },
+      {
+        heading: '옵저버 코드 추적',
+        body: 'Subject 에 두 옵저버를 등록하고 값을 5로 바꾸면 등록 순서대로 update() 가 호출된다.',
+        lang: 'java',
+        code: code`
+interface Observer { void update(int v); }
+class Named implements Observer {
+    String n;
+    Named(String n) { this.n = n; }
+    public void update(int v) { System.out.print(n + ":" + v + " "); }
+}
+// Subject s = new Subject();
+// s.add(new Named("A")); s.add(new Named("B"));
+// s.set(5);   // 등록된 옵저버에게 차례로 update(5)`,
+        output: 'A:5 B:5',
+      },
+      {
+        heading: '결합도와 응집도',
+        body: '좋은 설계는 결합도는 낮게, 응집도는 높게 가져간다. 결합도는 자료 → 스탬프 → 제어 → 외부 → 공통 → 내용 순으로 강해지고, 응집도는 기능 → 순차 → 통신 → 절차 → 시간 → 논리 → 우연 순으로 약해진다.',
+      },
+    ],
+    pitfalls: [
+      '결합도는 "약할수록 좋고", 응집도는 "강할수록 좋다" — 방향이 반대다',
+      '전략은 알고리즘 교체, 상태는 상태에 따른 행동 변화 — 구조가 비슷해 혼동하기 쉽다',
+      '템플릿 메서드는 상속, 전략은 위임(구성)으로 변화를 처리한다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '상태가 변하면 등록된 객체들에게 자동으로 통지하는 행위 패턴은?',
+        answer: '옵저버',
+        alt: ['옵저버 패턴', '관찰자', 'observer'],
+        ignoreCase: true,
+        explain: 'Subject 가 상태 변경을 Observer 들에게 알리는 발행-구독 구조다.',
+      },
+      {
+        id: 'q2',
+        prompt: '알고리즘을 캡슐화해 실행 중에 교체할 수 있게 하는 행위 패턴은?',
+        answer: '전략',
+        alt: ['전략 패턴', '스트래티지', '스트래티지 패턴', 'strategy'],
+        ignoreCase: true,
+        explain: '같은 인터페이스를 가진 여러 알고리즘 중 상황에 맞는 것을 끼워 쓴다.',
+      },
+      {
+        id: 'q3',
+        prompt: '결합도 중 가장 약한(가장 좋은) 결합도는?',
+        answer: '자료 결합도',
+        alt: ['자료', '데이터 결합도', 'data coupling'],
+        ignoreCase: true,
+        explain: '필요한 데이터만 매개변수로 주고받는 자료 결합도가 가장 약하다.',
+      },
+      {
+        id: 'q4',
+        prompt: '응집도 중 가장 강한(가장 좋은) 응집도는?',
+        answer: '기능적 응집도',
+        alt: ['기능적', '기능 응집도', '기능', 'functional cohesion'],
+        ignoreCase: true,
+        explain: '모듈이 하나의 기능만 수행하는 기능적 응집도가 가장 강하다.',
+      },
+    ],
+  },
+  {
+    id: 'integration-interface',
+    d: 6,
+    title: '통합 구현 — 연계(EAI · ESB) · 인터페이스 · REST',
+    track: '통합 구현',
+    minutes: 60,
+    summary: 'EAI 구축 유형과 ESB, REST 의 HTTP 메서드·상태 코드, JSON 데이터 형식을 정리한다.',
+    goals: [
+      'EAI 의 4가지 구축 유형을 구분한다',
+      'ESB 와 EAI 의 차이를 설명한다',
+      'REST 의 HTTP 메서드와 대표 상태 코드를 연결한다',
+      'JSON 구조를 읽고 값을 꺼낸다',
+    ],
+    tablesTitle: '핵심 표',
+    tables: [
+      {
+        name: 'EAI 구축 유형',
+        columns: ['유형', '구조', '특징'],
+        rows: [
+          ['Point-to-Point', '1:1 직접 연결', '단순하지만 연결 수가 늘면 복잡'],
+          ['Hub & Spoke', '중앙 허브 경유', '단일 접점 관리, 허브 장애에 취약'],
+          ['Message Bus (ESB 형)', '버스를 통한 메시지 전달', '확장성 높음, 대규모 환경'],
+          ['Hybrid', 'Hub & Spoke + Bus', '그룹 내 허브, 그룹 간 버스'],
+        ],
+      },
+      {
+        name: 'REST (HTTP)',
+        columns: ['메서드', '용도', '대표 응답 코드'],
+        rows: [
+          ['GET', '조회', '200 OK'],
+          ['POST', '생성', '201 Created'],
+          ['PUT', '전체 수정', '200 OK'],
+          ['PATCH', '부분 수정', '200 OK'],
+          ['DELETE', '삭제', '204 No Content'],
+        ],
+      },
+    ],
+    sections: [
+      {
+        heading: 'EAI 와 ESB',
+        body: 'EAI(기업 응용 통합)는 서로 다른 응용 시스템을 연계해 데이터와 업무 흐름을 통합한다. ESB(엔터프라이즈 서비스 버스)는 서비스 지향 구조(SOA)에서 버스를 통해 서비스 간 메시지 라우팅·변환·프로토콜 중개를 담당한다.',
+      },
+      {
+        heading: 'HTTP 상태 코드',
+        body: '2xx 성공(200 OK, 201 Created, 204 No Content), 3xx 리다이렉션, 4xx 클라이언트 오류(400 잘못된 요청, 401 인증 필요, 403 권한 없음, 404 찾을 수 없음), 5xx 서버 오류(500 내부 오류, 503 서비스 이용 불가).',
+      },
+      {
+        heading: 'JSON 읽기',
+        body: 'JSON 은 { 키: 값 } 객체와 [ ] 배열로 이루어진 가벼운 데이터 교환 형식이다. 배열의 인덱스는 0 부터 시작한다.',
+        lang: 'python',
+        code: code`
+import json
+data = json.loads('{"id": 1, "tags": ["a", "b"]}')
+print(data["tags"][1])`,
+        output: 'b',
+      },
+    ],
+    pitfalls: [
+      'POST 는 생성(멱등하지 않음), PUT 은 전체 교체(멱등) — GET · PUT · DELETE 는 멱등이다',
+      '401 은 "인증 안 됨", 403 은 "인증됐지만 권한 없음"이다',
+      'Hub & Spoke 는 허브가 단일 장애점이 될 수 있다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: 'EAI 구축 유형 중 중앙의 허브를 거쳐 데이터를 주고받는 방식은?',
+        answer: 'Hub & Spoke',
+        alt: ['허브 앤 스포크', '허브앤스포크', '허브 스포크', 'hub and spoke', 'hub&spoke', 'hub spoke'],
+        ignoreCase: true,
+        explain: '모든 시스템이 중앙 허브와만 연결되는 방식이다.',
+      },
+      {
+        id: 'q2',
+        prompt: 'REST API 에서 새 리소스를 생성할 때 주로 쓰는 HTTP 메서드는?',
+        answer: 'POST',
+        ignoreCase: true,
+        explain: '생성은 POST, 조회는 GET, 전체 수정은 PUT, 삭제는 DELETE 다.',
+      },
+      {
+        id: 'q3',
+        prompt: '존재하지 않는 리소스를 요청했을 때의 HTTP 상태 코드는? (숫자만 입력)',
+        answer: '404',
+        explain: '404 Not Found. 400 은 잘못된 요청, 403 은 권한 없음이다.',
+      },
+      {
+        id: 'q4',
+        prompt: 'XML 보다 가볍고 { 키: 값 } 형태를 쓰는 데이터 교환 형식의 약어는?',
+        answer: 'JSON',
+        alt: ['제이슨'],
+        ignoreCase: true,
+        explain: 'JavaScript Object Notation. 웹 API 의 기본 데이터 형식으로 널리 쓰인다.',
+      },
+    ],
+  },
+  {
+    id: 'security-basics',
+    d: 5,
+    title: '보안 — 암호화 · 접근 통제 · 웹 공격',
+    track: '보안',
+    minutes: 60,
+    summary: '대칭·비대칭 암호, 해시, 보안 3요소와 대표 웹 공격(SQL 인젝션 · XSS · CSRF)을 정리한다.',
+    goals: [
+      '보안 3요소 (기밀성 · 무결성 · 가용성) 를 설명한다',
+      '대칭키와 비대칭키의 특징과 필요한 키 개수를 계산한다',
+      '대표 암호·해시 알고리즘을 분류한다',
+      'SQL 인젝션과 방어책(준비된 문장)을 이해한다',
+    ],
+    tablesTitle: '핵심 표',
+    tables: [
+      {
+        name: '암호 알고리즘',
+        columns: ['분류', '알고리즘', '특징'],
+        rows: [
+          ['대칭키', 'DES · 3DES · AES · SEED · ARIA', '같은 키로 암·복호화, 빠름, 키 배송 문제'],
+          ['비대칭키', 'RSA · ECC · ElGamal', '공개키/개인키, 느림, 전자서명 가능'],
+          ['해시', 'SHA · MD5', '단방향, 무결성 검증, 복호화 불가'],
+        ],
+      },
+      {
+        name: '웹 공격',
+        columns: ['공격', '설명'],
+        rows: [
+          ['SQL 인젝션', '입력값으로 SQL 구문을 조작'],
+          ['XSS', '악성 스크립트를 페이지에 삽입해 사용자 브라우저에서 실행'],
+          ['CSRF', '로그인된 사용자의 권한으로 원치 않는 요청을 보내게 함'],
+        ],
+      },
+    ],
+    sections: [
+      {
+        heading: '보안 3요소와 키 개수',
+        body: '기밀성(허가된 사람만 열람) · 무결성(허가 없이 변경 금지) · 가용성(필요할 때 사용 가능). 대칭키는 n 명이 서로 통신하려면 n(n−1)/2 개, 비대칭키는 사용자마다 한 쌍이라 2n 개의 키가 필요하다.',
+        lang: 'text',
+        code: code`
+n = 10
+대칭키   : n(n-1)/2 = 10 x 9 / 2 = 45
+비대칭키 : 2n       = 20`,
+        output: '대칭 45 / 비대칭 20',
+      },
+      {
+        heading: '접근 통제',
+        body: 'DAC(임의 접근 통제, 소유자가 권한 부여), MAC(강제 접근 통제, 보안 등급 기반), RBAC(역할 기반 접근 통제, 역할에 권한 부여). 인증은 지식(비밀번호) · 소유(OTP, 토큰) · 존재(생체) 요소로 나뉘며 둘 이상 결합하면 다중 요소 인증이다.',
+      },
+      {
+        heading: 'SQL 인젝션',
+        body: '입력값을 문자열로 이어 붙여 SQL 을 만들면 \' OR \'1\'=\'1 같은 입력이 조건을 항상 참으로 만들어 인증을 우회한다. 방어는 준비된 문장(Prepared Statement)으로 값을 바인딩하고, 입력값을 검증·이스케이프하는 것이다.',
+        lang: 'python',
+        code: code`
+uid = "' OR '1'='1"
+print("SELECT * FROM users WHERE id='" + uid + "'")`,
+        output: "SELECT * FROM users WHERE id='' OR '1'='1'",
+      },
+    ],
+    pitfalls: [
+      '대칭키 알고리즘은 AES · DES · SEED · ARIA, 비대칭키는 RSA · ECC 로 구분한다',
+      '해시는 복호화가 안 된다 — 암호화(복호화 가능)와 다르다',
+      'XSS 는 사용자 브라우저에서 스크립트가 실행되는 공격, CSRF 는 사용자의 권한을 이용한 요청 위조다',
+    ],
+    questions: [
+      {
+        id: 'q1',
+        prompt: '미국 표준으로 128 · 192 · 256 비트 키를 쓰는 대칭키 블록 암호 알고리즘은?',
+        answer: 'AES',
+        ignoreCase: true,
+        explain: 'DES 를 대체한 Advanced Encryption Standard 다.',
+      },
+      {
+        id: 'q2',
+        prompt: '10명이 서로 대칭키 암호로 통신할 때 필요한 키의 총 개수는? (숫자만 입력)',
+        answer: '45',
+        explain: 'n(n−1)/2 = 10 × 9 / 2 = 45.',
+      },
+      {
+        id: 'q3',
+        prompt: '소인수분해의 어려움에 기반한 대표적인 공개키(비대칭키) 암호 알고리즘은?',
+        answer: 'RSA',
+        ignoreCase: true,
+        explain: 'RSA 는 암호화와 전자서명에 모두 쓰이는 공개키 알고리즘이다.',
+      },
+      {
+        id: 'q4',
+        prompt: '다음처럼 입력값이 SQL 조건을 항상 참으로 만들어 인증을 우회하는 공격은?',
+        lang: 'python',
+        code: code`
+uid = "' OR '1'='1"
+q = "SELECT * FROM users WHERE id='" + uid + "'"
+# q = SELECT * FROM users WHERE id='' OR '1'='1'`,
+        answer: 'SQL 인젝션',
+        alt: ['sql injection', 'sql 삽입', 'sql인젝션', '에스큐엘 인젝션'],
+        ignoreCase: true,
+        explain: "id='' OR '1'='1' 에서 '1'='1' 이 항상 참이라 모든 행이 조회된다. 방어는 Prepared Statement.",
+      },
+    ],
+  },
 ];
+
+/**
+ * 입력이 문항의 정답(또는 같은 뜻의 표기 `alt`)과 맞는지. 공백·줄바꿈 차이는 grading 의 규칙대로 무시하고,
+ * `ignoreCase` 문항은 대소문자도 무시한다(용어 문제). 출력값 문제는 대소문자를 구분한다.
+ */
+export function matchesLessonAnswer(question, input) {
+  const norm = (t) => (question.ignoreCase ? String(t).toLowerCase() : String(t));
+  return [question.answer, ...(question.alt ?? [])].some((a) => matchesExpectedOutput(norm(input), norm(a)) === true);
+}
 
 export const lessonByDay = (d) => LESSONS.find((l) => l.d === Number(d)) ?? null;
 export const lessonById = (id) => LESSONS.find((l) => l.id === id) ?? null;

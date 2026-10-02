@@ -124,17 +124,17 @@ describe('25일 로드맵 화면', () => {
 });
 
 describe('1단계 레슨 목록', () => {
-  it('레슨 카드 13개와 일차 카드의 레슨 링크를 보여준다 (D-16 · D-10 점검일은 레슨 없음)', () => {
+  it('레슨 카드 18개와 일차 카드의 레슨 링크를 보여준다 (D-16 · D-10 · D-4 점검일은 레슨 없음)', () => {
     const c = render();
     const shelf = c.querySelector('#road-lessons').closest('section');
     expect([...shelf.querySelectorAll('article h3')].map((h) => h.textContent)).toEqual(LESSONS.map((l) => l.title));
-    expect(shelf.querySelectorAll('article')).toHaveLength(13);
+    expect(shelf.querySelectorAll('article')).toHaveLength(18);
     expect(dayCard(c, 'D-24').querySelector('a[href="/lesson/24"]')).not.toBeNull();
     expect(dayCard(c, 'D-17').querySelector('a[href="/lesson/17"]')).not.toBeNull();
-    for (const d of [24, 23, 22, 21, 20, 19, 18, 17, 15, 14, 13, 12, 11]) {
+    for (const d of [24, 23, 22, 21, 20, 19, 18, 17, 15, 14, 13, 12, 11, 9, 8, 7, 6, 5]) {
       expect(dayCard(c, `D-${d}`).querySelector(`a[href="/lesson/${d}"]`), `D-${d}`).not.toBeNull();
     }
-    for (const d of [16, 10]) expect(dayCard(c, `D-${d}`).querySelector('a[href^="/lesson/"]'), `D-${d}`).toBeNull();
+    for (const d of [16, 10, 4]) expect(dayCard(c, `D-${d}`).querySelector('a[href^="/lesson/"]'), `D-${d}`).toBeNull();
   });
 
   it('북마크하면 저장되고 "북마크만 보기"로 걸러진다', async () => {

@@ -24,6 +24,7 @@
   --color-warning: var(--warning);
   --color-accent: var(--accent);
   --color-code: var(--code-bg);
+  --color-white: #fff;
   --radius-card: var(--radius);
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }

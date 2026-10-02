@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { matchesExpectedOutput } from '../../domain/grading';
+import { matchesLessonAnswer } from '../../domain/lessons';
 import CodeBlock from './CodeBlock';
 
 /**
@@ -14,7 +14,7 @@ export default function QuizItem({ index, question }) {
   const check = (e) => {
     e.preventDefault();
     if (value.trim() === '') return;
-    setResult(matchesExpectedOutput(value, question.answer) ? 'correct' : 'wrong');
+    setResult(matchesLessonAnswer(question, value) ? 'correct' : 'wrong');
   };
 
   return (
