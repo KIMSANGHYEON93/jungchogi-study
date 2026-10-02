@@ -6,6 +6,7 @@ import DailyGoalCard from '../components/DailyGoalCard';
 import { summarizeQuizResults } from '../domain/grading';
 
 import { STUDY_DAYS } from '../domain/studyDays';
+import { BOGANG_CARD_COUNT } from '../domain/bogangDeck';
 
 // ─── 오답 유형 분류 ───
 function categorizeWrongNotes(notes) {
@@ -60,7 +61,7 @@ export default function DashboardPage() {
 
   const flashcardTotal = 100;
   const flashcardDone = Object.values(flashcardKnown).filter(Boolean).length;
-  const bogangTotal = 24;
+  const bogangTotal = BOGANG_CARD_COUNT;
   const bogangDone = Object.values(loadProgress('flashcard_known_bogang119', {})).filter(Boolean).length;
   // quiz_results 에는 세 값이 섞여 있다: 'correct' | 'incorrect' | 레거시 'answered'.
   // 진도(= 시도한 문항 수)는 셋을 다 세고, 정답률은 채점된 것만으로 낸다 —

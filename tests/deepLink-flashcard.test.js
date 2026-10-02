@@ -18,7 +18,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const QUIZ_MD = readFileSync(resolve(process.cwd(), 'tests/fixtures/quiz-sample.md'), 'utf-8');
 const BOGANG_MD = readFileSync(resolve(process.cwd(), 'tests/fixtures/bogang-sample.md'), 'utf-8');
 
-// 픽스처: 단답형 001 · 002 · 026 (3장), 보강 B01 · B02 (2장)
+// 픽스처: 단답형 001 · 002 · 026 (3장), 보강 B01-1~3 · B02-1~2 (5장)
 function renderAt(url) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -80,13 +80,25 @@ describe('지목한 카드에서 시작한다', () => {
     unmount();
   });
 
-  it('보강 id(`B02`) 는 덱까지 바꿔서 연다', async () => {
+  it('보강 카드 id(`B02-2`) 는 덱까지 바꿔서 연다', async () => {
+    const { container, unmount } = renderAt('/flashcard?id=B02-2');
+    await flush();
+
+    expect(activeDeck(container)).toContain('보강');
+    expect(face(container)).toContain('B02-2.');
+    expect(counter(container)).toBe('5 / 5');
+    expect(notice(container)).toBe('');
+    unmount();
+  });
+
+  it('쪼개기 전 섹션 id(`B02`)는 그 섹션의 첫 카드로 열린다', async () => {
     const { container, unmount } = renderAt('/flashcard?id=B02');
     await flush();
 
     expect(activeDeck(container)).toContain('보강');
-    expect(face(container)).toContain('B02.');
-    expect(counter(container)).toBe('2 / 2');
+    expect(face(container)).toContain('B02-1.');
+    expect(counter(container)).toBe('4 / 5');
+    expect(notice(container)).toBe(''); // 못 찾은 것이 아니다
     unmount();
   });
 });
@@ -164,7 +176,7 @@ describe('기존 기능과의 얽힘', () => {
     await flush();
 
     expect(activeDeck(container)).toContain('보강');
-    expect(counter(container)).toBe('1 / 2');
+    expect(counter(container)).toBe('1 / 5');
     unmount();
   });
 

@@ -1,3 +1,5 @@
+import { expandLegacyBogangKnown } from '../domain/bogangDeck';
+
 const PREFIX = 'jungchogi_';
 
 // 브라우저마다 용량 초과 예외의 name/code 가 다르다.
@@ -66,6 +68,35 @@ export function clearProgress(key) {
     console.warn('[storage] flashcard_known 마이그레이션을 건너뜁니다.', err);
   }
 })();
+
+// ─── 마이그레이션: 암기 119선 외움 기록 섹션 단위(B07) → 카드 단위(B07-1, B07-2) ───
+// 덱을 섹션 단위 카드에서 덩어리 단위 카드로 쪼갰다(domain/bogangDeck.js). 옛 기록 `{ B07: true }` 는
+// 그 섹션의 모든 카드를 외운 것으로 펼친다. md 를 받지 않고도 돌도록 섹션별 카드 수는 상수를 쓴다.
+export function migrateBogangKnown() {
+  const key = 'flashcard_known_bogang119';
+  let raw;
+  try {
+    raw = localStorage.getItem(PREFIX + key);
+  } catch {
+    return false;
+  }
+  if (!raw) return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return false; // 깨진 값은 건드리지 않는다
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  const { known, changed } = expandLegacyBogangKnown(parsed);
+  return changed ? saveProgress(key, known) : false;
+}
+
+try {
+  migrateBogangKnown();
+} catch {
+  /* 저장소 접근이 막힌 환경 — 위 마이그레이션과 같은 이유로 건너뛴다 */
+}
 
 // ─── 오답노트 ───
 

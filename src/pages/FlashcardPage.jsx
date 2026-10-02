@@ -9,6 +9,7 @@ import { fetchMarkdown } from '../utils/mdCache';
 import Icon from '../components/Icon';
 import BookmarkButton from '../components/ui/BookmarkButton';
 import { DECK_BOOKMARK_TYPE } from '../domain/bookmarks';
+import { resolveBogangId } from '../domain/bogangDeck';
 import useStudyState from '../hooks/useStudyState';
 import { bookmarkKey } from '../utils/studyState';
 import {
@@ -23,7 +24,7 @@ const CATEGORIES = ['전체', '데이터베이스', '소프트웨어공학', '�
 // `idPattern` 은 교재 카드 id 형식이다 — 딥링크가 어느 덱을 가리키는지 모양으로 가른다.
 const DECKS = [
   { key: 'quiz100', label: '단답형 100선', file: '정처기_단답형_100선.md', parser: 'quiz', idPattern: /^\d{3}$/ },
-  { key: 'bogang119', label: '암기 119선 보강', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', idPattern: /^B\d{2,3}$/ },
+  { key: 'bogang119', label: '암기 119선 보강', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', idPattern: /^B\d{2,3}(-\d+)?$/ },
 ];
 
 const DEFAULT_DECK = 'quiz100';
@@ -88,7 +89,9 @@ export default function FlashcardPage() {
   // 카드 커서. 딥링크가 지목한 카드가 지금 목록에 있으면 거기서 시작한다.
   // 목록이 줄어 커서가 범위를 벗어나는 경우(모르는 것만 필터에서 외움 처리)도
   // 이 훅이 첫 카드로 되돌린다.
-  const { index: idx, setIndex, missedId } = useDeepLinkedIndex(cards, requestedId);
+  // 쪼개기 전의 섹션 id(`B07`)로 온 링크는 그 섹션의 첫 카드로 보낸다
+  const wantedId = deck === 'bogang119' ? resolveBogangId(requestedId, allCards) : requestedId;
+  const { index: idx, setIndex, missedId } = useDeepLinkedIndex(cards, wantedId);
   const deepLinkNotice = deckDeepLinkNotice(missedId);
 
   const markKnown = useCallback((card, val) => {

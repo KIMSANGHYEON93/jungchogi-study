@@ -19,7 +19,14 @@ const card = 'tw:rounded-xl tw:border tw:border-line tw:bg-card';
 // 문제 제목은 원본 md 에서 읽는다 — 북마크에는 id 만 저장하므로 원문이 바뀌어도 어긋나지 않는다.
 const SOURCES = {
   [BOOKMARK_TYPE.QUIZ100]: { file: '정처기_단답형_100선.md', pick: (md) => parseQuiz(md).map((q) => [q.id, q.question]) },
-  [BOOKMARK_TYPE.BOGANG]: { file: '정처기_보강_기출분석_암기119선.md', pick: (md) => parseBogang(md).map((q) => [q.id, q.question]) },
+  [BOOKMARK_TYPE.BOGANG]: {
+    file: '정처기_보강_기출분석_암기119선.md',
+    // 쪼개기 전 섹션 id(`B07`)로 한 북마크도 첫 카드의 제목으로 보여 준다
+    pick: (md) => {
+      const cards = parseBogang(md);
+      return [...cards.map((q) => [q.id, q.question]), ...cards.filter((q) => q.id.endsWith('-1')).map((q) => [q.section, q.question])];
+    },
+  },
   [BOOKMARK_TYPE.CODE_DRILL]: { file: '정처기_코드트레이싱_드릴.md', pick: (md) => parseCodeDrill(md).map((q) => [q.id, q.title]) },
 };
 
