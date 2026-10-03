@@ -2,6 +2,9 @@
 
 /* ═══ VIVARA Design System — Light Mode (default) ═══ */
 :root {
+  /* 모바일 하단 탭바: 내용 높이(아이폰 홈 바 영역은 따로 더한다). 탭바 · 공식 버튼 · 더보기 시트 · 페이지 여백이 모두 이 값을 쓴다 */
+  --tabbar-h: 60px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
   --bg: #F0F9FF;
   --bg-card: #FFFFFF;
   --bg-hover: #E0F2FE;
@@ -88,6 +91,8 @@ body {
   color: var(--text);
   line-height: 1.7;
   min-height: 100vh;
+  /* 모바일 주소창이 접히고 펴져도 높이가 흔들리지 않게 — 지원하는 브라우저에서만 위 값을 덮는다 */
+  min-height: 100dvh;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -732,17 +737,28 @@ button:active { transform: scale(0.97); }
   /* Hide desktop nav, show bottom tab bar */
   .desktop-nav { display: none !important; }
 
+  /* 위·아래로 끌 때 화면 전체가 고무줄처럼 튕기거나(iOS) 당겨서 새로고침이 걸리면(Android)
+     고정된 하단 탭까지 같이 끌려 움직인다. 페이지 끝에서 튕김을 막는다 */
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+
   .mobile-tab-bar {
     display: flex;
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
+    box-sizing: border-box;
+    min-height: calc(var(--tabbar-h) + var(--safe-bottom));
     background: var(--bg-card);
     border-top: 1px solid var(--border);
     z-index: 100;
-    padding: 6px 0;
-    padding-bottom: env(safe-area-inset-bottom, 6px);
+    padding: 6px 0 var(--safe-bottom);
+    /* 스크롤 중 탭바를 따로 합성해 주소창 변화·스크롤에 덜컹이지 않게 */
+    transform: translateZ(0);
+    will-change: transform;
   }
 
   .mobile-tab-bar a {
@@ -793,7 +809,7 @@ button:active { transform: scale(0.97); }
     position: fixed;
     left: 8px;
     right: 8px;
-    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 4px);
     z-index: 120;
     padding: var(--space-sm);
     background: var(--bg-card);
@@ -857,9 +873,10 @@ button:active { transform: scale(0.97); }
     font-weight: 600;
   }
 
-  /* Page spacing - account for bottom tab bar */
+  /* 아래 여백 = 하단 탭바 + 아이폰 홈 바 영역 + 그 위에 떠 있는 '공식' 버튼(44px)과 숨 쉴 틈.
+     예전 80px 은 탭바(60px)와 공식 버튼을 합친 높이보다 작아 마지막 내용이 버튼·탭바 밑에 깔렸다 */
   .page {
-    padding: 16px 14px 80px;
+    padding: 16px 14px calc(var(--tabbar-h) + var(--safe-bottom) + 76px);
   }
 
   .page h1 { font-size: 1.3rem; }
@@ -2791,7 +2808,8 @@ html { scroll-behavior: smooth; }
 
 @media (max-width: 768px) {
   .cheat-fab {
-    bottom: 76px;
+    /* 탭바 바로 위. 아이폰 홈 바 영역만큼 함께 올라가야 탭바와 겹치지 않는다 */
+    bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 12px);
   }
 }
 
