@@ -63,22 +63,35 @@ export function useDeepLinkId() {
  * 딥링크를 반영할 방법이 effect 밖에 없다. 그래서 상태는 "사용자가 옮긴 위치"만
  * 담고(`null` = 아직 안 옮김), 실제 위치는 렌더 중에 파생한다.
  *
+ * 딥링크가 없을 때는 `isDone` 이 주어지면 **처음 한 번** 풀이가 끝나지 않은 첫 항목에서 시작한다.
+ * 이어서 풀 때마다 끝난 문항을 넘기지 않아도 되게 하려는 것이다. 한 번 정한 위치는 고정한다 —
+ * 풀 때마다 다음 미완료 항목으로 자동으로 튀면 보던 문항이 사라진다.
+ *
  * @param {Array<{id?: string}>} items 지금 화면에 보이는 목록(필터·셔플 적용 후)
  * @param {string|null} requestedId `useDeepLinkId()` 가 읽은 값
+ * @param {(item: object) => boolean} [isDone] 이미 풀이를 마친 항목인지
  * @returns {{index: number, setIndex: (next: number) => void, missedId: string|null}}
  *   `missedId` 는 지목받았지만 목록에 없던 id — 화면은 이걸로 안내를 띄운다
  */
-export function useDeepLinkedIndex(items, requestedId) {
-  // null = 아직 사용자가 커서를 옮기지 않았다 → 딥링크가 커서를 소유한다
-  const [cursor, setCursor] = useState(requestedId === null ? 0 : null);
+export function useDeepLinkedIndex(items, requestedId, isDone) {
+  // null = 아직 사용자가 커서를 옮기지 않았다 → 딥링크(또는 이어 풀기 위치)가 커서를 소유한다
+  const [cursor, setCursor] = useState(null);
+  // 이어 풀기 위치. 목록이 처음 도착했을 때 한 번만 정한다(-1 = 정할 게 없음)
+  const [resumeAt, setResumeAt] = useState(null);
 
   const list = Array.isArray(items) ? items : [];
   const found = requestedId === null ? -1 : list.findIndex((item) => item?.id === requestedId);
 
+  // 이어 풀기는 딥링크가 없고 사용자가 아직 커서를 옮기지 않았을 때만, 렌더 중에 한 번 정한다
+  if (requestedId === null && cursor === null && resumeAt === null && isDone && list.length > 0) {
+    setResumeAt(list.findIndex((item) => !isDone(item)));
+  }
+
   // 목록이 아직 비어 있으면 로딩 중이지 "못 찾은" 것이 아니다
   const missedId = requestedId !== null && list.length > 0 && found < 0 ? requestedId : null;
 
-  const wanted = cursor === null ? Math.max(found, 0) : cursor;
+  const fromLink = found >= 0 ? found : Math.max(resumeAt ?? 0, 0);
+  const wanted = cursor === null ? fromLink : cursor;
   // 필터로 목록이 줄어 커서가 범위를 벗어나면 첫 항목으로 되돌린다
   const index = wanted >= 0 && wanted < list.length ? wanted : 0;
 
