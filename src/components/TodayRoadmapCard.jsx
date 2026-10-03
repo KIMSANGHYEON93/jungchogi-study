@@ -226,6 +226,9 @@ export default function TodayRoadmapCard({ examDate }) {
             정처기)를 만들어 가져오면 시험일이 바뀌었을 때 캘린더째 지우고 다시 가져올 수 있어요.
           </p>
 
+          {/* 클라이언트 ID 가 없는 배포에서는 쓸 수 없는 기능이라 아예 숨긴다 — 설정 방법은 README 에 있다.
+              예전에는 꺼진 버튼과 함께 'VITE_GOOGLE_CLIENT_ID' 같은 개발자용 문구가 사용자에게 보였다 */}
+          {calendarConfigured ? (
           <div className="goal-import">
             <button
               type="button"
@@ -233,7 +236,7 @@ export default function TodayRoadmapCard({ examDate }) {
               onClick={handleImport}
               onPointerEnter={preloadGoogle}
               onFocus={preloadGoogle}
-              disabled={!calendarConfigured || sync.status === 'loading'}
+              disabled={sync.status === 'loading'}
             >
               <Icon name="repeat" size={14} />{' '}
               {sync.status === 'loading' ? '가져오는 중…' : 'Google 캘린더에서 일정 가져오기'}
@@ -244,14 +247,13 @@ export default function TodayRoadmapCard({ examDate }) {
               </button>
             ) : null}
             <p className="goal-hint goal-import-hint" role="status">
-              {!calendarConfigured
-                ? 'Google 캘린더 연동은 아직 설정되지 않았습니다 (VITE_GOOGLE_CLIENT_ID — README 참고).'
-                : sync.message ||
-                  (busy.busyDates.length > 0
-                    ? `가져온 일정 기준으로 일정이 많은 ${busy.busyDates.length}일을 로드맵에 표시했습니다.`
-                    : '로그인하면 일정이 많은 날(하루 6시간 이상)을 로드맵에 표시합니다. 일정 제목·내용은 읽지 않고 시간만 사용합니다.')}
+              {sync.message ||
+                (busy.busyDates.length > 0
+                  ? `가져온 일정 기준으로 일정이 많은 ${busy.busyDates.length}일을 로드맵에 표시했습니다.`
+                  : '로그인하면 일정이 많은 날(하루 6시간 이상)을 로드맵에 표시합니다. 일정 제목·내용은 읽지 않고 시간만 사용합니다.')}
             </p>
           </div>
+          ) : null}
         </>
       ) : null}
     </section>
