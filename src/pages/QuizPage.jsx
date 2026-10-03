@@ -74,7 +74,12 @@ export default function QuizPage() {
   const problems = lang === '전체' ? allProblems : allProblems.filter((p) => p.lang === lang);
   // 문항 커서. 딥링크가 지목한 문항이 목록에 있으면 거기서 시작한다.
   // 목록은 md fetch 뒤에 도착하므로 커서를 렌더 중에 파생해야 effect 없이 맞출 수 있다.
-  const { index: idx, setIndex, missedId } = useDeepLinkedIndex(problems, requestedId);
+  const { index: idx, setIndex, missedId } = useDeepLinkedIndex(
+    problems,
+    requestedId,
+    // 이어 풀기: 시도한 문항(정답·오답·미정)은 넘기고 아직 안 푼 첫 문항에서 시작한다
+    (p) => !!results[p.id],
+  );
   const current = problems[idx];
   const deepLinkNotice = deckDeepLinkNotice(missedId);
 

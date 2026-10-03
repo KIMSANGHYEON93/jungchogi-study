@@ -91,7 +91,7 @@ export default function FlashcardPage() {
   // 이 훅이 첫 카드로 되돌린다.
   // 쪼개기 전의 섹션 id(`B07`)로 온 링크는 그 섹션의 첫 카드로 보낸다
   const wantedId = deck === 'bogang119' ? resolveBogangId(requestedId, allCards) : requestedId;
-  const { index: idx, setIndex, missedId } = useDeepLinkedIndex(cards, wantedId);
+  const { index: idx, setIndex, missedId } = useDeepLinkedIndex(cards, wantedId, isKnown);
   const deepLinkNotice = deckDeepLinkNotice(missedId);
 
   const markKnown = useCallback((card, val) => {

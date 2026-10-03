@@ -146,11 +146,50 @@ describe('레거시 데이터와의 공존', () => {
     saveProgress('quiz_results', { 'C-01': 'answered' });
     const { container, unmount } = render();
     await flush();
+    // 시도한 문항은 건너뛰고 시작하므로(이어 풀기) 첫 문항으로 되돌아간다
+    await act(async () => { buttonByName(container, '이전').click(); });
     await answerFirstProblem(container);
 
     await act(async () => { buttonByName(container, '맞았어요').click(); });
 
     expect(loadProgress('quiz_results', {})['C-01']).toBe('correct');
+
+    unmount();
+  });
+});
+
+describe('이어 풀기 — 푼 문항은 넘기고 진행 중인 문항에서 시작', () => {
+  const shownId = (container) => container.textContent.match(/[CJPS]{1}-\d+\./)?.[0];
+
+  it('앞쪽 문항을 이미 풀었으면 처음 안 푼 문항에서 시작한다', async () => {
+    saveProgress('quiz_results', { 'C-01': 'correct' });
+    const { container, unmount } = render();
+    await flush();
+
+    // 픽스처의 첫 문항 C-01 은 풀었으므로 다음 문항(J-01)에서 시작한다
+    expect(container.textContent).toContain('J-01');
+    expect(container.textContent).toContain('2 / 4');
+
+    unmount();
+  });
+
+  it('기록이 없으면 첫 문항에서 시작한다', async () => {
+    const { container, unmount } = render();
+    await flush();
+
+    expect(shownId(container)).toBe('C-01.');
+
+    unmount();
+  });
+
+  it('풀고 나서도 보던 문항에 그대로 머문다', async () => {
+    saveProgress('quiz_results', { 'C-01': 'correct' });
+    const { container, unmount } = render();
+    await flush();
+    const before = shownId(container);
+    await answerFirstProblem(container);
+
+    expect(shownId(container)).toBe(before);
 
     unmount();
   });
