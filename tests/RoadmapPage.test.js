@@ -178,3 +178,26 @@ describe('밀린 일차 안내', () => {
   });
 });
 
+describe('하루 배분 · 점검 기준 표시', () => {
+  it('컨트롤 카드에 하루 120분 배분(코드 60 · 주제 40 · 복습 20)이 보인다', () => {
+    const c = render();
+    const controls = c.querySelector('.road-controls');
+    expect(controls.textContent).toContain('하루 120분');
+    expect([...controls.querySelectorAll('.road-block strong')].map((e) => e.textContent)).toEqual(['코드 60분', '주제 40분', '복습 20분']);
+  });
+
+  it('D-16 점검일 카드에 85% 기준과 미달 분기가 보인다', () => {
+    const c = render();
+    const gate = dayCard(c, 'D-16').querySelector('.road-gate');
+    expect(gate.textContent).toContain('85%');
+    expect(gate.textContent).toContain('코드 80분');
+  });
+
+  it('기출 실전일(D-10)은 배지와 2시간 기출 블록을 보인다', () => {
+    const c = render();
+    const card = dayCard(c, 'D-10');
+    expect(card.textContent).toContain('기출 실전');
+    expect(card.querySelector('.road-block').textContent).toContain('기출 120분');
+    expect(dayCard(c, 'D-22').querySelector('.road-block')).toBeNull();
+  });
+});

@@ -4,7 +4,7 @@ import Icon from '../components/Icon';
 import LessonCard from '../components/ui/LessonCard';
 import { BOOKMARK_TYPE } from '../domain/bookmarks';
 import { LESSONS, lessonByDay } from '../domain/lessons';
-import { buildRoadmap, topicLinks } from '../domain/roadmap';
+import { DAILY_BLOCKS, DAILY_MINUTES, buildRoadmap, dayBlocks, topicLinks } from '../domain/roadmap';
 import useStudyState from '../hooks/useStudyState';
 import { loadStoredBusy } from '../utils/busyStore';
 import { getExamDate, toLocalDateKey } from '../utils/storage';
@@ -48,6 +48,7 @@ export default function RoadmapPage() {
         <span className="road-day-date">{formatDate(day.date)}</span>
         {day.isToday ? <span className="badge badge-primary">오늘</span> : null}
         {day.busy ? <span className="badge badge-warning" title="캘린더에서 가져온 일정이 많은 날 — 가볍게 복습하세요">일정 많음</span> : null}
+        {day.kind === 'practice' ? <span className="badge badge-danger">기출 실전</span> : null}
         <strong className="road-day-title">{day.title}</strong>
         {lessonByDay(day.d) ? (
           <Link className="note-link" to={`/lesson/${day.d}`}>
@@ -66,6 +67,22 @@ export default function RoadmapPage() {
           </label>
         ) : null}
       </div>
+      {day.kind === 'practice' ? (
+        <p className="road-blocks road-blocks-practice">
+          {dayBlocks(day).map((b) => (
+            <span key={b.key} className="road-block">
+              <strong>{b.label} {b.minutes}분</strong> {b.text}
+            </span>
+          ))}
+        </p>
+      ) : null}
+      {day.gate ? (
+        <p className="road-gate" role="note">
+          <strong>기준 · {day.gate.metric}</strong>
+          <span>{day.gate.pass}</span>
+          <span>{day.gate.below}</span>
+        </p>
+      ) : null}
       <ul className="road-topics">
         {day.topics.map((topic) => (
           <li key={topic.text} className={`road-topic is-${topic.scope}`}>
@@ -101,6 +118,21 @@ export default function RoadmapPage() {
           두 시험을 함께 준비하는 하나의 계획입니다. 두 시험이 겹치는 <strong>공통 모듈</strong>(코딩 · SQL · OS/네트워크 · 테스트)을
           먼저 두고, <span className="badge badge-warning">기사 특화</span> 주제(SDLC · 디자인패턴 · 연계 · 보안)는 3단계에서
           공통 복습 뒤에 이어집니다.
+        </p>
+
+        <h3 className="road-blocks-title">하루 {DAILY_MINUTES}분 배분 — 매일 같다</h3>
+        <ul className="road-blocks" aria-label="하루 학습 배분">
+          {DAILY_BLOCKS.map((b) => (
+            <li key={b.key} className={`road-block is-${b.key}`}>
+              <strong>{b.label} {b.minutes}분</strong>
+              <span>{b.text}</span>
+              {b.to ? <Link className="note-link" to={b.to}>바로 가기 <Icon name="chevron-right" size={14} /></Link> : null}
+            </li>
+          ))}
+        </ul>
+        <p className="road-hint">
+          코드 블록은 그날 주제가 OS·네트워크여도 빠지지 않습니다. 기출 실전일(<span className="badge badge-danger">기출 실전</span>)은
+          세 블록 대신 복원 기출 1회분을 2시간 안에 풀고, 점검일의 <strong>기준</strong>이 다음 구간의 배분을 정합니다.
         </p>
 
         <div className="road-gauge">

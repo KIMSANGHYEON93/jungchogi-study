@@ -72,6 +72,23 @@ describe('TodayRoadmapCard — 오늘의 로드맵', () => {
     expect(c.querySelector('.goal-lesson-link')).toBeNull();
   });
 
+  it('오늘 2시간 배분(코드 60 · 주제 40 · 복습 20)을 보인다', () => {
+    const c = render();
+    expect([...c.querySelectorAll('.goal-block strong')].map((e) => e.textContent)).toEqual(['코드 60분', '주제 40분', '복습 20분']);
+    expect(c.querySelector('.road-gate')).toBeNull();
+  });
+
+  it('D-16 점검일에는 85% 기준이, 기출 실전일(D-10)에는 기출 120분 블록이 보인다', () => {
+    vi.setSystemTime(day(10, 9));
+    let c = render();
+    expect(c.querySelector('.road-gate').textContent).toContain('85%');
+    c.remove();
+    vi.setSystemTime(day(10, 15));
+    c = render();
+    expect(c.querySelector('.goal-dday').textContent).toBe('D-10');
+    expect([...c.querySelectorAll('.goal-block strong')].map((e) => e.textContent)).toEqual(['기출 120분']);
+  });
+
   it('완료 버튼은 로드맵과 같은 저장소(roadmap_checks)에 기록한다', () => {
     const c = render();
     const btn = c.querySelector('button.goal-check');

@@ -9,6 +9,11 @@
 // 이 로드맵이 앱의 **유일한 학습 계획**이다. 예전 "일일 플랜"(Day01~14 문서를 남은 날에 균등 분배)은 없앴다.
 // 하루 일정이 날짜에 고정돼 있어 계획이 매일 바뀌지 않고, 밀리면 "밀린 일차"로 보여 준다.
 //
+// **하루 2시간 배분**(`DAILY_BLOCKS`)은 일차와 별개로 고정이다 — 코드 60 · 주제 40 · 복습 20.
+// 코드가 약점인 수험자를 기준으로 짰다: 코드 블록은 그날 주제가 무엇이든 매일 돈다.
+// 기출 실전일(`kind: 'practice'`)은 블록 대신 복원 기출 1회분을 2시간 안에 푼다.
+// 점검일에는 `gate`(기준치와 미달 시 분기)가 붙는다 — 다음 구간의 배분을 결정하는 숫자다.
+//
 // 날짜는 시험일에서 d 일을 빼서 만든다. 시험일을 바꿔도 "D-n 일차"의 의미(와 체크 기록)가
 // 그대로 이어지도록 체크는 날짜가 아니라 d 번호로 저장한다.
 
@@ -17,11 +22,29 @@ import { addDays, daysUntil, resolveExamDate } from './dailyPlan';
 /** 로드맵 길이: D-24 ~ D-Day = 25칸. 체크는 D-24 ~ D-1 의 24일 학습일에만 있다. */
 export const ROADMAP_START_D = 24;
 
+/** 하루 학습 시간(분). 수험자가 실제로 낼 수 있는 시간이다 */
+export const DAILY_MINUTES = 120;
+
+/**
+ * 하루 2시간의 고정 배분. 일차 주제와 무관하게 매일 같다.
+ * 코드 블록이 가장 크고 맨 앞이다 — 코드 문항(6~8문제 × 5점)이 합격선을 가르는데, 하루 쉬면 감각이 떨어진다.
+ */
+export const DAILY_BLOCKS = Object.freeze([
+  { key: 'code', label: '코드', minutes: 60, text: '코드 퀴즈 · 변수 추적표 — 주제와 무관하게 매일', to: '/quiz' },
+  { key: 'topic', label: '주제', minutes: 40, text: '오늘 일차 레슨 — 퀴즈 먼저, 모르는 것만 본문' },
+  { key: 'review', label: '복습', minutes: 20, text: '오답노트 재풀이 · 치트시트 공식', to: '/wrong' },
+]);
+
+/** 기출 실전일의 배분 — 세 블록 대신 한 덩어리 */
+const PRACTICE_BLOCKS = Object.freeze([
+  { key: 'practice', label: '기출', minutes: DAILY_MINUTES, text: '복원 기출 1회분 — 타이머 · 손으로 답안 작성 · 채점까지', to: '/exam' },
+]);
+
 export const ROADMAP_PHASES = [
   { no: 1, name: '코딩 · SQL 집중', fromD: 24, toD: 16, focus: 'C · Java · Python 코드 트레이싱과 SQL 을 먼저 굳힌다' },
   { no: 2, name: '인프라 · 테스트', fromD: 15, toD: 10, focus: 'OS · 네트워크 계산 문제와 테스트 이론' },
   { no: 3, name: '기사 특화', fromD: 9, toD: 4, focus: 'SDLC · 디자인패턴 · 연계 · 보안' },
-  { no: 4, name: '기출 회독 · 최종 점검', fromD: 3, toD: 1, focus: '최신 기출 회독과 핵심 공식 최종 점검' },
+  { no: 4, name: '기출 회독 · 최종 점검', fromD: 3, toD: 1, focus: '기출 실전 2회분과 핵심 공식 최종 점검 — 새 내용은 보지 않는다' },
 ];
 
 /**
@@ -46,11 +69,16 @@ const DAYS = [
   { d: 17, title: 'SQL ② JOIN · 그룹 · 서브쿼리', topics: [{ text: 'SQL — JOIN · GROUP BY · HAVING · 서브쿼리', scope: COMMON, study: 3, to: '/practice?tab=sql' }] },
   {
     d: 16,
-    title: '1단계 점검',
+    title: '1단계 점검 — 코드 진단',
     topics: [
-      { text: '변수 추적표로 C · Java · Python 섞어 풀기', scope: COMMON, to: '/practice?tab=trace' },
+      { text: '변수 추적표 10문제 — C · Java · Python 섞어서, 안 보고 끝까지 쓰기', scope: COMMON, to: '/practice?tab=trace' },
       { text: '코딩 · SQL 오답노트 복습', scope: COMMON, to: '/wrong' },
     ],
+    gate: {
+      metric: '변수 추적표 정답률',
+      pass: '85% 이상 → 계획대로 2단계',
+      below: '85% 미만 → D-14~D-11 은 코드 80분 · 주제 20분으로',
+    },
   },
 
   // ── 2단계: 인프라 · 테스트 ──
@@ -59,7 +87,20 @@ const DAYS = [
   { d: 13, title: '네트워크 ① 주소 계산', topics: [{ text: '네트워크 — IP 주소 · 서브넷 마스크 · CIDR 계산', scope: COMMON, study: 6, query: '서브넷' }] },
   { d: 12, title: '네트워크 ② 프로토콜', topics: [{ text: '네트워크 — OSI · TCP/UDP · 주요 프로토콜', scope: COMMON, study: 6 }] },
   { d: 11, title: '애플리케이션 테스트', topics: [{ text: '테스트 — 블랙박스 · 화이트박스 · 순환 복잡도 · 테스트 레벨', scope: COMMON, study: 6, query: '블랙박스' }] },
-  { d: 10, title: '2단계 점검', topics: [{ text: '계산 문제 반복 (치트시트) + 오답노트 복습', scope: COMMON, to: '/wrong' }] },
+  {
+    d: 10,
+    title: '2단계 점검 — 기출 ①',
+    kind: 'practice',
+    topics: [
+      { text: '복원 기출 1회분 실전 — 2시간 타이머, 손으로 답안 작성', scope: COMMON, to: '/exam' },
+      { text: '채점 후 계산 문제(치트시트)와 틀린 코드만 오답노트에', scope: COMMON, to: '/wrong' },
+    ],
+    gate: {
+      metric: '기출 ① 점수',
+      pass: '50점 이상 → 계획대로 3단계',
+      below: '40점 미만 → 3단계 주제 블록을 코드로 돌림',
+    },
+  },
 
   // ── 3단계: 기사 특화 (공통 복습 + 기사 특화) ──
   {
@@ -104,17 +145,23 @@ const DAYS = [
   },
   {
     d: 4,
-    title: '3단계 점검',
+    title: '3단계 점검 — 기출 ②',
+    kind: 'practice',
     topics: [
-      { text: '공통 복습 — 전 영역 오답 총점검', scope: COMMON, to: '/wrong' },
-      { text: '기사 특화 총정리 — 이론 용어 암기', scope: ENGINEER, study: 8 },
+      { text: '복원 기출 1회분 실전 — 2시간 타이머, 손으로 답안 작성', scope: COMMON, to: '/exam' },
+      { text: '기사 특화 총정리 — 이론 용어 암기 (채점 후 남는 시간만)', scope: ENGINEER, study: 8 },
     ],
+    gate: {
+      metric: '기출 ② 점수',
+      pass: '60점 이상 → D-3 부터 이론 범위를 넓혀도 됨',
+      below: '60점 미만 → D-3 · D-2 는 틀린 유형만 반복',
+    },
   },
 
   // ── 4단계: 기출 회독 · 최종 점검 ──
-  { d: 3, title: '기출 회독 ①', topics: [{ text: '최신 기출 회독 1회 — 코딩 · SQL 부터', scope: COMMON, study: 9, to: '/exam' }] },
-  { d: 2, title: '기출 회독 ② · 약점', topics: [{ text: '최신 기출 회독 2회 + 약점 보강', scope: COMMON, study: 11, to: '/exam' }] },
-  { d: 1, title: '핵심 공식 최종 점검', topics: [{ text: '핵심 공식(서브넷 · 순환 복잡도 · HRN · 페이지 교체) 최종 점검 + 컨디션 관리', scope: COMMON, study: 13 }] },
+  { d: 3, title: '기출 ③', kind: 'practice', topics: [{ text: '기출 1회분 실전 — 코딩 · SQL 부터, 틀린 유형은 바로 오답노트', scope: COMMON, study: 9, to: '/exam' }] },
+  { d: 2, title: '기출 ④ · 약점', kind: 'practice', topics: [{ text: '기출 1회분 실전 + 기출 ①~③ 에서 틀린 유형만 반복', scope: COMMON, study: 11, to: '/exam' }] },
+  { d: 1, title: '핵심 공식 최종 점검', topics: [{ text: '오답노트 재풀이 30분 · 핵심 공식(서브넷 · 순환 복잡도 · HRN · 페이지 교체) · 컨디션 관리 — 새 내용 금지', scope: COMMON, study: 13, to: '/wrong' }] },
 ];
 
 /** D-Day 당일 — 체크 대상이 아니다 */
@@ -149,6 +196,8 @@ export function phaseOfD(d) {
  * @property {boolean} isToday
  * @property {boolean} isPast
  * @property {boolean} busy 캘린더에서 가져온 "일정이 많은 날"인지 (학습일만)
+ * @property {'study'|'practice'|'exam'} kind 보통 학습일 · 기출 실전일 · 시험 당일
+ * @property {{metric: string, pass: string, below: string}|null} gate 점검일의 기준치와 분기
  */
 
 /**
@@ -192,6 +241,8 @@ export function buildRoadmap({ examDate: storedExamDate, today, checks = {}, bus
       isToday: todayD === day.d,
       isPast: todayD !== null && todayD < day.d,
       busy: day.d > 0 && busy.has(date),
+      kind: day.d === 0 ? 'exam' : day.kind ?? 'study',
+      gate: day.gate ?? null,
     };
   };
 
@@ -258,6 +309,16 @@ export function roadmapSchedule(roadmap) {
       units: x.topics.map((t) => ({ label: t.text, phase: { label: phaseName.get(x.phaseNo) ?? '' } })),
       busy: x.busy,
     }));
+}
+
+/**
+ * 그날의 2시간 배분. 보통 학습일은 고정 블록, 기출 실전일은 기출 한 덩어리, 시험 당일은 없음.
+ * @param {{kind?: string, d: number}} day
+ * @returns {{key: string, label: string, minutes: number, text: string, to?: string}[]}
+ */
+export function dayBlocks(day) {
+  if (day.d === 0 || day.kind === 'exam') return [];
+  return day.kind === 'practice' ? PRACTICE_BLOCKS : DAILY_BLOCKS;
 }
 
 /** 테스트와 화면이 같은 원본을 본다 */

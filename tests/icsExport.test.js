@@ -473,7 +473,7 @@ describe('buildIcs: 실제 roadmapSchedule 결과', () => {
 
   it('제목은 D-n 과 일차 제목이다', () => {
     expect(unescapeText(events[0].SUMMARY)).toBe('D-24 C언어 연산자');
-    expect(unescapeText(events[8].SUMMARY)).toBe('D-16 1단계 점검');
+    expect(unescapeText(events[8].SUMMARY)).toBe('D-16 1단계 점검 — 코드 진단');
   });
 
   it('시험 당일 이벤트는 시험 문구이고 DTEND 는 다음 날이다', () => {

@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  DAILY_BLOCKS,
+  DAILY_MINUTES,
+  dayBlocks,
   ROADMAP_DAYS,
   ROADMAP_PHASES,
   buildRoadmap,
@@ -304,5 +307,42 @@ describe('daysForStudyDoc', () => {
   it('완료 여부가 일차에 실린다', () => {
     const done = buildRoadmap({ ...base, checks: { 24: true } });
     expect(daysForStudyDoc(done, 1).map((d) => d.done)).toEqual([true, false, false]);
+  });
+});
+
+describe('하루 2시간 배분 · 기출 실전일 · 점검 기준', () => {
+  const days = buildRoadmap(base).phases.flatMap((p) => p.days);
+  const byD = (d) => days.find((x) => x.d === d);
+
+  it('고정 블록은 코드 → 주제 → 복습 순이고 합이 2시간이다', () => {
+    expect(DAILY_BLOCKS.map((b) => b.key)).toEqual(['code', 'topic', 'review']);
+    expect(DAILY_BLOCKS.reduce((sum, b) => sum + b.minutes, 0)).toBe(DAILY_MINUTES);
+    expect(DAILY_BLOCKS[0].minutes).toBeGreaterThanOrEqual(60);
+  });
+
+  it('보통 학습일은 고정 블록, 기출 실전일은 기출 한 덩어리(2시간), 시험 당일은 없음', () => {
+    expect(dayBlocks(byD(22))).toBe(DAILY_BLOCKS);
+    const practice = dayBlocks(byD(10));
+    expect(practice).toHaveLength(1);
+    expect(practice[0].minutes).toBe(DAILY_MINUTES);
+    expect(practice[0].to).toBe('/exam');
+    expect(dayBlocks(buildRoadmap(base).examDay)).toEqual([]);
+  });
+
+  it('기출 실전일은 D-10 · D-4 · D-3 · D-2 — 2·3단계 점검일과 4단계', () => {
+    expect(days.filter((x) => x.kind === 'practice').map((x) => x.d)).toEqual([10, 4, 3, 2]);
+    for (const d of [10, 4, 3, 2]) expect(byD(d).topics.some((t) => t.to === '/exam')).toBe(true);
+    expect(byD(22).kind).toBe('study');
+    expect(buildRoadmap(base).examDay.kind).toBe('exam');
+  });
+
+  it('점검일마다 기준치와 미달 시 분기가 있다 — D-16 코드 진단은 85%', () => {
+    expect(days.filter((x) => x.gate).map((x) => x.d)).toEqual([16, 10, 4]);
+    expect(byD(16).gate.pass).toMatch(/85%/);
+    expect(byD(16).gate.below).toMatch(/코드 80분/);
+    for (const d of [16, 10, 4]) {
+      for (const key of ['metric', 'pass', 'below']) expect(typeof byD(d).gate[key]).toBe('string');
+    }
+    expect(byD(22).gate).toBeNull();
   });
 });

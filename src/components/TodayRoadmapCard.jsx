@@ -4,7 +4,7 @@ import Icon from './Icon';
 import { addDays } from '../domain/dailyPlan';
 import { summarizeBusyDays } from '../domain/calendarBusy';
 import { lessonByDay } from '../domain/lessons';
-import { buildRoadmap, roadmapSchedule, topicLinks, upcomingDays } from '../domain/roadmap';
+import { buildRoadmap, dayBlocks, roadmapSchedule, topicLinks, upcomingDays } from '../domain/roadmap';
 import useStudyState from '../hooks/useStudyState';
 import { fetchCalendarEvents, isGoogleCalendarConfigured, loadGisScript } from '../services/googleCalendar';
 import { buildIcs, downloadIcs } from '../utils/icsExport';
@@ -128,6 +128,23 @@ export default function TodayRoadmapCard({ examDate }) {
               {day.busy ? ' · 일정이 많은 날 — 가볍게' : ''}
             </span>
             <strong className="goal-unit-title">{day.title}</strong>
+            {dayBlocks(day).length > 0 ? (
+              <ul className="goal-blocks" aria-label="오늘 2시간 배분">
+                {dayBlocks(day).map((b) => (
+                  <li key={b.key} className={`goal-block is-${b.key}`}>
+                    <strong>{b.label} {b.minutes}분</strong>
+                    {b.to ? <Link className="note-link" to={b.to}>{b.text}</Link> : <span>{b.text}</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {day.gate ? (
+              <p className="road-gate" role="note">
+                <strong>기준 · {day.gate.metric}</strong>
+                <span>{day.gate.pass}</span>
+                <span>{day.gate.below}</span>
+              </p>
+            ) : null}
             <ul className="road-topics">
               {day.topics.map((topic) => (
                 <li key={topic.text} className={`road-topic is-${topic.scope}`}>
