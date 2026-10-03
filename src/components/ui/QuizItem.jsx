@@ -42,7 +42,7 @@ export default function QuizItem({ index, question }) {
         <button
           type="submit"
           disabled={value.trim() === ''}
-          className="tw:min-h-10 tw:cursor-pointer tw:rounded-lg! tw:border-0 tw:bg-primary tw:px-4! tw:py-0! tw:font-semibold tw:text-white tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
+          className="tw:min-h-10 tw:cursor-pointer tw:rounded-lg! tw:border-0 tw:bg-primary tw:px-4! tw:py-0! tw:font-semibold tw:text-on-fill tw:disabled:cursor-not-allowed tw:disabled:opacity-50"
         >
           채점
         </button>

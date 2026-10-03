@@ -2,13 +2,13 @@
 export default function CompleteToggle({ done, onToggle, label = '학습 완료' }) {
   return (
     <label
-      className={`tw:inline-flex tw:min-h-9 tw:cursor-pointer tw:select-none tw:items-center tw:gap-2 tw:rounded-lg tw:border tw:px-3 tw:text-sm tw:font-medium tw:transition-colors ${
+      className={`tw:inline-flex tw:min-h-11 tw:cursor-pointer tw:select-none tw:items-center tw:gap-2 tw:rounded-lg tw:border tw:px-3 tw:text-sm tw:font-medium tw:transition-colors ${
         done
           ? 'tw:border-success tw:bg-success/15 tw:text-success'
           : 'tw:border-line tw:bg-card tw:text-dim tw:hover:bg-hover'
       }`}
     >
-      <input type="checkbox" checked={done} onChange={onToggle} aria-label={label} className="tw:size-4 tw:cursor-pointer tw:accent-success" />
+      <input type="checkbox" checked={done} onChange={onToggle} aria-label={label} className="tw:size-5 tw:cursor-pointer tw:accent-success" />
       <span>{done ? '완료함' : '완료'}</span>
     </label>
   );

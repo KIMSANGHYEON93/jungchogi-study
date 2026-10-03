@@ -152,40 +152,6 @@ export default function RoadmapPage() {
         </div>
       </section>
 
-      <section className="tw:mb-6 tw:flex tw:flex-col tw:gap-3" aria-labelledby="road-lessons">
-        <div className="tw:flex tw:flex-wrap tw:items-center tw:justify-between tw:gap-2">
-          <h2 id="road-lessons" className="tw:text-lg tw:font-bold tw:text-ink">
-            일차별 레슨 <span className="tw:text-sm tw:font-normal tw:text-dim">({LESSONS.length}개 공개)</span>
-          </h2>
-          <label className="tw:inline-flex tw:cursor-pointer tw:items-center tw:gap-2 tw:text-sm tw:text-ink">
-            <input
-              type="checkbox"
-              checked={onlyBookmarks}
-              onChange={(e) => setOnlyBookmarks(e.target.checked)}
-              className="tw:size-4 tw:accent-primary"
-            />
-            북마크만 보기
-          </label>
-        </div>
-        {shelf.length === 0 ? (
-          <p className="tw:rounded-lg tw:border tw:border-dashed tw:border-line tw:p-4 tw:text-sm tw:text-dim">
-            북마크한 레슨이 없습니다. 카드 오른쪽의 북마크 버튼으로 추가해 보세요.
-          </p>
-        ) : (
-          <div className="tw:grid tw:gap-3 tw:md:grid-cols-2 tw:xl:grid-cols-3">
-            {shelf.map((lesson) => (
-              <LessonCard
-                key={lesson.id}
-                lesson={lesson}
-                done={study.isDone(lesson.d)}
-                bookmarked={study.isBookmarked(BOOKMARK_TYPE.LESSON, lesson.id)}
-                onToggleBookmark={() => study.toggleBookmark(BOOKMARK_TYPE.LESSON, lesson.id)}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
       {roadmap.isDefaultExamDate && roadmap.examDate ? (
         <p className="road-hint">
           시험일을 설정하지 않아 {roadmap.examDate.replace(/-/g, '.')} 기준으로 계산했습니다. 대시보드에서 바꿀 수 있어요.
@@ -225,6 +191,46 @@ export default function RoadmapPage() {
           <ol className="road-days">{renderDay(roadmap.examDay)}</ol>
         </section>
       ) : null}
+
+      {/* 레슨 목록은 일정 아래에 접어 둔다. 일차 카드마다 '레슨 ›' 링크가 있어 평소엔 열 필요가 없고,
+          펼쳐 두면 모바일에서 오늘 일차까지 레슨 카드 18장을 지나야 했다 */}
+      <section className="road-lessons" aria-labelledby="road-lessons">
+        <details>
+          <summary>
+            <h2 id="road-lessons" className="tw:inline tw:text-lg tw:font-bold tw:text-ink">
+              일차별 레슨 <span className="tw:text-sm tw:font-normal tw:text-dim">({LESSONS.length}개 공개)</span>
+            </h2>
+          </summary>
+          <div className="tw:mt-3 tw:flex tw:flex-col tw:gap-3">
+            <label className="tw:inline-flex tw:min-h-11 tw:cursor-pointer tw:items-center tw:gap-2 tw:text-sm tw:text-ink">
+              <input
+                type="checkbox"
+                checked={onlyBookmarks}
+                onChange={(e) => setOnlyBookmarks(e.target.checked)}
+                className="tw:size-5 tw:accent-primary"
+              />
+              북마크만 보기
+            </label>
+            {shelf.length === 0 ? (
+              <p className="tw:rounded-lg tw:border tw:border-dashed tw:border-line tw:p-4 tw:text-sm tw:text-dim">
+                북마크한 레슨이 없습니다. 카드 오른쪽의 북마크 버튼으로 추가해 보세요.
+              </p>
+            ) : (
+              <div className="tw:grid tw:gap-3 tw:md:grid-cols-2 tw:xl:grid-cols-3">
+                {shelf.map((lesson) => (
+                  <LessonCard
+                    key={lesson.id}
+                    lesson={lesson}
+                    done={study.isDone(lesson.d)}
+                    bookmarked={study.isBookmarked(BOOKMARK_TYPE.LESSON, lesson.id)}
+                    onToggleBookmark={() => study.toggleBookmark(BOOKMARK_TYPE.LESSON, lesson.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </details>
+      </section>
     </div>
   );
 }

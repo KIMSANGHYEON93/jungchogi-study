@@ -62,11 +62,13 @@ afterEach(() => {
 });
 
 describe('Google 캘린더 가져오기', () => {
-  it('클라이언트 ID 가 없으면 버튼이 꺼지고 설정 안내를 보여준다', () => {
+  it('클라이언트 ID 가 없으면 가져오기 기능을 숨기고 개발자용 설정 문구도 보이지 않는다', () => {
     gcal.isGoogleCalendarConfigured.mockReturnValue(false);
     const c = render();
-    expect(byText(c, '캘린더에서 일정 가져오기').disabled).toBe(true);
-    expect(c.textContent).toContain('VITE_GOOGLE_CLIENT_ID');
+    expect(byText(c, '캘린더에서 일정 가져오기')).toBeUndefined();
+    expect(c.textContent).not.toContain('VITE_GOOGLE_CLIENT_ID');
+    // 내보내기(.ics)는 설정과 무관하게 그대로 쓸 수 있다
+    expect(byText(c, '.ics')).toBeDefined();
   });
 
   it('오늘부터 시험 당일 끝까지의 기간으로 조회한다', async () => {

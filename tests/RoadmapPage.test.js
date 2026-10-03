@@ -201,3 +201,14 @@ describe('하루 배분 · 점검 기준 표시', () => {
     expect(dayCard(c, 'D-22').querySelector('.road-block')).toBeNull();
   });
 });
+
+describe('화면 순서', () => {
+  it('일정(단계별 일차)이 먼저, 레슨 목록은 그 아래에 접혀 있다', () => {
+    const c = render();
+    const firstPhase = c.querySelector('.road-phase');
+    const lessons = c.querySelector('.road-lessons');
+    // DOCUMENT_POSITION_FOLLOWING(4): 레슨 목록이 첫 단계보다 뒤에 온다
+    expect(firstPhase.compareDocumentPosition(lessons) & 4).toBeTruthy();
+    expect(lessons.querySelector('details').open).toBe(false);
+  });
+});
