@@ -2259,6 +2259,78 @@ html { scroll-behavior: smooth; }
   color: var(--text-dim);
 }
 
+.road-blocks-title {
+  margin: var(--space-md) 0 var(--space-xs);
+  font-size: 0.95rem;
+}
+
+.road-blocks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.road-block {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-left: 3px solid var(--border);
+  font-size: 0.88rem;
+}
+
+.road-block.is-code { border-left-color: var(--primary); }
+.road-block.is-topic { border-left-color: var(--success); }
+.road-block.is-review { border-left-color: var(--warning); }
+.road-block.is-practice { border-left-color: var(--danger); }
+
+.road-blocks-practice {
+  margin: var(--space-sm) 0 0;
+}
+
+.road-gate {
+  display: grid;
+  gap: 2px;
+  margin: var(--space-sm) 0 0;
+  padding: var(--space-sm);
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.08);
+  font-size: 0.85rem;
+}
+
+.goal-blocks {
+  list-style: none;
+  margin: var(--space-xs) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  font-size: 0.85rem;
+}
+
+.goal-block {
+  display: inline-flex;
+  gap: var(--space-xs);
+  align-items: baseline;
+  padding-left: var(--space-xs);
+  border-left: 3px solid var(--border);
+}
+
+/* "코드 60분" 같은 짧은 라벨이 좁은 화면에서 낱말 중간에 꺾이지 않게 */
+.goal-block strong,
+.road-block strong {
+  white-space: nowrap;
+}
+
+.goal-block.is-code { border-left-color: var(--primary); }
+.goal-block.is-topic { border-left-color: var(--success); }
+.goal-block.is-review { border-left-color: var(--warning); }
+.goal-block.is-practice { border-left-color: var(--danger); }
+
 .road-gauge {
   margin-top: var(--space-md);
 }
