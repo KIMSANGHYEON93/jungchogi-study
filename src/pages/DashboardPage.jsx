@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { loadProgress, saveProgress, getWrongNotes, getExamDate, setExamDate, getWeeklyStudyTime, addStudyTime, getSpacedRepetitionDue, getStorageUsage, formatBytes } from '../utils/storage';
+import { Link, useNavigate } from 'react-router-dom';
+import { loadProgress, getWrongNotes, getExamDate, setExamDate, getWeeklyStudyTime, addStudyTime, getSpacedRepetitionDue, getStorageUsage, formatBytes, toLocalDateKey } from '../utils/storage';
 import Icon from '../components/Icon';
-import DailyGoalCard from '../components/DailyGoalCard';
-import TodayPlanCard from '../components/TodayPlanCard';
-import UsageSummaryCard from '../components/UsageSummaryCard';
+import TodayRoadmapCard from '../components/TodayRoadmapCard';
+import useStudyState from '../hooks/useStudyState';
+import { buildRoadmap, ROADMAP_DAYS } from '../domain/roadmap';
+import { lessonByDay } from '../domain/lessons';
+import { loadStoredBusy } from '../utils/busyStore';
+import { applyBackup, buildBackup, failureMessage, parseBackup, successMessage } from '../utils/backup';
 import { summarizeQuizResults } from '../domain/grading';
 
-import { STUDY_DAYS } from '../domain/studyDays';
+import { BOGANG_CARD_COUNT } from '../domain/bogangDeck';
 
 // ─── 오답 유형 분류 ───
 function categorizeWrongNotes(notes) {
@@ -34,7 +37,7 @@ export default function DashboardPage() {
   const [flashcardKnown] = useState(() => loadProgress('flashcard_known_quiz100', {}));
   const [quizResults] = useState(() => loadProgress('quiz_results', {}));
   const [wrongNotes] = useState(getWrongNotes);
-  const [dayChecks, setDayChecks] = useState(() => loadProgress('day_checks', {}));
+  const study = useStudyState();
   const [examDate, setExamDateState] = useState(() => getExamDate() || '');
   const [showDateInput, setShowDateInput] = useState(false);
   const [spacedDue] = useState(getSpacedRepetitionDue);
@@ -48,10 +51,40 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const toggleDay = (day) => {
-    const next = { ...dayChecks, [day]: !dayChecks[day] };
-    setDayChecks(next);
-    saveProgress('day_checks', next);
+  // 학습 데이터 백업 — 형식 검증·합치기·실패 시 되돌리기는 utils/backup.js
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(buildBackup(), null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jungchogi_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 'merge': 이 기기의 기록과 합친다(폰·PC 를 함께 쓸 때) · 'replace': 백업에 있는 항목을 백업 값으로 덮어쓴다
+  const importData = (mode) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const parsed = parseBackup(await file.text());
+      if (!parsed.ok) {
+        window.alert(failureMessage(parsed.reason));
+        return;
+      }
+      if (mode === 'replace' && !window.confirm(`이 기기의 학습 기록 ${Object.keys(parsed.items).length}개 항목을 백업 값으로 덮어씁니다.\n(백업에 없는 항목은 그대로입니다) 계속할까요?`)) return;
+      const result = applyBackup(parsed, mode);
+      if (!result.ok) {
+        window.alert(failureMessage(result.reason));
+        return;
+      }
+      window.alert(successMessage(result, mode));
+      window.location.reload();
+    };
+    input.click();
   };
 
   const handleExamDateSave = (val) => {
@@ -62,7 +95,7 @@ export default function DashboardPage() {
 
   const flashcardTotal = 100;
   const flashcardDone = Object.values(flashcardKnown).filter(Boolean).length;
-  const bogangTotal = 24;
+  const bogangTotal = BOGANG_CARD_COUNT;
   const bogangDone = Object.values(loadProgress('flashcard_known_bogang119', {})).filter(Boolean).length;
   // quiz_results 에는 세 값이 섞여 있다: 'correct' | 'incorrect' | 레거시 'answered'.
   // 진도(= 시도한 문항 수)는 셋을 다 세고, 정답률은 채점된 것만으로 낸다 —
@@ -72,13 +105,18 @@ export default function DashboardPage() {
   const quizTotal = 40;
   const wrongTotal = wrongNotes.length;
   const wrongReviewed = wrongNotes.filter((n) => n.reviewCount > 0).length;
-  const daysCompleted = Object.values(dayChecks).filter(Boolean).length;
+  // 계획은 25일 로드맵 하나다 — 진도는 로드맵 완료 일차(D-24~D-1)로 센다
+  const [todayKey] = useState(() => toLocalDateKey());
+  const [busy] = useState(loadStoredBusy);
+  const roadmap = buildRoadmap({ examDate: examDate || null, today: todayKey, checks: study.checks, busyDates: busy.busyDates });
+  const daysCompleted = roadmap.progress.done;
+  const daysTotal = ROADMAP_DAYS.length;
 
   const overallPercent = Math.round(
     ((flashcardDone / flashcardTotal) * 25 +
       (bogangDone / bogangTotal) * 15 +
       (quizDone / quizTotal) * 30 +
-      (daysCompleted / 14) * 30)
+      (daysCompleted / daysTotal) * 30)
   );
 
   // D-Day 계산
@@ -98,14 +136,20 @@ export default function DashboardPage() {
   // 추천 학습 결정
   const getRecommendation = () => {
     if (spacedDue.length > 0) return { text: `간격 반복 복습할 오답이 ${spacedDue.length}개 있어요!`, action: () => navigate('/wrong'), btn: '복습하기' };
-    if (daysCompleted === 0) return { text: 'Day 1부터 학습을 시작하세요!', action: () => navigate('/study'), btn: '학습 시작' };
+    // 오늘의 로드맵 일차가 있고 아직 안 끝났으면 그것부터
+    const todayDay = roadmap.today;
+    if (todayDay && todayDay.d > 0 && !todayDay.done) {
+      const lesson = lessonByDay(todayDay.d);
+      return {
+        text: `오늘의 로드맵 — ${todayDay.label} ${todayDay.title}`,
+        action: () => navigate(lesson ? `/lesson/${lesson.d}` : '/roadmap'),
+        btn: lesson ? '레슨 시작' : '로드맵 보기',
+      };
+    }
+    if (roadmap.late.length > 0) return { text: `밀린 로드맵 일차가 ${roadmap.late.length}개 있어요`, action: () => navigate('/roadmap'), btn: '이어하기' };
     if (flashcardDone < 30) return { text: '플래시카드로 기본 용어를 익히세요', action: () => navigate('/flashcard'), btn: '카드 학습' };
     if (wrongTotal > 0 && wrongReviewed < wrongTotal) return { text: `오답노트에 복습할 문제가 ${wrongTotal - wrongReviewed}개 있어요`, action: () => navigate('/wrong'), btn: '오답 복습' };
     if (quizDone < 20) return { text: '코드 트레이싱 퀴즈를 풀어보세요', action: () => navigate('/quiz'), btn: '퀴즈 풀기' };
-    if (daysCompleted < 14) {
-      const nextDay = STUDY_DAYS.find((d) => !dayChecks[d.day]);
-      return { text: `Day ${nextDay?.day} — ${nextDay?.label} 학습을 진행하세요`, action: () => navigate('/study'), btn: '학습 계속' };
-    }
     return { text: '모의고사로 실력을 점검하세요!', action: () => navigate('/exam'), btn: '모의고사' };
   };
 
@@ -114,7 +158,10 @@ export default function DashboardPage() {
   return (
     <div className="page">
       <h1>학습 대시보드</h1>
-      <p className="subtitle">정보처리기사 실기 학습 현황</p>
+      <p className="subtitle">
+        정보처리기사 실기 학습 현황 · <Link to="/roadmap">25일 로드맵</Link> ·{' '}
+        <Link to="/guide">시험 영역 안내</Link>
+      </p>
 
       {/* D-Day + 추천 학습 영역 */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -164,9 +211,9 @@ export default function DashboardPage() {
         </div>
 
         {/* 추천 학습 */}
-        <div className="card recommend-card" onClick={recommendation.action} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); recommendation.action(); } }} role="button" tabIndex={0} style={{ cursor: 'pointer', flex: 1, minWidth: 200 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-            <div>
+        <div className="card recommend-card" onClick={recommendation.action} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); recommendation.action(); } }} role="button" tabIndex={0} style={{ cursor: 'pointer', flex: '1 1 240px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 160px', minWidth: 0 }}>
               <div style={{ fontSize: '0.85rem', color: 'var(--warning)', fontWeight: 600, marginBottom: 4 }}>
                 {spacedDue.length > 0 ? '간격 반복 알림' : '오늘의 추천'}
               </div>
@@ -179,11 +226,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 오늘의 목표 단계 (남은 일수 기반 일일 플랜 — 서버 불필요) */}
-      <DailyGoalCard examDate={examDate} dayChecks={dayChecks} onToggleDay={toggleDay} />
-
-      {/* 오늘의 계획 (AI 학습 플래너) */}
-      <TodayPlanCard />
+      {/* 오늘의 로드맵 (25일 로드맵의 오늘 일차) */}
+      <TodayRoadmapCard examDate={examDate} />
 
       {/* 간격 반복 알림 상세 */}
       {spacedDue.length > 0 && (
@@ -346,31 +390,19 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Day별 학습 체크리스트 */}
-      <h2 style={{ fontSize: '1.1rem', marginTop: 32, marginBottom: 16 }}>14일 학습 체크리스트</h2>
-      <div className="day-grid">
-        {STUDY_DAYS.map((d) => (
-          <div
-            key={d.day}
-            className={`card day-card ${dayChecks[d.day] ? 'completed' : ''}`}
-            onClick={() => toggleDay(d.day)}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDay(d.day); } }}
-            role="button"
-            tabIndex={0}
-          >
-            <div className="day-check">{dayChecks[d.day] ? <Icon name="check-circle" size={20}/> : <Icon name={d.icon} size={20}/>}</div>
-            <div className="day-num">Day {d.day}</div>
-            <div className="day-label">{d.label}</div>
+      {/* 로드맵 진도 — 완료 체크는 로드맵·레슨 화면과 같은 기록이다 */}
+      <div className="card" style={{ marginTop: 32, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <h2 style={{ fontSize: '1.1rem', marginBottom: 8 }}>25일 로드맵 진도</h2>
+          <div className="progress-bar" role="progressbar" aria-label="로드맵 진도" aria-valuemin={0} aria-valuemax={100} aria-valuenow={roadmap.progress.percent}>
+            <div className="fill" style={{ width: `${roadmap.progress.percent}%` }} />
           </div>
-        ))}
+          <div style={{ marginTop: 8, color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+            {daysCompleted}/{daysTotal}일 완료{roadmap.late.length > 0 ? ` · 밀린 일차 ${roadmap.late.length}개` : ''}
+          </div>
+        </div>
+        <Link className="btn-outline" to="/roadmap" style={{ textDecoration: 'none' }}>로드맵 열기</Link>
       </div>
-
-      <div style={{ textAlign: 'center', marginTop: 16, color: 'var(--text-dim)', fontSize: '0.85rem' }}>
-        {daysCompleted}/14일 완료 — 클릭하여 완료 표시
-      </div>
-
-      {/* AI 사용량 — 본인 API 키로 도는 앱이라 비용이 곧 사용자 지갑이다 */}
-      <UsageSummaryCard />
 
       {/* 데이터 관리 */}
       <div className="card" style={{ marginTop: 32 }}>
@@ -388,59 +420,14 @@ export default function DashboardPage() {
           })()}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            className="btn-outline"
-            onClick={() => {
-              const data = {};
-              for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('jungchogi_')) {
-                  data[key] = localStorage.getItem(key);
-                }
-              }
-              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `jungchogi_backup_${new Date().toISOString().slice(0, 10)}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-          >
+          <button className="btn-outline" onClick={exportData}>
             학습 데이터 내보내기
           </button>
-          <button
-            className="btn-outline"
-            onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = '.json';
-              input.onchange = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  try {
-                    const data = JSON.parse(ev.target.result);
-                    let count = 0;
-                    for (const [key, value] of Object.entries(data)) {
-                      if (key.startsWith('jungchogi_')) {
-                        localStorage.setItem(key, value);
-                        count++;
-                      }
-                    }
-                    window.alert(`${count}개 항목을 복원했습니다.`);
-                    window.location.reload();
-                  } catch {
-                    window.alert('유효하지 않은 백업 파일입니다.');
-                  }
-                };
-                reader.readAsText(file);
-              };
-              input.click();
-            }}
-          >
-            데이터 가져오기
+          <button className="btn-outline" onClick={() => importData('merge')}>
+            가져오기 (합치기)
+          </button>
+          <button className="btn-outline" onClick={() => importData('replace')}>
+            가져오기 (덮어쓰기)
           </button>
           <button
             className="btn-outline"

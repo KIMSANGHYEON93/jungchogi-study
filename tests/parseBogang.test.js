@@ -9,29 +9,70 @@ const sample = readFileSync(
 );
 
 describe('parseBogang — 실제 콘텐츠 형식', () => {
-  it('`### 보강 N:` 헤딩을 가진 카드만 추출한다', () => {
+  it('섹션의 빈 줄 덩어리마다 카드 한 장으로 쪼갠다', () => {
     const cards = parseBogang(sample);
-    expect(cards).toHaveLength(2);
-    expect(cards.map((c) => c.id)).toEqual(['B01', 'B02']);
+    expect(cards.map((c) => c.id)).toEqual(['B01-1', 'B01-2', 'B01-3', 'B02-1', 'B02-2']);
+    expect(cards.map((c) => c.section)).toEqual(['B01', 'B01', 'B01', 'B02', 'B02']);
   });
 
-  it('id 는 두 자리로 0 을 채운 `B` 접두사 형식이다', () => {
+  it('id 는 `B섹션(두 자리)-순번` 이고 section 은 쪼개기 전 id 다', () => {
     const [first] = parseBogang('### 보강 7: 일곱\n### 보강 42: 마흔둘\n### 보강 119: 백열아홉\n');
-    expect(first.id).toBe('B07');
-    expect(parseBogang('### 보강 42: 마흔둘\n')[0].id).toBe('B42');
-    expect(parseBogang('### 보강 119: 백열아홉\n')[0].id).toBe('B119');
+    expect(first).toMatchObject({ id: 'B07-1', section: 'B07' });
+    expect(parseBogang('### 보강 42: 마흔둘\n')[0].id).toBe('B42-1');
+    expect(parseBogang('### 보강 119: 백열아홉\n')[0].id).toBe('B119-1');
   });
 
-  it('question 은 `[암기 ...]` 대괄호 주석을 제거하고 `[보강]` 을 앞에 붙인다', () => {
-    const [first] = parseBogang(sample);
-    expect(first.question).toBe('[보강] C언어 서식문자열 & 제어문자');
+  it('question 은 `[암기 ...]` 대괄호 주석을 제거하고 `[보강]` 을 앞에 붙이며, 덩어리 제목을 잇는다', () => {
+    const cards = parseBogang(sample);
+    expect(cards[0].question).toBe('[보강] C언어 서식문자열 & 제어문자 — 서식문자열');
+    expect(cards[1].question).toBe('[보강] C언어 서식문자열 & 제어문자 — 제어문자');
+    expect(cards[2].question).toBe('[보강] C언어 서식문자열 & 제어문자 — 자주 나오는 함정');
+    expect(cards[3].question).toBe('[보강] 연산자 우선순위'); // 제목 없는 덩어리는 섹션 제목만
+    expect(cards[4].question).toBe('[보강] 연산자 우선순위 — 암기');
   });
 
-  it('answer 는 다음 `### 보강` 헤딩 직전까지 모은다', () => {
-    const [first] = parseBogang(sample);
-    expect(first.answer).toContain('%d  정수 10진수');
-    expect(first.answer).toContain('**자주 나오는 함정**');
-    expect(first.answer).not.toContain('연산자 우선순위');
+  it('카드 한 장짜리 섹션은 질문이 섹션 제목 그대로다', () => {
+    const [card] = parseBogang('### 보강 3: 단일 [암기 001]\n```\n한 줄\n```\n');
+    expect(card.question).toBe('[보강] 단일');
+    expect(card.answer).toBe('```\n한 줄\n```');
+  });
+
+  it('answer 는 그 덩어리만 담고 본문은 고치지 않는다 (코드블록으로 다시 감싼다)', () => {
+    const cards = parseBogang(sample);
+    expect(cards[0].answer.startsWith('```\n서식문자열:')).toBe(true);
+    expect(cards[0].answer).toContain('%d  정수 10진수');
+    expect(cards[0].answer).not.toContain('제어문자:');
+    expect(cards[1].answer).toContain('\\n  줄바꿈(new line)');
+    expect(cards[2].answer).toContain('**자주 나오는 함정**');
+    expect(cards[2].answer).toContain('printf("ABC\\rDE")');
+    expect(cards.map((c) => c.answer).join('\n')).not.toContain('### 보강');
+  });
+
+  it('덩어리 앞의 공통 들여쓰기는 걷는다', () => {
+    const [card] = parseBogang('### 보강 1: 제목\n```\n  A:\n    a\n```\n');
+    expect(card.answer).toBe('```\nA:\n  a\n```');
+  });
+
+  it('같은 층에 항목이 여럿인 덩어리는 맨 윗줄을 제목으로 쓰지 않고, 둘 이상이면 용어 나열로 가른다', () => {
+    const cards = parseBogang(
+      '### 보강 1: 제목\n```\n절차적: C\n객체지향: Java\n\n스미싱: SMS\n웜: 복제\n\n에이징: 기다림\n```\n'
+    );
+    expect(cards.map((c) => c.question)).toEqual([
+      '[보강] 제목 — 절차적 · 객체지향',
+      '[보강] 제목 — 스미싱 · 웜',
+      '[보강] 제목 — 에이징',
+    ]);
+  });
+
+  it('제목 없는 덩어리가 하나뿐이면 섹션 제목만 쓴다', () => {
+    const cards = parseBogang('### 보강 1: 제목\n```\n절차적: C\n객체지향: Java\n\n에이징: 기다림\n```\n');
+    expect(cards[0].question).toBe('[보강] 제목');
+    expect(cards[1].question).toBe('[보강] 제목 — 에이징');
+  });
+
+  it('한 줄에 항목 둘(`A: … / B: …`)이면 두 용어를 잇는다', () => {
+    const cards = parseBogang('### 보강 1: 제목\n```\nARP: IP → MAC  /  RARP: MAC → IP\n\n프로토콜 3요소: 구문\n```\n');
+    expect(cards[0].question).toBe('[보강] 제목 — ARP · RARP');
   });
 
   it('answer 는 `## Part` 헤딩에서도 멈춘다', () => {
@@ -44,6 +85,7 @@ describe('parseBogang — 실제 콘텐츠 형식', () => {
   it('question 키워드로 카테고리를 매핑한다', () => {
     const [first] = parseBogang(sample);
     expect(first.category).toBe('OS/기타'); // 'C언어' → OS/기타
+    expect(new Set(parseBogang(sample).slice(0, 3).map((c) => c.category))).toEqual(new Set(['OS/기타'])); // 섹션의 모든 카드가 같다
 
     const map = (title) => parseBogang(`### 보강 1: ${title}\n내용\n`)[0].category;
     expect(map('UML 다이어그램 상세')).toBe('디자인패턴/UML');

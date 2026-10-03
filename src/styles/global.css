@@ -58,7 +58,7 @@
   --code-bg: #1e2030;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+/* 전역 리셋은 reset.css 로 옮겼다 — 레이어(base)에 두어 Tailwind 유틸리티(`tw:p-4` 등)가 이길 수 있게 한다. */
 
 *:focus-visible {
   outline: 2px solid var(--ring);
@@ -182,6 +182,7 @@ button:active { transform: scale(0.97); }
   color: var(--text-dim);
   font-weight: 500;
   font-size: 0.95rem;
+  white-space: nowrap;
   border-bottom: 3px solid transparent;
   transition: all 0.2s;
 }
@@ -201,7 +202,8 @@ button:active { transform: scale(0.97); }
 .page {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 32px 24px;
+  /* 아래쪽은 오른쪽 아래에 떠 있는 '공식' 버튼이 마지막 내용을 가리지 않도록 비워 둔다 */
+  padding: 32px 24px 96px;
 }
 
 .page h1 {
@@ -560,35 +562,6 @@ button:active { transform: scale(0.97); }
 .badge-success { background: rgba(74,222,128,0.2); color: var(--success); }
 .badge-warning { background: rgba(251,191,36,0.2); color: var(--warning); }
 .badge-danger { background: rgba(248,113,113,0.2); color: var(--danger); }
-/* AI 변형 문항 — 교재 문항이 이미 쓰는 네 색과 겹치지 않도록 accent 를 쓴다 */
-.badge-accent { background: rgba(var(--accent-rgb),0.2); color: var(--accent); }
-
-/* ═══ AI 변형 문제 (Phase 4) ═══ */
-
-/* 필터 바의 다른 버튼과 같은 생김새를 쓰되, 켜졌을 때만 accent 로 구분한다 */
-.variant-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.variant-toggle.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(var(--accent-rgb), 0.1);
-}
-
-/* 정답을 읽는 바로 그 자리에서 출처를 한 번 더 알린다 */
-.generated-notice {
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: rgba(var(--accent-rgb), 0.08);
-  color: var(--text);
-  font-size: 0.85rem;
-  line-height: 1.6;
-}
 
 /* Dashboard */
 .recommend-card {
@@ -650,49 +623,12 @@ button:active { transform: scale(0.97); }
 }
 
 /* Day grid */
-.day-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 10px;
-}
 
-.day-card {
-  text-align: center;
-  padding: 14px 8px !important;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-bottom: 0 !important;
-}
 
-.day-card:hover {
-  border-color: var(--primary-dim);
-  transform: translateY(-2px);
-}
 
-.day-card.completed {
-  border-color: var(--success);
-  background: rgba(74, 222, 128, 0.05);
-}
 
-.day-check {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary);
-  margin-bottom: 4px;
-}
 
-.day-num {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--primary);
-}
 
-.day-label {
-  font-size: 0.7rem;
-  color: var(--text-dim);
-  margin-top: 2px;
-}
 
 .logo-link {
   text-decoration: none !important;
@@ -823,8 +759,91 @@ button:active { transform: scale(0.97); }
     -webkit-tap-highlight-color: transparent;
   }
 
-  .mobile-tab-bar a.active {
+  .mobile-tab-bar a.active,
+  .mobile-tab-bar .mobile-more-button.active,
+  .mobile-tab-bar .mobile-more-button.open {
     color: var(--primary);
+  }
+
+  /* "더보기" 는 탭과 같은 모양의 버튼이다 */
+  .mobile-tab-bar .mobile-more-button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    transition: color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-more-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .mobile-more-sheet {
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    z-index: 120;
+    padding: var(--space-sm);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .mobile-more-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-xs);
+  }
+
+  .mobile-more-list a {
+    flex: none;
+    flex-direction: row;
+    justify-content: center;
+    gap: 6px;
+    min-height: 48px;
+    padding: 8px 6px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .mobile-more-list a.active {
+    color: var(--primary);
+    background: var(--bg-hover);
+  }
+
+  .mobile-more-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    padding-top: var(--space-sm);
+    border-top: 1px solid var(--border);
+  }
+
+  .mobile-more-actions button {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 0.85rem;
   }
 
   .mobile-tab-bar .tab-icon {
@@ -970,15 +989,7 @@ button:active { transform: scale(0.97); }
   .dash-stat-icon { /* SVG sized via props */ }
   .dash-stat-value { font-size: 1.4rem; }
 
-  .day-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 8px;
-  }
 
-  .day-card { padding: 10px 4px !important; }
-  .day-check { /* SVG sized via props */ }
-  .day-num { font-size: 0.7rem; }
-  .day-label { font-size: 0.65rem; }
 
   /* General touch targets */
   button { min-height: 44px; }
@@ -1831,226 +1842,9 @@ html { scroll-behavior: smooth; }
   .dashboard-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
 }
 
-/* ─── AI 해설 패널 ─── */
-.ai-explain {
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--border);
-}
+/* ─── 학습 노트 검색 결과의 문서 링크 ─── */
 
-.ai-explain-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.ai-explain-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin-right: auto;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.ai-explain-action {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 6px 14px;
-  font-size: 0.85rem;
-}
-
-.ai-explain-output {
-  margin-top: var(--space-sm);
-  padding: var(--space-md);
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.9rem;
-}
-
-.ai-explain-output .md-content > *:last-child {
-  margin-bottom: 0;
-}
-
-/* 스트리밍 중임을 알리는 커서 — 본문 흐름을 밀지 않도록 인라인 블록 */
-.ai-explain-caret {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  vertical-align: text-bottom;
-  background: var(--primary);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .ai-explain-caret {
-    animation: ai-explain-blink 1s steps(2, start) infinite;
-  }
-  @keyframes ai-explain-blink {
-    50% { opacity: 0; }
-  }
-}
-
-.ai-explain-error {
-  margin-top: var(--space-sm);
-}
-
-.ai-explain-error-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  color: var(--danger);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.ai-explain-hint {
-  margin-top: var(--space-sm);
-  font-size: 0.82rem;
-  color: var(--text-dim);
-}
-
-/* ─── 오늘의 계획 카드 (Phase 2 학습 플래너) ─── */
-
-.plan-card {
-  margin-bottom: var(--space-lg);
-}
-
-.plan-card-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-md);
-}
-
-.plan-card-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.plan-card-date {
-  font-size: 0.82rem;
-  color: var(--text-dim);
-  margin-right: auto;
-}
-
-.plan-card-action {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 6px 14px;
-  font-size: 0.85rem;
-  flex-shrink: 0;
-}
-
-.plan-card-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-sm);
-}
-
-.plan-minutes-label {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: 0.85rem;
-  color: var(--text-dim);
-}
-
-.plan-minutes-select {
-  font-size: 0.85rem;
-  padding: 6px 8px;
-  width: auto;
-}
-
-.plan-card-hint {
-  margin-top: var(--space-sm);
-  font-size: 0.82rem;
-  color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.plan-card-warn {
-  color: var(--danger);
-}
-
-/* 진행 표시 — 60초까지 걸릴 수 있어 화면이 살아 있다는 신호가 필요하다 */
-.plan-spinner {
-  width: 14px;
-  height: 14px;
-  border-width: 2px;
-  margin: 0;
-  flex-shrink: 0;
-}
-
-.plan-steps {
-  list-style: none;
-  margin: var(--space-sm) 0 0;
-  padding: 0;
-}
-
-.plan-step {
-  font-size: 0.85rem;
-  color: var(--text-dim);
-  padding: 2px 0 2px var(--space-md);
-  border-left: 2px solid var(--border);
-}
-
-.plan-step:last-child {
-  color: var(--primary);
-  border-left-color: var(--primary);
-}
-
-.plan-items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-.plan-item {
-  padding: var(--space-sm) var(--space-md);
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.plan-item-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-.plan-item-title {
-  font-weight: 600;
-  font-size: 0.95rem;
-  margin-right: auto;
-}
-
-.plan-item-minutes {
-  flex-shrink: 0;
-}
-
-.plan-item-why {
-  margin: var(--space-xs) 0 0;
-  font-size: 0.85rem;
-  color: var(--text-dim);
-}
-
-.plan-item-link {
+.note-link {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
@@ -2059,171 +1853,7 @@ html { scroll-behavior: smooth; }
   font-weight: 500;
 }
 
-.plan-card-foot {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--space-sm);
-}
-
-.plan-total {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--primary);
-}
-
-.plan-rationale {
-  margin: var(--space-sm) 0 0;
-  padding-left: var(--space-md);
-  border-left: 3px solid var(--accent);
-  font-size: 0.88rem;
-  color: var(--text-dim);
-}
-
-.plan-risks {
-  list-style: none;
-  margin: var(--space-sm) 0 0;
-  padding: 0;
-}
-
-.plan-risk {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: 0.85rem;
-  color: var(--warning);
-}
-
-.plan-error {
-  margin-top: var(--space-sm);
-}
-
-.plan-error-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  color: var(--danger);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-/* ─── AI 채점 패널 (Phase 3 자동 채점) ─── */
-
-.ai-grade {
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--border);
-}
-
-.ai-grade-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.ai-grade-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin-right: auto;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.ai-grade-action {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: 6px 14px;
-  font-size: 0.85rem;
-}
-
-.ai-grade-hint {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-top: var(--space-sm);
-  font-size: 0.82rem;
-  color: var(--text-dim);
-}
-
-.ai-grade-spinner {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-
-.ai-grade-result {
-  margin-top: var(--space-sm);
-  padding: var(--space-md);
-  background: var(--bg-hover);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.9rem;
-}
-
-/* 확신이 낮은 판정은 테두리로도 구분한다 — 색만으로 알리지 않는다 */
-.ai-grade-result.ai-grade-uncertain {
-  border-style: dashed;
-  border-color: var(--warning);
-}
-
-.ai-grade-verdict {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.ai-grade-score {
-  font-weight: 700;
-  color: var(--text);
-}
-
-.ai-grade-uncertain-badge {
-  margin-left: auto;
-}
-
-.ai-grade-fallback {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-xs);
-  margin: var(--space-sm) 0 0;
-  font-size: 0.85rem;
-  color: var(--warning);
-}
-
-.ai-grade-feedback {
-  margin: var(--space-sm) 0 0;
-  line-height: 1.65;
-}
-
-.ai-grade-missed {
-  margin: var(--space-sm) 0 0;
-  padding-left: 1.2em;
-  font-size: 0.85rem;
-  color: var(--text-dim);
-}
-
-.ai-grade-missed-item {
-  margin-bottom: 4px;
-}
-
-.ai-grade-error {
-  margin-top: var(--space-sm);
-}
-
-.ai-grade-error-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  color: var(--danger);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-/* ─── 자기 채점 (AI 채점의 폴백이자 기본 흐름) ─── */
+/* ─── 직접 채점 ─── */
 
 .self-grade {
   display: flex;
@@ -2290,23 +1920,7 @@ html { scroll-behavior: smooth; }
   color: var(--text-dim);
 }
 
-.goal-done {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin: 0;
-  font-weight: 600;
-  color: var(--success, var(--primary));
-}
 
-.goal-units {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
 
 .goal-unit {
   display: flex;
@@ -2355,24 +1969,38 @@ html { scroll-behavior: smooth; }
   font-size: 0.85rem;
 }
 
-.goal-review {
-  padding: var(--space-md);
-  border: 1px dashed var(--border);
-  border-radius: 10px;
+.goal-roadmap-day {
+  align-items: flex-start;
 }
 
-.goal-review-links {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
+.goal-roadmap-day .road-topics {
+  margin-top: var(--space-xs);
+}
+
+.goal-lesson-link {
+  align-self: flex-start;
   margin-top: var(--space-sm);
-}
-
-.goal-review-link {
   text-decoration: none;
   font-size: 0.85rem;
   padding: 6px 14px;
 }
+
+.goal-late {
+  color: var(--warning);
+}
+
+@media (max-width: 640px) {
+  .goal-roadmap-day {
+    flex-direction: column;
+  }
+  .goal-roadmap-day .goal-check {
+    align-self: stretch;
+    justify-content: center;
+  }
+}
+
+
+
 
 .goal-meta {
   margin: 0;
@@ -2485,3 +2113,725 @@ html { scroll-behavior: smooth; }
   flex-basis: 100%;
   margin: 0;
 }
+
+/* ─── 영역 안내 ─── */
+
+.guide-section {
+  margin-bottom: var(--space-lg);
+}
+
+.guide-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-md);
+  font-size: 1.1rem;
+}
+
+.guide-overview {
+  margin: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.guide-overview-row {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  gap: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-overview-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.guide-overview dt {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+}
+
+.guide-overview dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.guide-areas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.guide-area {
+  display: flex;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.guide-area.is-core {
+  border-color: var(--danger);
+}
+
+.guide-area.is-calc {
+  border-color: var(--warning);
+}
+
+.guide-area-no {
+  flex-shrink: 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--primary);
+}
+
+.guide-area-body {
+  min-width: 0;
+}
+
+.guide-area-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.guide-area-detail {
+  margin: var(--space-xs) 0 0;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.guide-weights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-md);
+}
+
+.guide-weight {
+  padding: var(--space-md);
+  border-left: 4px solid var(--border);
+  border-radius: 4px;
+  background: rgba(var(--primary-rgb), 0.06);
+}
+
+.guide-weight.is-core {
+  border-left-color: var(--danger);
+}
+
+.guide-weight.is-calc {
+  border-left-color: var(--warning);
+}
+
+.guide-weight p {
+  margin: var(--space-xs) 0 0;
+}
+
+@media (max-width: 480px) {
+  .guide-overview-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* ─── 25일 로드맵 ─── */
+
+.road-controls {
+  margin-bottom: var(--space-lg);
+}
+
+.road-controls-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-sm);
+  font-size: 1.1rem;
+}
+
+.road-hint {
+  margin: var(--space-sm) 0 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.road-gauge {
+  margin-top: var(--space-md);
+}
+
+.road-gauge-label {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.road-phase {
+  margin-bottom: var(--space-lg);
+}
+
+.road-phase-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.road-phase-no {
+  color: var(--primary);
+}
+
+.road-phase-range {
+  margin-left: auto;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.road-phase-focus {
+  margin: var(--space-xs) 0 var(--space-sm);
+  font-size: 0.88rem;
+  color: var(--text-dim);
+}
+
+.road-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.road-day {
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-bg, transparent);
+}
+
+.road-day.is-today {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.18);
+}
+
+.road-day.is-done {
+  opacity: 0.65;
+}
+
+.road-day.is-late {
+  border-color: var(--warning);
+}
+
+.road-day-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.road-day-d {
+  font-weight: 800;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.road-day-date {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+}
+
+.road-day-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.road-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.road-topics {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.road-topic {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  font-size: 0.9rem;
+}
+
+.road-topic-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+@media (max-width: 480px) {
+  .road-phase-range {
+    margin-left: 0;
+    flex-basis: 100%;
+  }
+}
+
+
+/* ─── 실기 연습: 변수 추적표 · SQL 빈칸 ─── */
+
+/* 실습 컴포넌트(CodeTracingTable, SqlQuizCard) 전용 스타일 — global.css 에 합쳐 쓴다 */
+
+/* ── CodeTracingTable ── */
+.trace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+.trace-empty {
+  color: var(--text-dim);
+}
+.trace-modes,
+.trace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.trace-code {
+  margin: 0;
+  padding: var(--space-sm) 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 100%;
+}
+.trace-line {
+  display: block;
+  padding: 0 var(--space-md) 0 0;
+  white-space: pre;
+}
+.trace-line--active {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.trace-ln {
+  display: inline-block;
+  width: 2.5em;
+  margin-right: var(--space-sm);
+  text-align: right;
+  color: var(--text-dim);
+  user-select: none;
+}
+.trace-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.trace-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9rem;
+}
+.trace-table th,
+.trace-table td {
+  border: 1px solid var(--border);
+  padding: 4px var(--space-sm);
+  text-align: left;
+  vertical-align: top;
+}
+.trace-table thead th {
+  white-space: nowrap;
+}
+.trace-row--current {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.trace-cell--unset {
+  color: var(--text-dim);
+  text-align: center;
+}
+.trace-cell--ok {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+}
+.trace-cell--bad {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.trace-cell--revealed {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.trace-input {
+  width: 100%;
+  min-width: 5em;
+  box-sizing: border-box;
+}
+.trace-output code {
+  white-space: pre-wrap;
+}
+.trace-status {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--text-dim);
+}
+
+/* ── SqlQuizCard ── */
+.sqlq {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.sqlq-title {
+  margin: 0;
+}
+.sqlq-prompt {
+  margin: 0;
+}
+.sqlq-tables {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.sqlq-columns {
+  margin-left: 4px;
+  color: var(--text-dim);
+}
+.sqlq-code {
+  margin: 0;
+  padding: var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 2.2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.sqlq-input {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 6px;
+  margin: 0 2px;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+.sqlq-input--ok {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+}
+.sqlq-input--bad {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.sqlq-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.sqlq-status {
+  margin: 0;
+  min-height: 1.4em;
+  color: var(--text-dim);
+}
+.sqlq-solution {
+  margin: 0;
+  padding: var(--space-md);
+  border: 1px solid var(--success);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .trace-table {
+    font-size: 0.8rem;
+  }
+}
+
+/* ─── 실기 연습: 단답 채점기 · 공식 치트시트 ─── */
+
+/* ShortAnswerGrader(sag-*) 와 FormulaCheatSheetModal(cheat-*) 스타일.
+   색은 전역 토큰만 써서 다크모드에서 따로 손볼 곳이 없다. global.css 에 합쳐 쓴다. */
+
+/* ---------- ShortAnswerGrader ---------- */
+.sag { display: flex; flex-direction: column; gap: var(--space-sm); }
+.sag-topic { font-size: 0.8rem; color: var(--text-dim); }
+.sag-question { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+.sag-label { margin: 0; font-size: 0.85rem; color: var(--text-dim); }
+.sag-textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; }
+.sag-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.sag-answer {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* 매칭 구간: 배경은 성공색을 옅게 섞어 라이트·다크 모두에서 글자색이 읽힌다 */
+.sag-hit {
+  background: color-mix(in srgb, var(--success) 28%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.sag-score { margin: 0; font-weight: 700; }
+.sag-keywords { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.sag-kw {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm);
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.sag-kw-hit { color: var(--success); border-color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
+.sag-kw-miss { color: var(--danger); border-color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.sag-model {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-left: 3px solid var(--primary);
+  background: var(--bg-hover);
+  overflow-wrap: anywhere;
+}
+/* 화면에는 숨기고 스크린리더에만 읽히는 보조 문구 */
+.sag-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- FormulaCheatSheetModal ---------- */
+.cheat-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.55);
+}
+.cheat-modal {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-md);
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.cheat-head {
+  position: sticky;
+  top: calc(var(--space-md) * -1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin: calc(var(--space-md) * -1) calc(var(--space-md) * -1) var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+}
+.cheat-title { margin: 0; font-size: 1.15rem; }
+.cheat-section { padding: var(--space-sm) 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.cheat-section:last-child { border-bottom: 0; }
+.cheat-section h3 { margin: 0 0 var(--space-sm); font-size: 1rem; color: var(--primary); }
+.cheat-section p { margin: var(--space-xs) 0; }
+.cheat-note { color: var(--text-dim); font-size: 0.85rem; }
+.cheat-formula {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-hover);
+  border-radius: 8px;
+  font-weight: 700;
+  text-align: center;
+}
+.cheat-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.cheat-table th,
+.cheat-table td { padding: var(--space-xs) var(--space-sm); border-bottom: 1px solid var(--border); text-align: left; }
+.cheat-table td:last-child,
+.cheat-table th:last-child { text-align: right; }
+.cheat-list,
+.cheat-faults { margin: var(--space-xs) 0; padding-left: var(--space-md); }
+.cheat-hrn { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--space-sm); }
+.cheat-frac { display: inline-flex; flex-direction: column; align-items: center; }
+.cheat-frac-num { padding: 0 var(--space-sm) 2px; border-bottom: 2px solid var(--text); }
+.cheat-frac-den { padding: 2px var(--space-sm) 0; }
+
+@media (max-width: 480px) {
+  .cheat-backdrop { padding: var(--space-sm); }
+  .cheat-table { font-size: 0.8rem; }
+  .cheat-table th,
+  .cheat-table td { padding: var(--space-xs); }
+}
+
+/* 공식 치트시트 열기 — 모든 화면 오른쪽 아래에 떠 있는 버튼. 모바일에서는 하단 탭바 위로 올린다 */
+.cheat-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 20px;
+  z-index: 90;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--primary);
+  background: var(--bg-card);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.88rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.cheat-fab:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+@media (max-width: 768px) {
+  .cheat-fab {
+    bottom: 76px;
+  }
+}
+
+.navbar .cheat-nav-button {
+  margin-left: auto;
+  margin-right: var(--space-sm);
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+/* 실기 연습 화면 */
+.practice-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.practice-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.practice-picker .btn-outline {
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+.practice-title {
+  margin: 0 0 var(--space-sm);
+  font-size: 1.05rem;
+}
+
+/* 모의고사 결과의 '정답 확인' — 문제와 정답을 나란히 */
+.exam-review-problem {
+  margin-top: var(--space-sm);
+}
+
+.exam-review-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.exam-review-question {
+  margin: 4px 0 0;
+  line-height: 1.6;
+}
+
+/* ─── 상단 내비게이션 드롭다운 ─── */
+
+.nav-dropdown {
+  position: relative;
+}
+
+.nav-dropdown-toggle {
+  padding: 16px 20px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.nav-dropdown-toggle:hover,
+.nav-dropdown-toggle.is-open {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.nav-dropdown-toggle.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.nav-dropdown-caret {
+  font-size: 0.7rem;
+  margin-left: 2px;
+}
+
+.nav-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 110;
+  min-width: 160px;
+  margin: 0;
+  padding: var(--space-xs) 0;
+  list-style: none;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+/* `.navbar a` 의 상단 탭 스타일(큰 여백·아래 밑줄)을 메뉴 항목에서는 덮어쓴다 */
+.navbar .nav-dropdown-menu a {
+  display: block;
+  padding: 10px 18px;
+  border-bottom: 0;
+}
+
+.navbar .nav-dropdown-menu a.active {
+  color: var(--primary);
+  background: rgba(var(--primary-rgb), 0.1);
+}
+

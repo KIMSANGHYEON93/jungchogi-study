@@ -35,22 +35,37 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('학습 노트 예정일 배너', () => {
-  it('Day 01 은 오늘(10/1) 배정으로 보인다', async () => {
+describe('학습 노트 로드맵 배너', () => {
+  it('Day 01 문서는 로드맵 D-24 · D-23 · D-22 에서 다룬다고 알려준다 (시험일 기준)', async () => {
     const { container, unmount } = render('/study');
     await flush();
-    const note = container.querySelector('.study-planned').textContent;
-    expect(note).toContain('예정일 10/1(목)');
-    expect(note).toContain('D-24');
-    expect(note).toContain('2026.10.25');
+    const note = container.querySelector('.study-planned');
+    expect(note.textContent).toContain('로드맵 D-24 10/1(목) · D-23 10/2(금) · D-22 10/3(토)');
+    expect(note.textContent).toContain('2026.10.25');
+    expect(note.querySelector('a').getAttribute('href')).toBe('/roadmap');
     unmount();
   });
 
-  it('완료한 Day 는 완료로 표시한다', async () => {
-    saveProgress('day_checks', { 1: true });
+  it('로드맵에서 그 문서의 일차를 모두 끝냈으면 완료로 표시한다', async () => {
+    saveProgress('roadmap_checks', { 24: true, 23: true, 22: true });
     const { container, unmount } = render('/study');
     await flush();
-    expect(container.querySelector('.study-planned').textContent).toContain('완료한 Day');
+    expect(container.querySelector('.study-planned').textContent).toContain('로드맵에서 완료한 문서');
+    unmount();
+  });
+
+  it('일부만 끝냈으면 완료가 아니다', async () => {
+    saveProgress('roadmap_checks', { 24: true });
+    const { container, unmount } = render('/study');
+    await flush();
+    expect(container.querySelector('.study-planned').textContent).not.toContain('완료한');
+    unmount();
+  });
+
+  it('로드맵에 배정되지 않은 Day 문서는 복습용이라고 알려준다 (Day 07)', async () => {
+    const { container, unmount } = render('/study?day=7');
+    await flush();
+    expect(container.querySelector('.study-planned').textContent).toContain('복습용');
     unmount();
   });
 

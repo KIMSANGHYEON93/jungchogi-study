@@ -1,3 +1,5 @@
+import { expandLegacyBogangKnown } from '../domain/bogangDeck';
+
 const PREFIX = 'jungchogi_';
 
 // 브라우저마다 용량 초과 예외의 name/code 가 다르다.
@@ -66,6 +68,35 @@ export function clearProgress(key) {
     console.warn('[storage] flashcard_known 마이그레이션을 건너뜁니다.', err);
   }
 })();
+
+// ─── 마이그레이션: 암기 119선 외움 기록 섹션 단위(B07) → 카드 단위(B07-1, B07-2) ───
+// 덱을 섹션 단위 카드에서 덩어리 단위 카드로 쪼갰다(domain/bogangDeck.js). 옛 기록 `{ B07: true }` 는
+// 그 섹션의 모든 카드를 외운 것으로 펼친다. md 를 받지 않고도 돌도록 섹션별 카드 수는 상수를 쓴다.
+export function migrateBogangKnown() {
+  const key = 'flashcard_known_bogang119';
+  let raw;
+  try {
+    raw = localStorage.getItem(PREFIX + key);
+  } catch {
+    return false;
+  }
+  if (!raw) return false;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return false; // 깨진 값은 건드리지 않는다
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+  const { known, changed } = expandLegacyBogangKnown(parsed);
+  return changed ? saveProgress(key, known) : false;
+}
+
+try {
+  migrateBogangKnown();
+} catch {
+  /* 저장소 접근이 막힌 환경 — 위 마이그레이션과 같은 이유로 건너뛴다 */
+}
 
 // ─── 오답노트 ───
 
@@ -214,8 +245,6 @@ export function getSpacedRepetitionDue() {
 
   return notes.filter((n) => {
     // 노트가 아닌 값이 섞여 있어도 복습 화면이 죽지 않게 한다.
-    // 서버판(`lib/ai/spacedRepetition.js` 의 selectDueReviews)과 같은 판정이다 —
-    // 두 구현의 동치성은 `tests/plan-spaced-repetition.test.js` 가 잡고 있다.
     if (!n || typeof n !== 'object') return false;
     if (n.mastered) return false;
     const lastTime = n.lastReviewed || n.addedAt;
@@ -226,65 +255,6 @@ export function getSpacedRepetitionDue() {
   });
 }
 
-// ─── 학습 플랜 (StudyPlan 애그리게이트) ───
-
-// 날짜별로 키가 하나씩 늘어나므로 상한이 필요하다. 한 주치만 남긴다 —
-// 지난 계획은 참고용이고, 무제한으로 쌓이면 대시보드 "데이터 관리"의
-// 용량 표시를 계획 데이터가 잠식한다.
-export const MAX_STORED_PLANS = 7;
-
-const STUDY_PLAN_PREFIX = 'study_plan_';
-const STUDY_PLAN_KEY_PREFIX = PREFIX + STUDY_PLAN_PREFIX;
-const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** 저장된 계획의 날짜를 최신순으로 돌려준다. */
-export function listStudyPlanDates() {
-  const dates = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key.startsWith(STUDY_PLAN_KEY_PREFIX)) continue;
-    const date = key.slice(STUDY_PLAN_KEY_PREFIX.length);
-    // 접두사만 맞고 날짜가 아닌 키(수동 편집·구버전 잔재)는 계획으로 세지 않는다
-    if (DATE_KEY_RE.test(date)) dates.push(date);
-  }
-  // 날짜 키가 YYYY-MM-DD 라 사전순 정렬이 곧 시간순 정렬이다
-  return dates.sort().reverse();
-}
-
-/**
- * 최신 `keep` 개만 남기고 오래된 계획을 지운다.
- * @returns {string[]} 지운 날짜
- */
-export function pruneStudyPlans(keep = MAX_STORED_PLANS) {
-  const removed = listStudyPlanDates().slice(Math.max(keep, 0));
-  removed.forEach((date) => clearProgress(STUDY_PLAN_PREFIX + date));
-  return removed;
-}
-
-/**
- * @param {string} dateKey 로컬 기준 YYYY-MM-DD
- * @returns {import('../domain/studyPlan.js').StudyPlan|null}
- */
-export function getStudyPlan(dateKey) {
-  return loadProgress(STUDY_PLAN_PREFIX + dateKey, null);
-}
-
-/**
- * 계획을 저장한다. 같은 날짜면 덮어쓴다(재생성).
- * 쓰기 전에 오래된 계획을 정리해 키가 무한정 늘어나지 않게 한다.
- * @returns {boolean} 저장 성공 여부 (용량 초과 시 false)
- */
-export function saveStudyPlan(plan) {
-  const date = plan?.date;
-  if (typeof date !== 'string' || date === '') return false;
-  // 덮어쓸 자기 날짜는 정리 대상에서 빼야 총 개수가 MAX_STORED_PLANS 로 맞는다
-  listStudyPlanDates()
-    .filter((d) => d !== date)
-    .slice(MAX_STORED_PLANS - 1)
-    .forEach((d) => clearProgress(STUDY_PLAN_PREFIX + d));
-  return saveProgress(STUDY_PLAN_PREFIX + date, plan);
-}
-
 // ─── 모의고사 채점 결과 (Phase 3) ───
 
 /**
@@ -293,11 +263,10 @@ export function saveStudyPlan(plan) {
  * `quiz_results` 는 id 만 키로 쓰는 평평한 맵이고 코드 퀴즈 40문항 진도
  * (대시보드 `quizDone/40`, 코드 퀴즈 화면의 "남은 문제")가 거기 걸려 있다.
  * 모의고사는 단답형(`042`)과 코드 드릴(`C-01`)을 섞어 내므로 같은 맵에 쓰면
- * 진도가 40 을 넘는다. 변형 채점(`variant_results`)을 가른 것과 같은 이유다.
+ * 진도가 40 을 넘는다.
  *
  * 값은 `quiz_results` 와 **같은 세 가지**다 — `'correct'|'incorrect'|'answered'`
- * (`domain/grading.js` 의 `QUIZ_RESULT`). 읽는 쪽(서버 `get_weak_categories`)이
- * 두 맵을 한 규칙으로 세려면 값 계약이 같아야 한다.
+ * (`domain/grading.js` 의 `QUIZ_RESULT`).
  */
 export const EXAM_RESULTS_KEY = 'exam_results';
 
@@ -306,7 +275,7 @@ export const EXAM_RESULTS_KEY = 'exam_results';
  */
 export function getExamResults() {
   // 오답노트·학습시간과 같은 이유로 여기서 형태를 보장한다 —
-  // 읽는 쪽(스냅샷·약점 분석)이 전부 `{id: 상태}` 맵을 전제한다.
+  // 읽는 쪽이 전부 `{id: 상태}` 맵을 전제한다.
   // `JSON.parse('null')` 은 예외가 아니라 fallback 을 타지 않는다.
   const results = loadProgress(EXAM_RESULTS_KEY, {});
   return results !== null && typeof results === 'object' && !Array.isArray(results) ? results : {};
@@ -318,47 +287,4 @@ export function getExamResults() {
  */
 export function saveExamResults(results) {
   return saveProgress(EXAM_RESULTS_KEY, results);
-}
-
-// ─── AI 변형 문제 (Phase 4) ───
-
-/**
- * 변형 문항을 학습에 포함할지.
- *
- * **기본값은 꺼짐이다.** 변형은 AI 가 만든 문항이고 교재가 아니다.
- * 검수를 통과했더라도 정답의 근거는 교재보다 약하며, 켜는 순간 덱 크기가 바뀐다.
- * 기존 사용자가 아무것도 하지 않았는데 학습 대상이 늘어나는 쪽이 더 나쁘므로 옵트인으로 둔다.
- */
-const INCLUDE_VARIANTS_KEY = 'include_variants';
-
-/** 변형 채점 결과. `quiz_results` 와 **절대 섞지 않는다** (아래 주석 참조) */
-export const VARIANT_RESULTS_KEY = 'variant_results';
-
-/**
- * 변형 카드의 "외움" 표시. 덱마다 따로 둔다.
- *
- * 교재 진도 맵(`quiz_results`·`flashcard_known_*`)은 분모가 고정돼 있다 —
- * 코드 퀴즈 40, 단답형 100, 보강 24. 변형 진도가 같은 맵에 들어가면
- * 대시보드 진도가 100% 를 넘고 종합 달성률이 부풀려진다.
- * 그래서 키를 갈라 둔다. 모의고사 결과를 `quiz_results` 에 쓰지 않는 것과 같은 이유다.
- *
- * @param {string} deck `quiz100` | `bogang119`
- */
-export function variantKnownKey(deck) {
-  return `variant_known_${deck}`;
-}
-
-/** @returns {boolean} */
-export function getIncludeVariants() {
-  // 정확히 boolean true 일 때만 켜진 것으로 본다 —
-  // 손상됐거나 구버전 형식인 값이 "켜짐"으로 읽히면 안 된다
-  return loadProgress(INCLUDE_VARIANTS_KEY, false) === true;
-}
-
-/**
- * @param {boolean} on
- * @returns {boolean} 저장 성공 여부
- */
-export function setIncludeVariants(on) {
-  return saveProgress(INCLUDE_VARIANTS_KEY, on === true);
 }

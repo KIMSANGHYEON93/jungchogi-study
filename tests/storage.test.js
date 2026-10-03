@@ -18,15 +18,6 @@ import {
   formatBytes,
   getSpacedRepetitionDue,
   toLocalDateKey,
-  saveStudyPlan,
-  getStudyPlan,
-  listStudyPlanDates,
-  pruneStudyPlans,
-  MAX_STORED_PLANS,
-  getIncludeVariants,
-  setIncludeVariants,
-  VARIANT_RESULTS_KEY,
-  variantKnownKey,
   EXAM_RESULTS_KEY,
   getExamResults,
   saveExamResults,
@@ -388,142 +379,7 @@ describe('toLocalDateKey', () => {
   });
 });
 
-describe('saveStudyPlan / getStudyPlan', () => {
-  const plan = (date) => ({
-    date,
-    items: [{ type: 'review_wrong', source: 'quiz100', ids: ['042'], minutes: 20, why: '틀림' }],
-    rationale: '오답부터',
-    riskFlags: [],
-  });
-
-  it('`study_plan_<date>` 키로 저장하고 그대로 다시 읽는다', () => {
-    expect(saveStudyPlan(plan('2026-09-03'))).toBe(true);
-    expect(localStorage.getItem(`${PREFIX}study_plan_2026-09-03`)).not.toBeNull();
-    expect(getStudyPlan('2026-09-03')).toEqual(plan('2026-09-03'));
-  });
-
-  it('저장된 계획이 없는 날짜는 null 이다', () => {
-    expect(getStudyPlan('2026-09-03')).toBeNull();
-  });
-
-  it('같은 날짜로 다시 저장하면 덮어쓴다 (재생성)', () => {
-    saveStudyPlan(plan('2026-09-03'));
-    const regenerated = { ...plan('2026-09-03'), rationale: '다시 세운 계획' };
-    saveStudyPlan(regenerated);
-    expect(getStudyPlan('2026-09-03').rationale).toBe('다시 세운 계획');
-    expect(listStudyPlanDates()).toEqual(['2026-09-03']);
-  });
-
-  it('date 가 없는 계획은 저장하지 않는다', () => {
-    expect(saveStudyPlan({ items: [] })).toBe(false);
-    expect(saveStudyPlan(null)).toBe(false);
-    expect(listStudyPlanDates()).toEqual([]);
-  });
-
-  it('용량이 꽉 차면 false 를 돌려주고 예외를 던지지 않는다', () => {
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      const err = new Error('quota');
-      err.name = 'QuotaExceededError';
-      throw err;
-    });
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(saveStudyPlan(plan('2026-09-03'))).toBe(false);
-  });
-});
-
-describe('listStudyPlanDates / pruneStudyPlans', () => {
-  const save = (date) => saveStudyPlan({ date, items: [], rationale: '', riskFlags: [] });
-
-  it('저장된 날짜를 최신순으로 돌려준다', () => {
-    save('2026-09-01');
-    save('2026-09-03');
-    save('2026-09-02');
-    expect(listStudyPlanDates()).toEqual(['2026-09-03', '2026-09-02', '2026-09-01']);
-  });
-
-  it('플랜이 아닌 jungchogi_ 키는 세지 않는다', () => {
-    saveProgress('day_checks', { 1: true });
-    save('2026-09-03');
-    expect(listStudyPlanDates()).toEqual(['2026-09-03']);
-  });
-
-  it('저장할 때마다 오래된 계획을 MAX_STORED_PLANS 개까지만 남긴다', () => {
-    for (let d = 1; d <= 10; d++) save(`2026-09-${String(d).padStart(2, '0')}`);
-    const dates = listStudyPlanDates();
-    expect(dates).toHaveLength(MAX_STORED_PLANS);
-    expect(dates[0]).toBe('2026-09-10');
-    expect(dates.at(-1)).toBe(`2026-09-0${10 - MAX_STORED_PLANS + 1}`);
-  });
-
-  it('pruneStudyPlans 는 지운 날짜를 돌려준다', () => {
-    save('2026-09-01');
-    save('2026-09-02');
-    save('2026-09-03');
-    expect(pruneStudyPlans(1)).toEqual(['2026-09-02', '2026-09-01']);
-    expect(listStudyPlanDates()).toEqual(['2026-09-03']);
-  });
-
-  it('전체 초기화가 플랜 키도 함께 지우도록 jungchogi_ 접두사를 쓴다', () => {
-    save('2026-09-03');
-    const keys = Object.keys(localStorage).filter((k) => k.includes('study_plan'));
-    expect(keys.every((k) => k.startsWith(PREFIX))).toBe(true);
-  });
-});
-
 // ─── AI 변형 문제 (Phase 4) ───
-
-describe('변형 포함 설정', () => {
-  it('기본값은 꺼짐이다', () => {
-    // 교재가 아닌 AI 생성 문항은 옵트인으로 들어온다 —
-    // 기존 사용자의 덱 크기·진도 분모가 아무 조작 없이 바뀌면 안 된다
-    expect(getIncludeVariants()).toBe(false);
-  });
-
-  it('켜면 저장되고 다시 읽힌다', () => {
-    setIncludeVariants(true);
-    expect(getIncludeVariants()).toBe(true);
-    expect(localStorage.getItem(PREFIX + 'include_variants')).toBe('true');
-  });
-
-  it('껐다 켜기를 되풀이해도 마지막 값이 남는다', () => {
-    setIncludeVariants(true);
-    setIncludeVariants(false);
-    expect(getIncludeVariants()).toBe(false);
-  });
-
-  it('저장값이 손상돼 있으면 꺼짐으로 본다', () => {
-    localStorage.setItem(PREFIX + 'include_variants', '{그렇다');
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(getIncludeVariants()).toBe(false);
-  });
-
-  it('불리언이 아닌 값이 들어 있어도 꺼짐으로 본다', () => {
-    localStorage.setItem(PREFIX + 'include_variants', '"true"');
-    expect(getIncludeVariants()).toBe(false);
-  });
-});
-
-describe('변형 진도 키', () => {
-  it('교재 진도 키와 이름이 겹치지 않는다', () => {
-    // quiz_results·flashcard_known_* 는 "문항 수가 고정된" 분모(40·100·24)에
-    // 걸려 있다. 변형 진도가 같은 맵에 들어가면 진도가 100% 를 넘는다.
-    expect(VARIANT_RESULTS_KEY).not.toBe('quiz_results');
-    expect(variantKnownKey('quiz100')).not.toBe('flashcard_known_quiz100');
-    expect(variantKnownKey('bogang119')).not.toBe('flashcard_known_bogang119');
-  });
-
-  it('덱마다 다른 키를 쓴다', () => {
-    expect(variantKnownKey('quiz100')).not.toBe(variantKnownKey('bogang119'));
-  });
-
-  it('전체 초기화가 함께 지우도록 jungchogi_ 접두사 아래 쌓인다', () => {
-    saveProgress(VARIANT_RESULTS_KEY, { 'C-01-v1': 'correct' });
-    saveProgress(variantKnownKey('quiz100'), { '001-v1': true });
-    const keys = Object.keys(localStorage).filter((k) => k.includes('variant'));
-    expect(keys).toHaveLength(2);
-    expect(keys.every((k) => k.startsWith(PREFIX))).toBe(true);
-  });
-});
 
 // ─── 모의고사 채점 결과 (Phase 3 잔여) ───
 
@@ -533,7 +389,6 @@ describe('모의고사 채점 결과', () => {
     // 모의고사가 낸 단답형 id(`042`)가 섞이면 진도가 40 을 넘는다 — 변형 진도를
     // 가른 것과 같은 이유로 키를 가른다.
     expect(EXAM_RESULTS_KEY).not.toBe('quiz_results');
-    expect(EXAM_RESULTS_KEY).not.toBe(VARIANT_RESULTS_KEY);
   });
 
   it('저장한 결과를 그대로 다시 읽는다', () => {

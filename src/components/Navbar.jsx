@@ -1,6 +1,9 @@
+import { useCallback, useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import NavDropdown from './NavDropdown';
 import { useThemeContext } from '../hooks/useTheme';
 import Icon from './Icon';
+import MobileMoreMenu from './MobileMoreMenu';
 
 const SunIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -18,20 +21,64 @@ const MoonIcon = () => (
   </svg>
 );
 
-export default function Navbar() {
+/** 상단 탭이 늘어 드롭다운으로 묶는다. 한 군데에서만 고치도록 목록을 위로 뺐다. */
+const NAV_GROUPS = [
+  {
+    id: 'study',
+    label: '학습',
+    items: [
+      { to: '/study', label: '학습노트' },
+      { to: '/flashcard', label: '플래시카드' },
+      { to: '/search', label: '검색' },
+      { to: '/bookmarks', label: '북마크' },
+    ],
+  },
+  {
+    id: 'practice',
+    label: '실전',
+    items: [
+      { to: '/quiz', label: '코드퀴즈' },
+      { to: '/practice', label: '실기연습' },
+      { to: '/exam', label: '모의고사' },
+      { to: '/wrong', label: '오답노트' },
+    ],
+  },
+  {
+    id: 'plan',
+    label: '계획',
+    items: [
+      { to: '/roadmap', label: '로드맵' },
+      { to: '/guide', label: '영역안내' },
+    ],
+  },
+];
+
+export default function Navbar({ onOpenCheatSheet }) {
   const { theme, toggle } = useThemeContext();
+  // 열린 드롭다운 id (한 번에 하나)
+  const [openGroup, setOpenGroup] = useState(null);
+  const closeMenu = useCallback(() => setOpenGroup(null), []);
+  const toggleMenu = useCallback((id) => setOpenGroup((current) => (current === id ? null : id)), []);
 
   return (
     <>
       {/* Desktop: top bar */}
       <nav className="navbar desktop-nav" role="navigation" aria-label="메인 네비게이션">
         <NavLink to="/" className="logo-link"><span className="logo">정처기 학습</span></NavLink>
-        <NavLink to="/flashcard">플래시카드</NavLink>
-        <NavLink to="/quiz">코드퀴즈</NavLink>
-        <NavLink to="/study">학습노트</NavLink>
-        <NavLink to="/exam">모의고사</NavLink>
-        <NavLink to="/wrong">오답노트</NavLink>
-        <NavLink to="/search">검색</NavLink>
+        {NAV_GROUPS.map((group) => (
+          <NavDropdown
+            key={group.id}
+            id={group.id}
+            label={group.label}
+            items={group.items}
+            open={openGroup === group.id}
+            onToggle={toggleMenu}
+            onClose={closeMenu}
+          />
+        ))}
+        <button type="button" className="btn-outline cheat-nav-button" onClick={onOpenCheatSheet}>
+          공식
+        </button>
         <button
           className="theme-toggle"
           onClick={toggle}
@@ -68,6 +115,7 @@ export default function Navbar() {
           <span className="tab-icon"><Icon name="wrong" size={20}/></span>
           <span className="tab-label">오답</span>
         </NavLink>
+        <MobileMoreMenu onOpenCheatSheet={onOpenCheatSheet} />
       </nav>
     </>
   );

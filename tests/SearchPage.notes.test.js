@@ -8,7 +8,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import SearchPage from '../src/pages/SearchPage.jsx';
-import { clearGeneratedCache } from '../src/utils/generatedDeck.js';
+import { clearMarkdownCache } from '../src/utils/mdCache.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -20,6 +20,8 @@ const BOGANG_MD = fx('bogang-sample.md');
 const DAY13_MD = '# Day 13 - 시험 전날\n\n## 전날 체크리스트\n\n신분증과 수험표를 챙기고 일찍 잠자리에 듭니다.\n';
 
 let notesFail;
+/** 노트 문서 요청을 붙잡아 두는 문 — 색인이 끝나기 전 상태를 만든다 */
+let notesGate;
 
 function render() {
   const container = document.createElement('div');
@@ -46,8 +48,9 @@ async function search(container, query) {
 
 beforeEach(() => {
   localStorage.clear();
-  clearGeneratedCache();
+  clearMarkdownCache();
   notesFail = false;
+  notesGate = null;
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.stubGlobal(
     'fetch',
@@ -58,6 +61,7 @@ beforeEach(() => {
       if (u.includes('보강')) return Promise.resolve(new Response(BOGANG_MD, { status: 200 }));
       if (u.includes('단답형')) return Promise.resolve(new Response(QUIZ_MD, { status: 200 }));
       // 그 밖의 문서는 학습 노트다
+      if (notesGate) return notesGate.then(() => new Response(u.includes('Day13') ? DAY13_MD : '# 빈 문서\n내용 없음', { status: 200 }));
       if (notesFail) return Promise.reject(new Error('network'));
       if (u.includes('Day13')) return Promise.resolve(new Response(DAY13_MD, { status: 200 }));
       return Promise.resolve(new Response('# 빈 문서\n내용 없음', { status: 200 }));
@@ -113,6 +117,24 @@ describe('학습 노트 검색', () => {
     await search(container, 'TCP');
     expect(container.textContent).toMatch(/\d+개 결과/);
     expect(container.querySelector('.search-input').disabled).toBe(false);
+    unmount();
+  });
+
+  it('노트 색인이 끝나기 전에는 "결과 없음" 대신 불러오는 중을 보여준다', async () => {
+    let open;
+    notesGate = new Promise((resolve) => { open = resolve; });
+    const { container, unmount } = render();
+    await flush();
+    await search(container, '수험표');
+
+    expect(container.textContent).toContain('학습 노트를 불러오는 중');
+    expect(container.textContent).not.toContain('검색 결과가 없습니다');
+    expect(container.textContent).not.toContain('0개 결과');
+
+    await act(async () => { open(); });
+    await flush();
+    await search(container, '수험표');
+    expect(container.textContent).toContain('전날 체크리스트');
     unmount();
   });
 });

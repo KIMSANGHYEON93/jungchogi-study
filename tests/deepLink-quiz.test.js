@@ -15,35 +15,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import QuizPage from '../src/pages/QuizPage.jsx';
-import { clearGeneratedCache } from '../src/utils/generatedDeck.js';
-import { setIncludeVariants } from '../src/utils/storage.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const DRILL_MD = readFileSync(resolve(process.cwd(), 'tests/fixtures/code-drill-sample.md'), 'utf-8');
-
-// 픽스처의 교재 문항은 C-01 · J-01 · S-01 · S-05 네 개다.
-const GENERATED = {
-  version: 1,
-  source: 'codedrill',
-  generatedAt: '2026-09-03T12:00:00.000Z',
-  model: 'claude-opus-5',
-  reviewed: true,
-  items: [
-    {
-      id: 'C-01-v1',
-      title: '포인터 기본 변형',
-      context: '',
-      code: 'int a=3;',
-      lang: 'c',
-      answer: '출력: 7',
-      expectedOutput: '7',
-      pitfall: '',
-      variantOf: 'C-01',
-      generated: true,
-    },
-  ],
-};
 
 function renderAt(url) {
   const container = document.createElement('div');
@@ -79,15 +54,9 @@ function buttonByName(container, name) {
 
 beforeEach(() => {
   localStorage.clear();
-  clearGeneratedCache();
-  vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.stubGlobal(
     'fetch',
-    vi.fn((url) =>
-      String(url).includes('/data/generated/')
-        ? Promise.resolve(new Response(JSON.stringify(GENERATED), { status: 200 }))
-        : Promise.resolve(new Response(DRILL_MD, { status: 200 }))
-    )
+    vi.fn(() => Promise.resolve(new Response(DRILL_MD, { status: 200 })))
   );
 });
 
@@ -179,29 +148,6 @@ describe('못 찾는 id', () => {
     expect(counter(container)).toBe('1 / 4');
     expect(notice(container)).toContain('찾지 못해');
     expect(notice(container).length).toBeLessThan(200);
-    unmount();
-  });
-});
-
-describe('변형 문항 딥링크', () => {
-  it('변형 포함이 꺼져 있으면 첫 문항 + 켜라는 안내', async () => {
-    const { container, unmount } = renderAt('/quiz?id=C-01-v1');
-    await flush();
-
-    expect(counter(container)).toBe('1 / 4');
-    expect(notice(container)).toContain('C-01-v1');
-    expect(notice(container)).toContain('변형 포함');
-    unmount();
-  });
-
-  it('변형 포함이 켜져 있으면 그 변형을 연다', async () => {
-    setIncludeVariants(true);
-    const { container, unmount } = renderAt('/quiz?id=C-01-v1');
-    await flush();
-
-    expect(heading(container)).toContain('C-01-v1');
-    expect(counter(container)).toBe('5 / 5');
-    expect(notice(container)).toBe('');
     unmount();
   });
 });

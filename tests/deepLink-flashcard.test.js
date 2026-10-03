@@ -12,33 +12,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import FlashcardPage from '../src/pages/FlashcardPage.jsx';
-import { clearGeneratedCache } from '../src/utils/generatedDeck.js';
-import { setIncludeVariants } from '../src/utils/storage.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const QUIZ_MD = readFileSync(resolve(process.cwd(), 'tests/fixtures/quiz-sample.md'), 'utf-8');
 const BOGANG_MD = readFileSync(resolve(process.cwd(), 'tests/fixtures/bogang-sample.md'), 'utf-8');
 
-// 픽스처: 단답형 001 · 002 · 026 (3장), 보강 B01 · B02 (2장)
-const GENERATED_QUIZ100 = {
-  version: 1,
-  source: 'quiz100',
-  generatedAt: '2026-09-03T12:00:00.000Z',
-  model: 'claude-opus-5',
-  reviewed: true,
-  items: [
-    {
-      id: '001-v1',
-      question: '트랜잭션의 격리성을 한 낱말로 쓰시오.',
-      answer: 'Isolation',
-      category: '데이터베이스',
-      variantOf: '001',
-      generated: true,
-    },
-  ],
-};
-
+// 픽스처: 단답형 001 · 002 · 026 (3장), 보강 B01-1~3 · B02-1~2 (5장)
 function renderAt(url) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -74,20 +54,11 @@ function buttonByName(container, name) {
 
 beforeEach(() => {
   localStorage.clear();
-  clearGeneratedCache();
-  vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.stubGlobal(
     'fetch',
-    vi.fn((url) => {
-      const path = String(url);
-      if (path.includes('/data/generated/quiz100.json')) {
-        return Promise.resolve(new Response(JSON.stringify(GENERATED_QUIZ100), { status: 200 }));
-      }
-      if (path.includes('/data/generated/')) {
-        return Promise.resolve(new Response('Not Found', { status: 404 }));
-      }
-      return Promise.resolve(new Response(path.includes('보강') ? BOGANG_MD : QUIZ_MD, { status: 200 }));
-    })
+    vi.fn((url) =>
+      Promise.resolve(new Response(String(url).includes('보강') ? BOGANG_MD : QUIZ_MD, { status: 200 }))
+    )
   );
 });
 
@@ -109,13 +80,25 @@ describe('지목한 카드에서 시작한다', () => {
     unmount();
   });
 
-  it('보강 id(`B02`) 는 덱까지 바꿔서 연다', async () => {
+  it('보강 카드 id(`B02-2`) 는 덱까지 바꿔서 연다', async () => {
+    const { container, unmount } = renderAt('/flashcard?id=B02-2');
+    await flush();
+
+    expect(activeDeck(container)).toContain('보강');
+    expect(face(container)).toContain('B02-2.');
+    expect(counter(container)).toBe('5 / 5');
+    expect(notice(container)).toBe('');
+    unmount();
+  });
+
+  it('쪼개기 전 섹션 id(`B02`)는 그 섹션의 첫 카드로 열린다', async () => {
     const { container, unmount } = renderAt('/flashcard?id=B02');
     await flush();
 
     expect(activeDeck(container)).toContain('보강');
-    expect(face(container)).toContain('B02.');
-    expect(counter(container)).toBe('2 / 2');
+    expect(face(container)).toContain('B02-1.');
+    expect(counter(container)).toBe('4 / 5');
+    expect(notice(container)).toBe(''); // 못 찾은 것이 아니다
     unmount();
   });
 });
@@ -163,29 +146,6 @@ describe('못 찾는 id', () => {
   });
 });
 
-describe('변형 카드 딥링크', () => {
-  it('변형 포함이 꺼져 있으면 첫 카드 + 켜라는 안내', async () => {
-    const { container, unmount } = renderAt('/flashcard?id=001-v1');
-    await flush();
-
-    expect(counter(container)).toBe('1 / 3');
-    expect(notice(container)).toContain('001-v1');
-    expect(notice(container)).toContain('변형 포함');
-    unmount();
-  });
-
-  it('변형 포함이 켜져 있으면 그 변형을 연다', async () => {
-    setIncludeVariants(true);
-    const { container, unmount } = renderAt('/flashcard?id=001-v1');
-    await flush();
-
-    expect(face(container)).toContain('001-v1.');
-    expect(counter(container)).toBe('4 / 4');
-    expect(notice(container)).toBe('');
-    unmount();
-  });
-});
-
 describe('기존 기능과의 얽힘', () => {
   it('섞기를 누르면 딥링크를 놓고 첫 카드로 간다', async () => {
     const { container, unmount } = renderAt('/flashcard?id=026');
@@ -216,7 +176,7 @@ describe('기존 기능과의 얽힘', () => {
     await flush();
 
     expect(activeDeck(container)).toContain('보강');
-    expect(counter(container)).toBe('1 / 2');
+    expect(counter(container)).toBe('1 / 5');
     unmount();
   });
 

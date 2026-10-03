@@ -1,0 +1,30 @@
+/*
+ * Tailwind CSS v4 — 기존 global.css 와 공존하도록 좁게 쓴다.
+ *  - preflight(리셋)는 가져오지 않는다: global.css 가 이미 리셋과 토큰을 가지고 있다.
+ *  - 모든 유틸리티에 `tw:` 접두사를 붙인다 (예: `tw:flex`, `tw:md:grid-cols-2`) — 기존 클래스명과 충돌하지 않는다.
+ *  - 색은 global.css 의 CSS 변수에 연결해 라이트/다크 테마를 그대로 따른다.
+ */
+/* 리셋은 가장 낮은 레이어(base) — 레이어 선언 순서상 theme·utilities 보다 앞이어야 한다 */
+@import "./reset.css" layer(base);
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) prefix(tw);
+
+@theme inline {
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-card: var(--bg-card);
+  --color-hover: var(--bg-hover);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-dim: var(--text-dim);
+  --color-primary: var(--primary);
+  --color-primary-dim: var(--primary-dim);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-accent: var(--accent);
+  --color-code: var(--code-bg);
+  --color-white: #fff;
+  --radius-card: var(--radius);
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

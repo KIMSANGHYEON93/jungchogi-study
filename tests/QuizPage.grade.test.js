@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 //
-// 코드 퀴즈 화면의 채점 흐름 (BLUEPRINT §4.2 · §5 Phase 3).
+// 코드 퀴즈 화면의 채점 흐름.
 //
-// 지키려는 것 세 가지:
-//   1) 정답 조기 노출 금지 — `정답 확인` 전에는 풀이도 AI 채점도 없다
-//   2) AI 채점은 보조 — 서버가 없어도, 확신이 낮아도 자기 채점으로 학습이 이어진다
-//   3) 저장 계약 — quiz_results 에 'correct'/'incorrect' 만 새로 쓴다
+//   1) 정답 조기 노출 금지 — `정답 확인` 전에는 풀이도 자기 채점도 없다
+//   2) 저장 계약 — quiz_results 에 'correct'/'incorrect' 만 새로 쓴다
+//   3) 레거시 `answered` 와의 공존
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -14,7 +13,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import QuizPage from '../src/pages/QuizPage.jsx';
 import { loadProgress, saveProgress } from '../src/utils/storage.js';
-import { clearGeneratedCache } from '../src/utils/generatedDeck.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -49,42 +47,9 @@ function buttonByName(container, name) {
   );
 }
 
-function jsonResponse(payload, status = 200) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-function grade(overrides = {}) {
-  return {
-    verdict: 'correct',
-    score: 100,
-    feedback: '출력이 정확합니다.',
-    missedPoints: [],
-    confidence: 0.92,
-    ...overrides,
-  };
-}
-
-/** 채점 응답을 지정한다. 교재 md 요청은 언제나 픽스처로 답한다. */
-let gradeResponder;
-
 beforeEach(() => {
   localStorage.clear();
-  clearGeneratedCache();
-  gradeResponder = () => jsonResponse(grade());
-  vi.stubGlobal(
-    'fetch',
-    vi.fn((url) => {
-      if (String(url).includes('/api/ai/grade')) return Promise.resolve(gradeResponder());
-      // 생성물(Phase 4)은 아직 커밋되지 않은 상태 — 이 테스트의 관심사가 아니다
-      if (String(url).includes('/data/generated/')) {
-        return Promise.resolve(new Response('Not Found', { status: 404 }));
-      }
-      return Promise.resolve(new Response(DRILL_MD, { status: 200 }));
-    })
-  );
+  vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(DRILL_MD, { status: 200 }))));
 });
 
 afterEach(() => {
@@ -113,12 +78,11 @@ async function answerFirstProblem(container, answer = '0 0') {
 }
 
 describe('정답 조기 노출 방지', () => {
-  it('정답 확인 전에는 풀이도 AI 채점도 자기 채점도 없다', async () => {
+  it('정답 확인 전에는 풀이도 자기 채점도 없다', async () => {
     const { container, unmount } = render();
     await flush();
 
     expect(container.textContent).toContain('C-01');
-    expect(container.textContent).not.toContain('AI 채점');
     expect(container.textContent).not.toContain('맞았어요');
     // 풀이(추적표)는 정답 확인 전에는 화면에 없다
     expect(container.textContent).not.toContain('추적표');
@@ -126,104 +90,20 @@ describe('정답 조기 노출 방지', () => {
     unmount();
   });
 
-  it('답을 적어도 정답 확인 전에는 어떤 AI 요청도 나가지 않는다', async () => {
-    const { container, unmount } = render();
-    await flush();
-
-    await typeAnswer(container);
-
-    expect(fetch.mock.calls.filter(([u]) => String(u).includes('/api/ai/'))).toHaveLength(0);
-
-    unmount();
-  });
-
-  it('정답 확인을 눌러야 풀이와 AI 채점 패널이 함께 나타난다', async () => {
+  it('정답 확인을 눌러야 풀이와 자기 채점이 함께 나타난다', async () => {
     const { container, unmount } = render();
     await flush();
     await answerFirstProblem(container);
 
     expect(container.textContent).toContain('추적표');
-    expect(container.textContent).toContain('AI 채점');
-    // 패널이 떠도 요청은 사용자가 버튼을 눌러야만 나간다
-    expect(fetch.mock.calls.filter(([u]) => String(u).includes('/api/ai/'))).toHaveLength(0);
+    expect(container.textContent).toContain('맞았어요');
 
     unmount();
   });
 });
 
-describe('AI 채점 확정분 저장', () => {
-  it('확신이 충분한 판정은 quiz_results 에 correct 로 저장한다', async () => {
-    const { container, unmount } = render();
-    await flush();
-    await answerFirstProblem(container);
-
-    expect(loadProgress('quiz_results', {})['C-01']).toBe('answered');
-
-    await act(async () => { buttonByName(container, '채점 요청').click(); });
-    await flush();
-
-    expect(loadProgress('quiz_results', {})['C-01']).toBe('correct');
-    expect(container.textContent).toContain('정답');
-
-    unmount();
-  });
-
-  it('partial 판정은 오답으로 저장한다 — 정답률을 부풀리지 않는다', async () => {
-    gradeResponder = () => jsonResponse(grade({ verdict: 'partial', score: 60, confidence: 0.8 }));
-    const { container, unmount } = render();
-    await flush();
-    await answerFirstProblem(container);
-
-    await act(async () => { buttonByName(container, '채점 요청').click(); });
-    await flush();
-
-    expect(loadProgress('quiz_results', {})['C-01']).toBe('incorrect');
-
-    unmount();
-  });
-});
-
-describe('confidence 폴백 — 자기 채점으로 넘어간다', () => {
-  it('확신이 낮으면 확정 저장하지 않고 직접 확인을 요청한다', async () => {
-    gradeResponder = () => jsonResponse(grade({ verdict: 'incorrect', confidence: 0.55 }));
-    const { container, unmount } = render();
-    await flush();
-    await answerFirstProblem(container);
-
-    await act(async () => { buttonByName(container, '채점 요청').click(); });
-    await flush();
-
-    // 판정이 저장되지 않는다 — 시도 기록만 남는다
-    expect(loadProgress('quiz_results', {})['C-01']).toBe('answered');
-    expect(container.textContent).toContain('직접');
-
-    // 사용자가 직접 고르면 그때 저장된다
-    await act(async () => { buttonByName(container, '틀렸어요').click(); });
-    expect(loadProgress('quiz_results', {})['C-01']).toBe('incorrect');
-
-    unmount();
-  });
-});
-
-describe('서버가 없어도 학습은 이어진다', () => {
-  it('채점 요청이 실패해도 자기 채점 버튼은 그대로 동작한다', async () => {
-    gradeResponder = () => { throw new TypeError('Failed to fetch'); };
-    const { container, unmount } = render();
-    await flush();
-    await answerFirstProblem(container);
-
-    await act(async () => { buttonByName(container, '채점 요청').click(); });
-    await flush();
-
-    expect(container.textContent).toContain('연결하지 못했습니다');
-
-    await act(async () => { buttonByName(container, '맞았어요').click(); });
-    expect(loadProgress('quiz_results', {})['C-01']).toBe('correct');
-
-    unmount();
-  });
-
-  it('AI 를 한 번도 부르지 않아도 자기 채점만으로 저장된다', async () => {
+describe('자기 채점', () => {
+  it('자기 채점만으로 저장된다', async () => {
     const { container, unmount } = render();
     await flush();
     await answerFirstProblem(container);
@@ -231,7 +111,6 @@ describe('서버가 없어도 학습은 이어진다', () => {
     await act(async () => { buttonByName(container, '틀렸어요').click(); });
 
     expect(loadProgress('quiz_results', {})['C-01']).toBe('incorrect');
-    expect(fetch.mock.calls.filter(([u]) => String(u).includes('/api/ai/'))).toHaveLength(0);
 
     unmount();
   });

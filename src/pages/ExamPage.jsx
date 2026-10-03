@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { parseQuiz } from '../utils/parseQuiz';
@@ -11,29 +12,14 @@ import {
   saveExamResults,
 } from '../utils/storage';
 import useStudyTimer from '../hooks/useStudyTimer';
-import useVariantPreference from '../hooks/useVariantPreference';
 import { fetchMarkdown } from '../utils/mdCache';
-import { applyGeneratedItems } from '../utils/generatedDeck';
 import Icon from '../components/Icon';
 import ProblemContext from '../components/ProblemContext';
-import AiGradePanel from '../components/AiGradePanel';
-import GeneratedBadge from '../components/GeneratedBadge';
-import VariantToggle from '../components/VariantToggle';
-import { toAiSource, toGradeKind } from '../domain/aiSource';
-import { isGeneratedItem } from '../domain/generatedItems';
 import {
   QUIZ_RESULT,
-  isConfidentGrade,
-  verdictToQuizResult,
   withQuizResult,
 } from '../domain/grading';
 import { useThemeContext } from '../hooks/useTheme';
-
-// 모의고사는 단답형(quiz100)과 코드 트레이싱(codedrill)을 섞어 낸다.
-// 어느 교재에서 온 문항인지·어떻게 채점할 문항인지는 화면이 아니라 문항이 정한다.
-// AI 변형 문항이면 `toAiSource` 가 null 을 주고 채점 패널이 통째로 사라진다 —
-// 서버 guard 의 ID_PATTERN 이 변형 id 를 거절해 400 이 나기 때문이다.
-const examItem = (q) => ({ source: 'exam', type: q?.type, generated: q?.generated, id: q?.id });
 
 /** 자기 채점 상태 문구 — 코드 퀴즈(QuizPage)와 같은 말을 쓴다 */
 const SELF_GRADE_STATE = {
@@ -75,26 +61,19 @@ export default function ExamPage() {
   // 문제 풀 로드
   const [quizPool, setQuizPool] = useState([]);
   const [codePool, setCodePool] = useState([]);
-  const [includeVariants, changeIncludeVariants] = useVariantPreference();
-  const [variantsAvailable, setVariantsAvailable] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetchMarkdown('정처기_단답형_100선.md').then((md) =>
-        applyGeneratedItems(parseQuiz(md), 'quiz100', includeVariants)
-      ),
-      fetchMarkdown('정처기_코드트레이싱_드릴.md').then((md) =>
-        applyGeneratedItems(parseCodeDrill(md), 'codedrill', includeVariants)
-      ),
+      fetchMarkdown('정처기_단답형_100선.md').then(parseQuiz),
+      fetchMarkdown('정처기_코드트레이싱_드릴.md').then(parseCodeDrill),
     ]).then(([quiz, code]) => {
       if (cancelled) return;
-      setQuizPool(quiz.items.map((q) => ({ ...q, type: 'quiz' })));
-      setCodePool(code.items.map((q) => ({ ...q, type: 'code' })));
-      setVariantsAvailable(quiz.available + code.available);
+      setQuizPool(quiz.map((q) => ({ ...q, type: 'quiz' })));
+      setCodePool(code.map((q) => ({ ...q, type: 'code' })));
     });
     return () => { cancelled = true; };
-  }, [includeVariants]);
+  }, []);
 
   const startExam = () => {
     // 단답형 12문제 + 코드 8문제 = 20문제
@@ -133,12 +112,10 @@ export default function ExamPage() {
   };
 
   /**
-   * 채점 결과를 남긴다. 자기 채점 버튼과 AI 채점 확정분이 같은 길로 들어온다
-   * (코드 퀴즈의 `recordGrade` 와 같은 구조).
+   * 자기 채점 결과를 남긴다 (코드 퀴즈의 `recordGrade` 와 같은 구조).
    *
-   * 쓰기 직전에 저장소를 다시 읽는다. 결과 화면에는 채점 패널이 20개 떠 있고
-   * 여러 문항의 채점이 동시에 진행될 수 있어, 렌더 시점에 잡힌 맵으로 덮어쓰면
-   * 그 사이 끝난 다른 문항의 판정이 사라진다.
+   * 쓰기 직전에 저장소를 다시 읽는다. 결과 화면에는 채점 버튼이 20문항 분 떠 있어,
+   * 렌더 시점에 잡힌 맵으로 덮어쓰면 그 사이 남긴 다른 문항의 판정이 사라진다.
    *
    * @param {string} id
    * @param {'correct'|'incorrect'} verdict
@@ -147,13 +124,6 @@ export default function ExamPage() {
     const next = withQuizResult(getExamResults(), id, verdict);
     saveExamResults(next);
     setExamResults(next);
-  };
-
-  // §4.2: 확신이 낮은 판정은 확정으로 쓰지 않고 자기 채점 버튼에 맡긴다.
-  const handleAiGrade = (id, result) => {
-    if (!isConfidentGrade(result)) return;
-    const verdict = verdictToQuizResult(result.verdict);
-    if (verdict) recordGrade(id, verdict);
   };
 
   const timerClass = timeLeft < 300 ? 'timer danger' : timeLeft < 600 ? 'timer warning' : 'timer';
@@ -177,16 +147,6 @@ export default function ExamPage() {
             disabled={quizPool.length === 0}>
             {quizPool.length === 0 ? '문제 로딩 중...' : '시험 시작'}
           </button>
-
-          {/* 변형 포함은 시험을 시작하기 전에만 고를 수 있다 — 출제 풀이 바뀌는 설정이라
-              시험 중에 바꾸면 이미 낸 문제와 앞뒤가 맞지 않는다 */}
-          <div className="filter-bar" style={{ justifyContent: 'center', marginTop: 24, marginBottom: 0 }}>
-            <VariantToggle
-              enabled={includeVariants}
-              available={variantsAvailable}
-              onChange={changeIncludeVariants}
-            />
-          </div>
         </div>
       </div>
     );
@@ -227,7 +187,6 @@ export default function ExamPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
             <span style={{ fontWeight: 700 }}>문제 {currentQ + 1} / 20</span>
             <span style={{ display: 'flex', gap: 8 }}>
-              <GeneratedBadge item={q} />
               <span className={`badge ${q.type === 'code' ? 'badge-warning' : 'badge-primary'}`}>
                 {q.type === 'code' ? `코드(${q.lang?.toUpperCase()})` : '단답형'}
               </span>
@@ -299,7 +258,6 @@ export default function ExamPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <strong>문제 {i + 1}. {q.type === 'quiz' ? q.question : q.title}</strong>
             <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-              <GeneratedBadge item={q} />
               <span className={`badge ${q.type === 'code' ? 'badge-warning' : 'badge-primary'}`}>
                 {q.type === 'code' ? q.lang?.toUpperCase() : '단답형'}
               </span>
@@ -313,25 +271,29 @@ export default function ExamPage() {
           </div>
           <details style={{ marginTop: 8 }}>
             <summary style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: 600 }}>정답 확인</summary>
-            <div className="md-content" style={{ marginTop: 8, fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>
-              {q.answer}
+            {/* 정답만 펼치면 코드 문제는 지문·코드를 다시 볼 수 없어 풀이를 대조하기 어렵다 — 문제를 함께 보여 준다 */}
+            <div className="exam-review-problem">
+              <div className="exam-review-label">문제</div>
+              {q.type === 'quiz' ? (
+                <p className="exam-review-question">{q.question}</p>
+              ) : (
+                <>
+                  <ProblemContext text={q.context} fontSize="0.9rem" />
+                  <SyntaxHighlighter language={q.lang} style={syntaxTheme} customStyle={{ borderRadius: 8, fontSize: '0.85rem' }}>
+                    {q.code}
+                  </SyntaxHighlighter>
+                </>
+              )}
+            </div>
+            <div className="exam-review-label" style={{ marginTop: 12 }}>정답</div>
+            {/* 정답 원문은 마크다운(코드 펜스·표)이라 코드 퀴즈와 같이 렌더링한다 */}
+            <div className="md-content" style={{ marginTop: 4, fontSize: '0.9rem' }}>
+              <ReactMarkdown>{q.answer}</ReactMarkdown>
             </div>
           </details>
-          {/* AI 채점은 제출 후(이 결과 화면)에만 있다 — 시험 중에 띄우면
-              feedback·missedPoints 가 아직 안 푼 문제의 답을 흘린다.
+          {/* 자기 채점. 카드가 20장 늘어서므로 버튼마다 문항 번호를 붙인다.
               확정분은 `exam_results` 에 쌓는다: `quiz_results` 는 코드 퀴즈 40문항의
               진도를 세는 칸이라, 모의고사가 낸 단답형 id 까지 섞이면 진도가 어긋난다. */}
-          <AiGradePanel
-            key={`grade-${i}`}
-            source={toAiSource(examItem(q))}
-            kind={toGradeKind(examItem(q))}
-            id={q.id}
-            userAnswer={answers[i]?.trim() || ''}
-            onResult={(result) => handleAiGrade(q.id, result)}
-          />
-
-          {/* 자기 채점 — AI 가 없어도, 확신이 낮아도, 변형 문항이라 패널이 안 떠도
-              여기서 끝낼 수 있다. 카드가 20장 늘어서므로 버튼마다 문항 번호를 붙인다. */}
           <div className="self-grade">
             <span className="self-grade-label">직접 채점</span>
             <button
@@ -387,9 +349,6 @@ export default function ExamPage() {
                     pitfall: q.pitfall,
                     userAnswer: answers[i]?.trim() || '',
                     category: q.category,
-                    // 표시를 함께 남긴다 — 오답노트 화면이 배지를 붙이고
-                    // AI 해설 버튼을 띄우지 않는 근거가 된다
-                    generated: isGeneratedItem(q) || undefined,
                   });
                   setWrongIds((prev) => new Set(prev).add(q.id));
                 }}

@@ -2,16 +2,16 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { parseQuiz } from '../utils/parseQuiz';
 import { parseBogang } from '../utils/parseBogang';
-import { saveProgress, loadProgress, variantKnownKey } from '../utils/storage';
+import { saveProgress, loadProgress } from '../utils/storage';
 import useSwipe from '../hooks/useSwipe';
 import useStudyTimer from '../hooks/useStudyTimer';
-import useVariantPreference from '../hooks/useVariantPreference';
 import { fetchMarkdown } from '../utils/mdCache';
-import { applyGeneratedItems } from '../utils/generatedDeck';
 import Icon from '../components/Icon';
-import GeneratedBadge, { GeneratedAnswerNotice } from '../components/GeneratedBadge';
-import VariantToggle from '../components/VariantToggle';
-import { isGeneratedItem } from '../domain/generatedItems';
+import BookmarkButton from '../components/ui/BookmarkButton';
+import { DECK_BOOKMARK_TYPE } from '../domain/bookmarks';
+import { resolveBogangId } from '../domain/bogangDeck';
+import useStudyState from '../hooks/useStudyState';
+import { bookmarkKey } from '../utils/studyState';
 import {
   useDeepLinkId,
   useDeepLinkedIndex,
@@ -21,12 +21,10 @@ import {
 
 const CATEGORIES = ['전체', '데이터베이스', '소프트웨어공학', '디자인패턴/UML', '테스트', '보안/네트워크', 'OS/기타'];
 
-// `source` 는 생성물 파일 이름(BLUEPRINT §4.4)이다.
-// 덱 키(bogang119)와 교재 출처 이름(bogang)이 달라 한 곳에서 맞춰 둔다.
-// `idPattern` 은 서버 guard 의 ID_PATTERN 과 같은 형식에 변형 접미사(`-v1`)를 붙인 것이다.
+// `idPattern` 은 교재 카드 id 형식이다 — 딥링크가 어느 덱을 가리키는지 모양으로 가른다.
 const DECKS = [
-  { key: 'quiz100', label: '단답형 100선', file: '정처기_단답형_100선.md', parser: 'quiz', source: 'quiz100', idPattern: /^\d{3}(-v\d+)?$/ },
-  { key: 'bogang119', label: '암기 119선 보강', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', source: 'bogang', idPattern: /^B\d{2,3}(-v\d+)?$/ },
+  { key: 'quiz100', label: '단답형 100선', file: '정처기_단답형_100선.md', parser: 'quiz', idPattern: /^\d{3}$/ },
+  { key: 'bogang119', label: '암기 119선 보강', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', idPattern: /^B\d{2,3}(-\d+)?$/ },
 ];
 
 const DEFAULT_DECK = 'quiz100';
@@ -56,11 +54,10 @@ export default function FlashcardPage() {
   const [flipped, setFlipped] = useState(false);
   const [category, setCategory] = useState('전체');
   const [known, setKnown] = useState({});
-  // 변형 카드의 "외움"은 별도 맵에 쌓는다 — 아래 markKnown 주석 참조
-  const [variantKnown, setVariantKnown] = useState({});
   const [filterMode, setFilterMode] = useState('all');
-  const [includeVariants, changeIncludeVariants] = useVariantPreference();
-  const [variantsAvailable, setVariantsAvailable] = useState(0);
+  const study = useStudyState();
+  const bookmarkType = DECK_BOOKMARK_TYPE[deck];
+  const { bookmarks } = study;
 
   // 덱 변경 시 데이터 로드
   useEffect(() => {
@@ -68,33 +65,23 @@ export default function FlashcardPage() {
     const deckInfo = DECKS.find((d) => d.key === deck);
     fetchMarkdown(deckInfo.file)
       .then((text) => {
-        const parsed = deckInfo.parser === 'quiz' ? parseQuiz(text) : parseBogang(text);
-        return applyGeneratedItems(parsed, deckInfo.source, includeVariants);
-      })
-      .then(({ items, available }) => {
         if (cancelled) return;
-        setAllCards(items);
-        setVariantsAvailable(available);
+        setAllCards(deckInfo.parser === 'quiz' ? parseQuiz(text) : parseBogang(text));
         setKnown(loadProgress(`flashcard_known_${deck}`, {}));
-        setVariantKnown(loadProgress(variantKnownKey(deck), {}));
       });
     return () => { cancelled = true; };
-  }, [deck, includeVariants]);
+  }, [deck]);
 
-  // 외움 여부는 교재 카드와 변형 카드가 서로 다른 맵에 있다.
-  // id 는 겹치지 않도록 병합 단계에서 보장되므로 카드가 어느 쪽인지만 보면 된다.
-  const isKnown = useCallback(
-    (card) => !!(isGeneratedItem(card) ? variantKnown : known)[card.id],
-    [known, variantKnown]
-  );
+  const isKnown = useCallback((card) => !!known[card.id], [known]);
 
   // 필터 결과는 파생 상태 — effect 없이 렌더 중 계산한다
   const filtered = useMemo(() => {
     let f = allCards;
     if (category !== '전체') f = f.filter((c) => c.category === category);
     if (filterMode === 'unknown') f = f.filter((c) => !isKnown(c));
+    if (filterMode === 'bookmarked') f = f.filter((c) => bookmarkKey(bookmarkType, c.id) in bookmarks);
     return f;
-  }, [allCards, category, filterMode, isKnown]);
+  }, [allCards, category, filterMode, isKnown, bookmarks, bookmarkType]);
 
   // 셔플은 그 대상이 지금의 filtered 와 같을 때만 유효하다
   const cards = shuffled && shuffled.source === filtered ? shuffled.order : filtered;
@@ -102,24 +89,16 @@ export default function FlashcardPage() {
   // 카드 커서. 딥링크가 지목한 카드가 지금 목록에 있으면 거기서 시작한다.
   // 목록이 줄어 커서가 범위를 벗어나는 경우(모르는 것만 필터에서 외움 처리)도
   // 이 훅이 첫 카드로 되돌린다.
-  const { index: idx, setIndex, missedId } = useDeepLinkedIndex(cards, requestedId);
-  const deepLinkNotice = deckDeepLinkNotice(missedId, { variantsOff: !includeVariants });
+  // 쪼개기 전의 섹션 id(`B07`)로 온 링크는 그 섹션의 첫 카드로 보낸다
+  const wantedId = deck === 'bogang119' ? resolveBogangId(requestedId, allCards) : requestedId;
+  const { index: idx, setIndex, missedId } = useDeepLinkedIndex(cards, wantedId);
+  const deepLinkNotice = deckDeepLinkNotice(missedId);
 
-  // 변형 카드의 진도는 교재 진도와 **다른 키**에 쌓는다.
-  // 대시보드는 `flashcard_known_<deck>` 의 값 개수를 분모 100(단답형)·24(보강)에
-  // 나눠 진도를 낸다. 변형 id 가 같은 맵에 들어가면 진도가 100% 를 넘고
-  // 종합 달성률까지 부풀려진다. 그래서 키를 갈라 둔다.
   const markKnown = useCallback((card, val) => {
-    if (isGeneratedItem(card)) {
-      const next = { ...variantKnown, [card.id]: val };
-      setVariantKnown(next);
-      saveProgress(variantKnownKey(deck), next);
-      return;
-    }
     const next = { ...known, [card.id]: val };
     setKnown(next);
     saveProgress(`flashcard_known_${deck}`, next);
-  }, [known, variantKnown, deck]);
+  }, [known, deck]);
 
   const next = useCallback(() => { setFlipped(false); setIndex(Math.min(idx + 1, cards.length - 1)); }, [idx, cards.length, setIndex]);
   const prev = useCallback(() => { setFlipped(false); setIndex(Math.max(idx - 1, 0)); }, [idx, setIndex]);
@@ -166,9 +145,7 @@ export default function FlashcardPage() {
     onSwipeRight: prev,
   });
 
-  // 진도는 **교재 카드만** 센다 — 변형은 덤이지 진도의 분모가 아니다
-  const baseCards = allCards.filter((c) => !isGeneratedItem(c));
-  const knownCount = baseCards.filter((c) => known[c.id]).length;
+  const knownCount = allCards.filter((c) => known[c.id]).length;
   const current = cards[idx];
 
   return (
@@ -191,7 +168,7 @@ export default function FlashcardPage() {
 
       <div className="stats">
         <div className="stat-box">
-          <div className="value">{baseCards.length}</div>
+          <div className="value">{allCards.length}</div>
           <div className="label">전체 문제</div>
         </div>
         <div className="stat-box">
@@ -199,13 +176,13 @@ export default function FlashcardPage() {
           <div className="label">외운 문제</div>
         </div>
         <div className="stat-box">
-          <div className="value" style={{ color: 'var(--warning)' }}>{baseCards.length - knownCount}</div>
+          <div className="value" style={{ color: 'var(--warning)' }}>{allCards.length - knownCount}</div>
           <div className="label">남은 문제</div>
         </div>
       </div>
 
       <div className="progress-bar">
-        <div className="fill" style={{ width: `${baseCards.length ? (knownCount / baseCards.length) * 100 : 0}%` }} />
+        <div className="fill" style={{ width: `${allCards.length ? (knownCount / allCards.length) * 100 : 0}%` }} />
       </div>
 
       <div className="filter-bar">
@@ -217,13 +194,9 @@ export default function FlashcardPage() {
         <span style={{ margin: '0 8px', borderLeft: '1px solid var(--border)', height: 28 }} />
         <button className={`btn-outline ${filterMode === 'all' ? 'active' : ''}`} onClick={() => changeFilterMode('all')}>전체</button>
         <button className={`btn-outline ${filterMode === 'unknown' ? 'active' : ''}`} onClick={() => changeFilterMode('unknown')}>모르는 것만</button>
+          <button className={`btn-outline ${filterMode === 'bookmarked' ? 'active' : ''}`} onClick={() => changeFilterMode('bookmarked')}>북마크만</button>
         <span style={{ margin: '0 8px', borderLeft: '1px solid var(--border)', height: 28 }} />
         <button className="btn-outline" onClick={shuffle} title="카드 순서 섞기"><Icon name="refresh" size={14}/> 섞기</button>
-        <VariantToggle
-          enabled={includeVariants}
-          available={variantsAvailable}
-          onChange={(next) => { changeIncludeVariants(next); setIndex(0); setFlipped(false); }}
-        />
       </div>
 
       {/* 지목받은 카드를 못 찾았을 때. 조용히 다른 카드를 열면 사용자는
@@ -236,16 +209,24 @@ export default function FlashcardPage() {
 
       {cards.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 60 }}>
-          {filterMode === 'unknown' ? <><Icon name="party" size={24}/> 모든 카드를 외웠습니다!</> : '문제를 불러오는 중...'}
+          {filterMode === 'unknown' ? <><Icon name="party" size={24}/> 모든 카드를 외웠습니다!</>
+            : filterMode === 'bookmarked' && allCards.length > 0 ? '북마크한 카드가 없습니다. 카드 위의 북마크 버튼으로 추가해 보세요.'
+            : '문제를 불러오는 중...'}
         </div>
       ) : current ? (
         <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+            <BookmarkButton
+              active={study.isBookmarked(bookmarkType, current.id)}
+              onToggle={() => study.toggleBookmark(bookmarkType, current.id)}
+              label={`${current.id}번 카드 북마크`}
+            />
+          </div>
           <div className="flashcard-container" {...swipeHandlers}>
             <div className={`flashcard ${flipped ? 'flipped' : ''} ${deck === 'bogang119' && flipped ? 'flashcard-tall' : ''}`} onClick={() => setFlipped(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFlipped(!flipped); } }} role="button" tabIndex={0} aria-label="카드 뒤집기">
               <div className="flashcard-face">
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                   <span className="badge badge-primary">{current.category}</span>
-                  <GeneratedBadge item={current} />
                 </div>
                 <h2 style={{ fontSize: '1.3rem', textAlign: 'center', lineHeight: 1.6 }}>
                   {current.id}. {current.question}
@@ -254,7 +235,6 @@ export default function FlashcardPage() {
               </div>
               <div className="flashcard-face flashcard-back">
                 <div className="md-content" style={{ width: '100%', fontSize: deck === 'bogang119' ? '0.85rem' : '0.95rem' }}>
-                  <GeneratedAnswerNotice item={current} />
                   <ReactMarkdown>{current.answer}</ReactMarkdown>
                 </div>
               </div>
