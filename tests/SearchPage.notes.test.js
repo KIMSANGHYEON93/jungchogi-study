@@ -15,7 +15,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const fx = (name) => readFileSync(resolve(process.cwd(), `tests/fixtures/${name}`), 'utf-8');
 const QUIZ_MD = fx('quiz-sample.md');
 const DRILL_MD = fx('code-drill-sample.md');
-const BOGANG_MD = fx('bogang-sample.md');
+const CORE_MD = fx('core-sample.md');
 
 const DAY13_MD = '# Day 13 - 시험 전날\n\n## 전날 체크리스트\n\n신분증과 수험표를 챙기고 일찍 잠자리에 듭니다.\n';
 
@@ -58,7 +58,7 @@ beforeEach(() => {
       const u = decodeURIComponent(String(url));
       if (u.includes('/data/generated/')) return Promise.resolve(new Response('Not Found', { status: 404 }));
       if (u.includes('코드트레이싱')) return Promise.resolve(new Response(DRILL_MD, { status: 200 }));
-      if (u.includes('보강')) return Promise.resolve(new Response(BOGANG_MD, { status: 200 }));
+      if (u.includes('핵심암기')) return Promise.resolve(new Response(CORE_MD, { status: 200 }));
       if (u.includes('단답형')) return Promise.resolve(new Response(QUIZ_MD, { status: 200 }));
       // 그 밖의 문서는 학습 노트다
       if (notesGate) return notesGate.then(() => new Response(u.includes('Day13') ? DAY13_MD : '# 빈 문서\n내용 없음', { status: 200 }));

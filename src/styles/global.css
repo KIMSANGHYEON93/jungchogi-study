@@ -446,6 +446,13 @@ a.btn-danger {
   text-align: left;
   align-items: flex-start;
   overflow-y: auto;
+  /* 세로 가운데 정렬(center)은 정답이 카드보다 길면 윗부분을 스크롤로도 볼 수 없게 밀어낸다.
+     위에서부터 쌓고, 짧은 정답만 아래 auto 여백으로 가운데에 둔다 */
+  justify-content: flex-start;
+}
+
+.flashcard-back > .md-content {
+  margin: auto 0;
 }
 
 .flashcard-tall {

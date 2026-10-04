@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { parseQuiz } from '../utils/parseQuiz';
-import { parseBogang } from '../utils/parseBogang';
 import { saveProgress, loadProgress } from '../utils/storage';
 import useSwipe from '../hooks/useSwipe';
 import useStudyTimer from '../hooks/useStudyTimer';
@@ -9,7 +9,7 @@ import { fetchMarkdown } from '../utils/mdCache';
 import Icon from '../components/Icon';
 import BookmarkButton from '../components/ui/BookmarkButton';
 import { DECK_BOOKMARK_TYPE } from '../domain/bookmarks';
-import { resolveBogangId } from '../domain/bogangDeck';
+import { CORE_DECK_FILE, CORE_DECK_KEY } from '../domain/coreDeck';
 import useStudyState from '../hooks/useStudyState';
 import { bookmarkKey } from '../utils/studyState';
 import {
@@ -24,7 +24,7 @@ const CATEGORIES = ['전체', '데이터베이스', '소프트웨어공학', '�
 // `idPattern` 은 교재 카드 id 형식이다 — 딥링크가 어느 덱을 가리키는지 모양으로 가른다.
 const DECKS = [
   { key: 'quiz100', label: '단답형 100선', file: '정처기_단답형_100선.md', parser: 'quiz', idPattern: /^\d{3}$/ },
-  { key: 'bogang119', label: '암기 119선 보강', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang', idPattern: /^B\d{2,3}(-\d+)?$/ },
+  { key: CORE_DECK_KEY, label: '핵심 암기 카드', file: CORE_DECK_FILE, parser: 'quiz', idPattern: /^K\d{3}$/ },
 ];
 
 const DEFAULT_DECK = 'quiz100';
@@ -66,7 +66,7 @@ export default function FlashcardPage() {
     fetchMarkdown(deckInfo.file)
       .then((text) => {
         if (cancelled) return;
-        setAllCards(deckInfo.parser === 'quiz' ? parseQuiz(text) : parseBogang(text));
+        setAllCards(parseQuiz(text));
         setKnown(loadProgress(`flashcard_known_${deck}`, {}));
       });
     return () => { cancelled = true; };
@@ -90,7 +90,7 @@ export default function FlashcardPage() {
   // 목록이 줄어 커서가 범위를 벗어나는 경우(모르는 것만 필터에서 외움 처리)도
   // 이 훅이 첫 카드로 되돌린다.
   // 쪼개기 전의 섹션 id(`B07`)로 온 링크는 그 섹션의 첫 카드로 보낸다
-  const wantedId = deck === 'bogang119' ? resolveBogangId(requestedId, allCards) : requestedId;
+  const wantedId = requestedId;
   const { index: idx, setIndex, missedId } = useDeepLinkedIndex(cards, wantedId, isKnown);
   const deepLinkNotice = deckDeepLinkNotice(missedId);
 
@@ -223,7 +223,7 @@ export default function FlashcardPage() {
             />
           </div>
           <div className="flashcard-container" {...swipeHandlers}>
-            <div className={`flashcard ${flipped ? 'flipped' : ''} ${deck === 'bogang119' && flipped ? 'flashcard-tall' : ''}`} onClick={() => setFlipped(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFlipped(!flipped); } }} role="button" tabIndex={0} aria-label="카드 뒤집기">
+            <div className={`flashcard ${flipped ? 'flipped' : ''} ${deck === CORE_DECK_KEY && flipped ? 'flashcard-tall' : ''}`} onClick={() => setFlipped(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFlipped(!flipped); } }} role="button" tabIndex={0} aria-label="카드 뒤집기">
               <div className="flashcard-face">
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                   <span className="badge badge-primary">{current.category}</span>
@@ -234,8 +234,8 @@ export default function FlashcardPage() {
                 <p style={{ color: 'var(--text-dim)', marginTop: 16, fontSize: '0.85rem' }}>클릭하여 정답 확인</p>
               </div>
               <div className="flashcard-face flashcard-back">
-                <div className="md-content" style={{ width: '100%', fontSize: deck === 'bogang119' ? '0.85rem' : '0.95rem' }}>
-                  <ReactMarkdown>{current.answer}</ReactMarkdown>
+                <div className="md-content" style={{ width: '100%', fontSize: deck === CORE_DECK_KEY ? '0.9rem' : '0.95rem' }}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{current.answer}</ReactMarkdown>
                 </div>
               </div>
             </div>

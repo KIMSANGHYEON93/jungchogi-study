@@ -5,7 +5,6 @@ import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/pris
 import ReactMarkdown from 'react-markdown';
 import { parseQuiz } from '../utils/parseQuiz';
 import { parseCodeDrill } from '../utils/parseCodeDrill';
-import { parseBogang } from '../utils/parseBogang';
 import { parseStudyNotes, makeSnippet } from '../utils/parseStudyNotes';
 import { STUDY_FILES } from '../domain/studyFiles';
 import { fetchMarkdown } from '../utils/mdCache';
@@ -16,7 +15,7 @@ import { useThemeContext } from '../hooks/useTheme';
 const SOURCE_CONFIG = {
   quiz100: { label: '단답형 100선', badge: 'badge-primary', file: '정처기_단답형_100선.md', parser: 'quiz' },
   codeDrill: { label: '코드 트레이싱', badge: 'badge-warning', file: '정처기_코드트레이싱_드릴.md', parser: 'code' },
-  bogang: { label: '암기 119선', badge: 'badge-danger', file: '정처기_보강_기출분석_암기119선.md', parser: 'bogang' },
+  core: { label: '핵심 암기', badge: 'badge-danger', file: '정처기_핵심암기_카드.md', parser: 'quiz' },
   // 문제 은행이 아니라 Day 문서 등 학습 노트 본문 — 제목(#~###) 단위 섹션으로 색인한다
   notes: { label: '학습 노트', badge: 'badge-success' },
 };
@@ -47,8 +46,8 @@ export default function SearchPage() {
     Promise.all([
       load('quiz100', parseQuiz),
       load('codeDrill', parseCodeDrill),
-      load('bogang', parseBogang),
-    ]).then(([quiz, code, bogang]) => {
+      load('core', parseQuiz),
+    ]).then(([quiz, code, core]) => {
       if (cancelled) return;
       const quizItems = quiz.map((q) => ({
         ...q,
@@ -60,12 +59,12 @@ export default function SearchPage() {
         source: 'codeDrill',
         searchText: `${q.title} ${q.context} ${q.code} ${q.answer} ${q.pitfall || ''} ${q.lang}`.toLowerCase(),
       }));
-      const bogangItems = bogang.map((q) => ({
+      const coreItems = core.map((q) => ({
         ...q,
-        source: 'bogang',
+        source: 'core',
         searchText: `${q.question} ${q.answer} ${q.category}`.toLowerCase(),
       }));
-      setAllItems([...quizItems, ...codeItems, ...bogangItems]);
+      setAllItems([...quizItems, ...codeItems, ...coreItems]);
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -187,7 +186,7 @@ export default function SearchPage() {
         <div className="card" style={{ textAlign: 'center', padding: 60 }}>
           <div style={{ marginBottom: 16, color: 'var(--text-dim)' }}><Icon name="search" size={48}/></div>
           <p style={{ color: 'var(--text-dim)' }}>
-            단답형 100선, 코드 트레이싱 40문제, 암기 119선 보강<br />
+            단답형 100선, 코드 트레이싱 40문제, 핵심 암기 카드<br />
             학습 노트 {noteItems.length}개 섹션을 포함해 총 {searchable.length}개 항목에서 검색합니다
           </p>
         </div>

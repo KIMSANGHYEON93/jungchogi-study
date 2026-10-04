@@ -15,7 +15,7 @@ export const STUDY_FILES = [
   { name: 'Day 12 — 최종정리', file: '정처기_Day12_최종정리.md' },
   { name: 'Day 13 — 시험전날', file: '정처기_Day13_시험전날.md' },
   { name: 'Day 14 — 시험당일', file: '정처기_Day14_시험당일.md' },
-  { name: '보강 — 기출+암기119선', file: '정처기_보강_기출분석_암기119선.md' },
+  { name: '핵심 암기 카드', file: '정처기_핵심암기_카드.md' },
   { name: '단답형 100선', file: '정처기_단답형_100선.md' },
   { name: '코드 트레이싱 드릴', file: '정처기_코드트레이싱_드릴.md' },
   { name: '합격 전략 가이드', file: '정보처리기사_실기_합격전략.md' },

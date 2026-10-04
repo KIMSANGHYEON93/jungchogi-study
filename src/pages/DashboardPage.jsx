@@ -10,7 +10,7 @@ import { loadStoredBusy } from '../utils/busyStore';
 import { applyBackup, buildBackup, failureMessage, parseBackup, successMessage } from '../utils/backup';
 import { summarizeQuizResults } from '../domain/grading';
 
-import { BOGANG_CARD_COUNT } from '../domain/bogangDeck';
+import { CORE_CARD_COUNT, CORE_DECK_KEY } from '../domain/coreDeck';
 
 // ─── 오답 유형 분류 ───
 function categorizeWrongNotes(notes) {
@@ -95,8 +95,8 @@ export default function DashboardPage() {
 
   const flashcardTotal = 100;
   const flashcardDone = Object.values(flashcardKnown).filter(Boolean).length;
-  const bogangTotal = BOGANG_CARD_COUNT;
-  const bogangDone = Object.values(loadProgress('flashcard_known_bogang119', {})).filter(Boolean).length;
+  const coreTotal = CORE_CARD_COUNT;
+  const coreDone = Object.values(loadProgress(`flashcard_known_${CORE_DECK_KEY}`, {})).filter(Boolean).length;
   // quiz_results 에는 세 값이 섞여 있다: 'correct' | 'incorrect' | 레거시 'answered'.
   // 진도(= 시도한 문항 수)는 셋을 다 세고, 정답률은 채점된 것만으로 낸다 —
   // 레거시에는 정오 정보가 없어 정답으로도 오답으로도 셀 수 없다.
@@ -114,7 +114,7 @@ export default function DashboardPage() {
 
   const overallPercent = Math.round(
     ((flashcardDone / flashcardTotal) * 25 +
-      (bogangDone / bogangTotal) * 15 +
+      (coreDone / coreTotal) * 15 +
       (quizDone / quizTotal) * 30 +
       (daysCompleted / daysTotal) * 30)
   );
@@ -343,12 +343,12 @@ export default function DashboardPage() {
 
         <div className="card dash-stat-card" onClick={() => navigate('/flashcard')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/flashcard'); } }} role="button" tabIndex={0} style={{ cursor: 'pointer' }}>
           <div className="dash-stat-icon"><Icon name="book-open" size={28}/></div>
-          <div className="dash-stat-title">암기 119선</div>
-          <div className="dash-stat-value">{bogangDone}<span>/{bogangTotal}</span></div>
-          <div className="progress-bar" role="progressbar" aria-valuenow={Math.round((bogangDone / bogangTotal) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="학습 진도" style={{ marginTop: 8 }}>
-            <div className="fill" style={{ width: `${(bogangDone / bogangTotal) * 100}%`, background: 'var(--accent)' }} />
+          <div className="dash-stat-title">핵심 암기 카드</div>
+          <div className="dash-stat-value">{coreDone}<span>/{coreTotal}</span></div>
+          <div className="progress-bar" role="progressbar" aria-valuenow={Math.round((coreDone / coreTotal) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="학습 진도" style={{ marginTop: 8 }}>
+            <div className="fill" style={{ width: `${(coreDone / coreTotal) * 100}%`, background: 'var(--accent)' }} />
           </div>
-          <div className="dash-stat-sub">{Math.round((bogangDone / bogangTotal) * 100)}% 완료</div>
+          <div className="dash-stat-sub">{Math.round((coreDone / coreTotal) * 100)}% 완료</div>
         </div>
 
         <div className="card dash-stat-card" onClick={() => navigate('/quiz')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/quiz'); } }} role="button" tabIndex={0} style={{ cursor: 'pointer' }}>
