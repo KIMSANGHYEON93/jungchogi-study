@@ -26,4 +26,12 @@ describe('학습 자료 출처 규칙', () => {
       expect(md, f).not.toContain('기출 코드 트레이싱');
     }
   });
+
+  it('Day09 · Day11 모의고사는 직접 만든 문항 표기를 달고 20문항씩이다', () => {
+    for (const f of ['정처기_Day09_모의고사1회.md', '정처기_Day11_모의고사2회.md']) {
+      const md = read(f);
+      expect(md, f).toContain('이 앱에서 직접 만든 문항');
+      expect(md.match(/^### 문제 \d+\./gm), f).toHaveLength(20);
+    }
+  });
 });

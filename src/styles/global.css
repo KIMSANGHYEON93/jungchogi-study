@@ -344,6 +344,29 @@ a.btn-danger {
   text-align: left;
 }
 .md-content th { background: var(--bg-hover); font-weight: 600; }
+
+/* 학습 노트의 정답 상자 — 처음에는 접혀 있어 풀기 전에 답이 보이지 않는다 */
+.md-answer {
+  margin: var(--space-sm) 0 var(--space-md);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+}
+.md-answer > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-md);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--primary);
+}
+.md-answer[open] > summary {
+  border-bottom: 1px solid var(--border);
+}
+.md-answer-body {
+  padding: var(--space-sm) var(--space-md);
+}
 .md-content hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
 .md-content pre {
   background: var(--code-bg) !important;
