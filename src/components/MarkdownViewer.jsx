@@ -3,14 +3,15 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useThemeContext } from '../hooks/useTheme';
+import { splitDetails } from '../utils/splitDetails';
 
 export default function MarkdownViewer({ content }) {
   const { theme } = useThemeContext();
   const syntaxTheme = theme === 'dark' ? oneDark : oneLight;
 
-  return (
-    <div className="md-content">
+  const markdown = (text, key) => (
       <ReactMarkdown
+        key={key}
         remarkPlugins={[remarkGfm]}
         components={{
           code({ inline, className, children, ...props }) {
@@ -31,8 +32,22 @@ export default function MarkdownViewer({ content }) {
           },
         }}
       >
-        {content}
+        {text}
       </ReactMarkdown>
+  );
+
+  return (
+    <div className="md-content">
+      {splitDetails(content).map((part, i) =>
+        part.kind === 'md' ? (
+          markdown(part.text, i)
+        ) : (
+          <details key={i} className="md-answer">
+            <summary>{part.summary}</summary>
+            <div className="md-answer-body">{markdown(part.text, 'body')}</div>
+          </details>
+        )
+      )}
     </div>
   );
 }

@@ -78,10 +78,11 @@ describe('대시보드 — 로드맵 하나로 통합', () => {
     expect([...c.querySelectorAll('button')].some((b) => b.textContent === '이어하기')).toBe(true);
   });
 
-  it('암기 119선 진도의 분모는 카드 수(80)다', () => {
-    saveProgress('flashcard_known_bogang119', { 'B01-1': true, 'B01-2': true });
+  it('핵심 암기 카드 진도의 분모는 카드 수(68)다', () => {
+    saveProgress('flashcard_known_core', { K001: true, K002: true });
     const c = render();
-    expect(c.textContent).toContain('/80');
-    expect(c.textContent).toContain('3%'); // 2/80
+    expect(c.textContent).toContain('핵심 암기 카드');
+    expect(c.textContent).toContain('/68');
+    expect(c.textContent).toContain('3%'); // 2/68
   });
 });

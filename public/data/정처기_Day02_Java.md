@@ -1,8 +1,8 @@
 # Day 2 - Java 클래스, 상속, 오버라이딩
 
 > **권장 학습 시간**: 14:00~19:00
-> **목표**: Java 객체지향 핵심 + 기출 코드 트레이싱
-> **학습 후 체크**: [ ] 이론 이해  [ ] 기출 8문제+  [ ] 오답 정리
+> **목표**: Java 객체지향 핵심 + 코드 트레이싱 연습
+> **학습 후 체크**: [ ] 이론 이해  [ ] 연습 8문제  [ ] 오답 정리
 
 ---
 
@@ -165,195 +165,220 @@ class Doc implements Printable {
 
 ---
 
-## PART 5: 기출 코드 트레이싱 (직접 풀어보기!)
+## PART 5: 코드 트레이싱 연습 (직접 풀어보기!)
+
+> 기출에 자주 나온 **개념**을 이 앱에서 새로 만든 문제입니다. 정답은 javac 로 컴파일 · 실행해 확인했습니다.
 
 ---
 
 ### 문제 1 (오버라이딩 + 재귀) ★★★★★
 
 ```java
-class Parent {
-    int compute(int num) {
-        if (num <= 1) return num;
-        return compute(num-1) + compute(num-2);
+class Base {
+    int calc(int n) {
+        if (n <= 0) return 1;
+        return calc(n - 1) + n;
     }
 }
-class Child extends Parent {
-    int compute(int num) {
-        if (num <= 1) return num;
-        return compute(num-1) + compute(num-3);
+class Derived extends Base {
+    int calc(int n) {
+        if (n <= 0) return 1;
+        return calc(n - 2) * 2;
     }
 }
 public class Main {
     public static void main(String[] args) {
-        Parent obj = new Child();
-        System.out.print(obj.compute(4));
+        Base obj = new Derived();
+        System.out.print(obj.calc(5));
     }
 }
 ```
 
 **트레이싱:**
 ```
-compute(4) = compute(3) + compute(1)
-compute(3) = compute(2) + compute(0)
-compute(2) = compute(1) + compute(-1)
+obj 의 실제 객체는 ______ → calc 는 ______ 의 것이 불린다 (재귀 호출도 마찬가지)
 
-compute(1)=___, compute(0)=___, compute(-1)=___
-compute(2)=___, compute(3)=___, compute(4)=___
+calc(5) = calc(___) * 2
+calc(3) = calc(___) * 2
+calc(1) = calc(___) * 2
+calc(-1) = ___
 
 출력: ___
 ```
 
 ---
 
-### 문제 2 (super + 상속) ★★★
+### 문제 2 (super 생성자 + super 메서드) ★★★
 
 ```java
-class A {
-    private int a;
-    public A(int a) { this.a = a; }
-    public void display() { System.out.println("a=" + a); }
+class Animal {
+    protected String name;
+    public Animal(String name) {
+        this.name = name;
+        System.out.println("Animal(" + name + ")");
+    }
+    public void speak() { System.out.println("..."); }
 }
-class B extends A {
-    public B(int a) {
-        super(a);
-        super.display();
+class Dog extends Animal {
+    public Dog(String name) {
+        super(name);
+        System.out.println("Dog(" + name + ")");
+    }
+    public void speak() {
+        super.speak();
+        System.out.println(name + ": bark");
     }
 }
 public class Main {
     public static void main(String[] args) {
-        B obj = new B(10);
+        Animal a = new Dog("Max");
+        a.speak();
     }
 }
 ```
 
-**나의 답:** ___________
+**나의 답:**
+```
+___________
+___________
+___________
+___________
+```
 
 ---
 
-### 문제 3 (추상클래스 + 오버로딩) ★★★★
+### 문제 3 (추상 클래스 + 오버로딩) ★★★★
 
 ```java
-abstract class Vehicle {
-    String name;
-    abstract public String getName(String val);
-    public String getName() {
-        return "Vehicle name: " + name;
+abstract class Shape {
+    String label;
+    abstract String describe(int scale);
+    String describe() {
+        return "Shape " + label;
     }
 }
-class Car extends Vehicle {
-    public Car(String val) { name = val; }
-    public String getName(String val) {
-        return "Car name: " + val;
+class Circle extends Shape {
+    Circle(String label) { this.label = label; }
+    String describe(int scale) {
+        return "Circle " + label + " x" + scale;
     }
 }
 public class Main {
     public static void main(String[] args) {
-        Vehicle obj = new Car("Spark");
-        System.out.println(obj.getName());
+        Shape s = new Circle("C1");
+        System.out.println(s.describe());
+        System.out.println(s.describe(3));
     }
 }
 ```
 
-**포인트: 매개변수 없는 `getName()`은 어디에?**
+**포인트: 매개변수 없는 `describe()` 는 누가 가지고 있나?**
 
-나의 답: ___________________________
+나의 답:
+```
+___________________________
+___________________________
+```
 
 ---
 
-### 문제 4 (생성자 체이닝) ★★★★★
+### 문제 4 (생성자 체이닝 + 필드 숨김) ★★★★★
 
 ```java
 class Parent {
-    int x = 100;
-    Parent() { this(500); }
-    Parent(int x) { this.x = x; }
-    int getX() { return x; }
+    int v = 1;
+    Parent() { this(20); System.out.print("P "); }
+    Parent(int v) { this.v = v; System.out.print("P(" + v + ") "); }
+    int getV() { return v; }
 }
 class Child extends Parent {
-    int x = 4000;
-    Child() { this(5000); }
-    Child(int x) { this.x = x; }
+    int v = 300;
+    Child() { this(400); System.out.print("C "); }
+    Child(int v) { this.v = v; System.out.print("C(" + v + ") "); }
 }
 public class Main {
     public static void main(String[] args) {
         Child obj = new Child();
-        System.out.println(obj.getX());
+        System.out.println();
+        System.out.println(obj.getV() + obj.v);
     }
 }
 ```
 
 **트레이싱:**
 ```
-Child() → this(5000) → Child(5000)
-  → 암묵적 super() → Parent() → this(500) → Parent(500)
-    → Parent.x = ___
-  → Child.x = ___
+Child() → this(400) → Child(400)
+  → 암묵적 super() → Parent() → this(20) → Parent(20)
+      → Parent.v = ___ , 출력 "_____"
+    → Parent() 나머지, 출력 "_____"
+  → Child.v = ___ , 출력 "_____"
+→ Child() 나머지, 출력 "_____"
 
-getX()는 Parent 소속 → return Parent.x = ___
+getV() 는 Parent 의 메서드 → Parent.v = ___
+obj.v 는 Child 타입 변수로 접근 → Child.v = ___
 
-출력: ___
+출력 (2줄): ____________ / ___
 ```
 
 ---
 
-### 문제 5 (싱글톤 패턴) ★★★★
+### 문제 5 (싱글톤) ★★★★
 
 ```java
-class Connection {
-    private static Connection _inst = null;
-    private int count = 0;
-    static public Connection get() {
-        if (_inst == null) { _inst = new Connection(); }
-        return _inst;
+class Counter {
+    private static Counter instance;
+    private static int created = 0;
+    private int hits = 0;
+    private Counter() { created++; }
+    static Counter getInstance() {
+        if (instance == null) instance = new Counter();
+        return instance;
     }
-    public void count() { count++; }
-    public int getCount() { return count; }
+    void hit() { hits++; }
+    int getHits() { return hits; }
+    static int getCreated() { return created; }
 }
 public class Main {
     public static void main(String[] args) {
-        Connection c1 = Connection.get();
-        c1.count();
-        Connection c2 = Connection.get();
-        c2.count();
-        Connection c3 = Connection.get();
-        c3.count();
-        System.out.print(c1.getCount());
+        Counter a = Counter.getInstance();
+        a.hit();
+        Counter b = Counter.getInstance();
+        b.hit();
+        b.hit();
+        System.out.println(a.getHits() + " " + Counter.getCreated() + " " + (a == b));
     }
 }
 ```
 
-**c1, c2, c3는 같은 객체? ___ → 출력: ___**
+**a 와 b 는 같은 객체? ___ → 출력: ___________**
 
 ---
 
-### 문제 6 (상속 + super.메서드) ★★★★
+### 문제 6 (오버라이딩 안에서 super.메서드) ★★★★
 
 ```java
-class ovr1 {
-    int san(int x, int y) { return x + y; }
+class Calc {
+    int op(int x, int y) { return x * y; }
 }
-class ovr2 extends ovr1 {
-    int san(int x, int y) {
-        return x - y + super.san(x, y);
+class SubCalc extends Calc {
+    int op(int x, int y) {
+        return super.op(x, y) - (x + y);
     }
 }
 public class Main {
     public static void main(String[] args) {
-        ovr1 a1 = new ovr1();
-        ovr1 a2 = new ovr2();
-        System.out.println(a1.san(3,2) + a2.san(3,2));
+        Calc c1 = new Calc();
+        Calc c2 = new SubCalc();
+        System.out.println(c1.op(4, 5) + c2.op(4, 5));
     }
 }
 ```
 
 **트레이싱:**
 ```
-a1.san(3,2) = ___
-a2.san(3,2) = 3 - 2 + super.san(3,2) = 1 + ___ = ___
-합계: ___ + ___ = ___
-
-출력: ___
+c1.op(4,5) = ___
+c2.op(4,5) = super.op(4,5) - (4+5) = ___ - ___ = ___
+합계: ___
 ```
 
 ---
@@ -363,17 +388,17 @@ a2.san(3,2) = 3 - 2 + super.san(3,2) = 1 + ___ = ___
 ```java
 public class Main {
     public static void main(String[] args) {
-        String str = "Programming";
+        String str = "Engineering";
         System.out.println(str.length());
-        System.out.println(str.charAt(3));
-        System.out.println(str.substring(2, 6));
-        System.out.println(str.indexOf("gram"));
-        System.out.println(str.toUpperCase());
+        System.out.println(str.charAt(5));
+        System.out.println(str.substring(3, 7));
+        System.out.println(str.indexOf("ee"));
+        System.out.println(str.lastIndexOf('n'));
     }
 }
 ```
 
-**인덱스: P(0) r(1) o(2) g(3) r(4) a(5) m(6) m(7) i(8) n(9) g(10)**
+**인덱스: E(0) n(1) g(2) i(3) n(4) e(5) e(6) r(7) i(8) n(9) g(10)**
 
 나의 답:
 ```
@@ -386,26 +411,21 @@ ___
 
 ---
 
-### 문제 8 (비트/논리 연산) ★★★★
+### 문제 8 (비단락 논리 연산 | & ^) ★★★★
 
 ```java
 public class Main {
     public static void main(String[] args) {
-        int a=3, b=4, c=3, d=5;
-        if ((a==2 | a==c) & !(c>d) & (1==b ^ c!=d)) {
-            a = b + c;
-            if (7==b ^ c!=a) {
-                System.out.println(a);
+        int x = 6, y = 3, z = 6, w = 2;
+        if ((x == y | x == z) & !(y < w) & (x > z ^ y != w)) {
+            x = y * w;
+            if (x == z ^ y > w) {
+                System.out.println(x + y);
             } else {
-                System.out.println(b);
+                System.out.println(x - w);
             }
         } else {
-            a = c + d;
-            if (7==c ^ c!=a) {
-                System.out.println(a);
-            } else {
-                System.out.println(d);
-            }
+            System.out.println(z);
         }
     }
 }
@@ -413,18 +433,15 @@ public class Main {
 
 **트레이싱:**
 ```
-| → OR (둘 다 평가)
-& → AND (둘 다 평가)
-^ → XOR (다르면 true)
+| → OR (양쪽 모두 평가)   & → AND (양쪽 모두 평가)   ^ → XOR (다르면 true)
 
-(a==2 | a==c) = (F | T) = ___
-!(c>d) = !(F) = ___
-(1==b ^ c!=d) = (F ^ T) = ___
-전체 = ___ & ___ & ___ = ___
+(x==y | x==z)    = (___ | ___) = ___
+!(y<w)           = !(___)      = ___
+(x>z ^ y!=w)     = (___ ^ ___) = ___
+전체 = ___ → ___ 블록
 
-→ ___ 블록 진입
-a = ___, 내부 조건 = ___
-
+x = y*w = ___
+(x==z ^ y>w) = (___ ^ ___) = ___ → ___ 블록
 출력: ___
 ```
 
@@ -434,38 +451,63 @@ a = ___, 내부 조건 = ___
 
 <details>
 
-### 문제 1 정답: `1`
-Child.compute(4) = compute(3) + compute(1) = 0 + 1 = 1
-- compute(2) = compute(1) + compute(-1) = 1 + (-1) = 0
-- compute(3) = compute(2) + compute(0) = 0 + 0 = 0
+### 문제 1 정답: `8`
+- 실제 객체가 Derived 이므로 **재귀 안의 calc 도 Derived 의 것**이 불린다 (동적 바인딩)
+- calc(-1) = 1 → calc(1) = 1×2 = 2 → calc(3) = 2×2 = 4 → calc(5) = 4×2 = **8**
+- 함정: Base 의 `calc(n-1) + n` 으로 계산하면 틀린다
 
-### 문제 2 정답: `a=10`
-B(10) → super(10) → A.a=10 → super.display() → "a=10"
+### 문제 2 정답
+```
+Animal(Max)
+Dog(Max)
+...
+Max: bark
+```
+- 생성: `super(name)` 이 먼저 → Animal 생성자 출력 → 그다음 Dog 생성자 출력
+- `a.speak()`: 실제 객체 Dog 의 speak → `super.speak()` 로 "..." → 이어서 "Max: bark"
 
-### 문제 3 정답: `Vehicle name: Spark`
-매개변수 없는 getName()은 Car에 없음 → 부모의 getName() 실행
+### 문제 3 정답
+```
+Shape C1
+Circle C1 x3
+```
+- 매개변수 없는 `describe()` 는 Circle 이 재정의하지 않았다 → **Shape 의 것**이 그대로 쓰인다
+- `describe(3)` 은 추상 메서드라 **Circle 의 구현**이 불린다 (오버로딩: 이름은 같고 매개변수가 다름)
 
-### 문제 4 정답: `500`
-Parent.x=500, Child.x=5000. getX()는 Parent 소속 → 500 반환
+### 문제 4 정답
+```
+P(20) P C(400) C 
+420
+```
+- 생성자 순서: Child() → Child(400) → (super) Parent() → Parent(20). 출력은 **안쪽부터** 끝나므로 P(20) → P → C(400) → C
+- `getV()` 는 Parent 의 메서드라 **Parent.v = 20**, `obj.v` 는 Child 타입 변수라 **Child.v = 400** (필드는 오버라이딩되지 않는다)
+- 20 + 400 = **420**
 
-### 문제 5 정답: `3`
-싱글톤: 모두 같은 객체. count 3번 증가 → 3
+### 문제 5 정답: `3 1 true`
+- getInstance 는 처음 한 번만 객체를 만든다 → **같은 객체**, created = **1**
+- hit() 을 a 로 1번, b 로 2번 → 같은 객체의 hits = **3**
 
-### 문제 6 정답: `11`
-a1.san(3,2)=5, a2.san(3,2)=1+5=6, 합계=11
+### 문제 6 정답: `31`
+- c1.op(4,5) = 4×5 = **20**
+- c2.op(4,5) = super.op(4,5) − (4+5) = 20 − 9 = **11** (실제 객체 SubCalc)
+- 20 + 11 = **31**
 
-### 문제 7 정답:
+### 문제 7 정답
 ```
 11
-g
-ogra
-3
-PROGRAMMING
+e
+inee
+5
+9
 ```
-substring(2,6): 인덱스 2~5 (6 미포함) → "ogra"
+- `substring(3, 7)`: 인덱스 3 ~ **6** (끝 번호는 포함하지 않음) → i n e e
+- `indexOf("ee")`: 처음 나오는 위치 5 / `lastIndexOf('n')`: 마지막 n 은 인덱스 9
 
-### 문제 8 정답: `7`
-조건 true → a=b+c=7, (7==b ^ c!=a)=(F^T)=T → println(a) → 7
+### 문제 8 정답: `4`
+- (F | T) = T, !(F) = T, (F ^ T) = T → 전체 **T** → 첫 블록
+- x = 3×2 = 6 → (6==6 ^ 3>2) = (T ^ T) = **F** → else
+- x − w = 6 − 2 = **4**
+- 함정: `|` `&` 는 단락 평가를 하지 않아 양쪽을 모두 계산한다 (`||` `&&` 와 다름)
 
 </details>
 

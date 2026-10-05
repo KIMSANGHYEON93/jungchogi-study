@@ -207,7 +207,7 @@ export default function QuizPage() {
               value={userAnswer}
               onChange={(e) => setUserAnswer(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
-              placeholder="예: 30 50"
+              placeholder="예: 3 7"
               disabled={submitted}
             />
             {!submitted ? (

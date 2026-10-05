@@ -2,6 +2,7 @@
 
 > **목적**: 시험에서 가장 배점 높고 실수 잦은 코드/SQL 문제 집중 훈련
 > **방법**: 문제 → 손으로 변수 추적표 작성 → 정답 확인 → 함정 포인트 체크
+> **출처**: 이 앱에서 새로 만든 문제입니다. 모든 코드 정답은 실제로 실행해 확인했습니다.
 > **목표 시간**: 코드 1문제 3~5분, SQL 1문제 2~3분
 
 ---
@@ -13,12 +14,12 @@
 ```c
 #include <stdio.h>
 int main() {
-    int a = 10, b = 20;
-    int *p = &a;
-    *p = *p + b;
-    p = &b;
-    *p = *p + a;
-    printf("%d %d", a, b);
+    int x = 4, y = 9;
+    int *p = &y;
+    *p = *p - x;
+    p = &x;
+    *p = *p * y;
+    printf("%d %d", x, y);
     return 0;
 }
 ```
@@ -27,15 +28,14 @@ int main() {
 <summary>정답 및 풀이</summary>
 
 ```
-추적표:
-a=10, b=20, p=&a
-*p = *p + b → *p = 10+20 = 30 → a=30
-p = &b → p가 b를 가리킴
-*p = *p + a → *p = 20+30 = 50 → b=50
+x=4, y=9, p=&y
+*p = *p - x → y = 9 - 4 = 5
+p = &x      → p 가 x 를 가리킴
+*p = *p * y → x = 4 * 5 = 20   (y 는 이미 5)
 
-출력: 30 50
+출력: 20 5
 ```
-**함정**: `*p + b`에서 a가 30으로 바뀐 뒤, 이후 `*p + a`의 a는 이미 30임
+**함정**: `*p` 는 "지금 p 가 가리키는 변수"다. p 를 옮긴 뒤에는 다른 변수를 바꾼다
 </details>
 
 ---
@@ -45,18 +45,18 @@ p = &b → p가 b를 가리킴
 ### J-01. 상속 + 오버라이딩
 
 ```java
-class A {
-    int x = 10;
-    String f() { return "A"; }
+class P {
+    int v = 1;
+    String who() { return "P"; }
 }
-class B extends A {
-    int x = 20;
-    String f() { return "B"; }
+class Q extends P {
+    int v = 2;
+    String who() { return "Q"; }
 }
 public class Main {
     public static void main(String[] args) {
-        A obj = new B();
-        System.out.println(obj.x + " " + obj.f());
+        P obj = new Q();
+        System.out.println(obj.v + " " + obj.who());
     }
 }
 ```
@@ -65,14 +65,13 @@ public class Main {
 <summary>정답 및 풀이</summary>
 
 ```
-A obj = new B();  ← 부모 타입, 자식 객체
+P obj = new Q()
+obj.v     → 필드는 변수 타입(P) 기준 = 1
+obj.who() → 메서드는 실제 객체(Q) 기준 = "Q"
 
-obj.x   → 변수는 부모 기준 = 10
-obj.f() → 메서드는 자식 오버라이딩 = "B"
-
-출력: 10 B
+출력: 1 Q
 ```
-**최다출제 함정**: 변수=선언타입(부모), 메서드=실제객체(자식). 반드시 구분!
+**함정**: 필드는 오버라이딩되지 않는다 — 변수 타입을 따른다
 </details>
 
 ---
@@ -82,69 +81,73 @@ obj.f() → 메서드는 자식 오버라이딩 = "B"
 ### S-01. GROUP BY + HAVING
 
 ```
-테이블: 사원(이름, 부서, 급여)
-| 이름 | 부서 | 급여 |
+테이블: 주문(고객, 상품, 금액)
+| 고객 | 상품 | 금액 |
 |------|------|------|
-| 김 | 개발 | 400 |
-| 이 | 개발 | 300 |
-| 박 | 인사 | 350 |
-| 정 | 개발 | 500 |
-| 최 | 인사 | 250 |
+| 김 | 펜 | 300 |
+| 이 | 책 | 1200 |
+| 김 | 책 | 900 |
+| 박 | 컵 | 500 |
+| 이 | 펜 | 300 |
+| 김 | 컵 | 600 |
 ```
 
 ```sql
-SELECT 부서, COUNT(*) AS 인원, AVG(급여) AS 평균
-FROM 사원
-GROUP BY 부서
-HAVING COUNT(*) >= 3;
+SELECT 고객, COUNT(*) AS 건수, SUM(금액) AS 합계
+FROM 주문
+GROUP BY 고객
+HAVING SUM(금액) >= 1000
+ORDER BY 합계 DESC;
 ```
 
 <details>
 <summary>정답 및 풀이</summary>
 
 ```
-① GROUP BY 부서:
-   개발: 김(400), 이(300), 정(500) → 3명
-   인사: 박(350), 최(250) → 2명
-
-② HAVING COUNT(*) >= 3:
-   개발: 3 >= 3 → O
-   인사: 2 >= 3 → X (제외)
+① GROUP BY 고객:
+   김: 300 + 900 + 600 = 1800 (3건)
+   이: 1200 + 300 = 1500 (2건)
+   박: 500 (1건)
+② HAVING 합계 >= 1000 → 박 제외
+③ 합계 내림차순
 
 결과:
-| 부서 | 인원 | 평균 |
+| 고객 | 건수 | 합계 |
 |------|------|------|
-| 개발 | 3 | 400 |
+| 김 | 3 | 1800 |
+| 이 | 2 | 1500 |
 ```
-**함정**: AVG(급여) = (400+300+500)/3 = 400. HAVING은 그룹 후 필터
+**함정**: 집계 함수로 거르는 조건은 WHERE 가 아니라 HAVING
 </details>
 
 ---
-
 
 ### S-05. DDL 작성
 
 ```
 다음 조건에 맞는 CREATE TABLE 문을 작성하시오:
-- 테이블명: 학생
-- 학번(INT): 기본키
-- 이름(VARCHAR(20)): NOT NULL
-- 학과(VARCHAR(30)): 기본값 '미정'
-- 학년(INT): 1~4 사이 값만 허용
+- 테이블명: 도서
+- 도서번호(INT): 기본키
+- 제목(VARCHAR(50)): NOT NULL
+- 가격(INT): 0 이상만 허용
+- 분류(VARCHAR(10)): 기본값 '일반'
+- 출판사번호(INT): 출판사 테이블의 출판사번호를 참조(외래키)
 ```
 
 <details>
 <summary>정답</summary>
 
 ```sql
-CREATE TABLE 학생 (
-    학번 INT PRIMARY KEY,
-    이름 VARCHAR(20) NOT NULL,
-    학과 VARCHAR(30) DEFAULT '미정',
-    학년 INT CHECK (학년 BETWEEN 1 AND 4)
+CREATE TABLE 도서 (
+    도서번호 INT PRIMARY KEY,
+    제목 VARCHAR(50) NOT NULL,
+    가격 INT CHECK (가격 >= 0),
+    분류 VARCHAR(10) DEFAULT '일반',
+    출판사번호 INT,
+    FOREIGN KEY (출판사번호) REFERENCES 출판사(출판사번호)
 );
 ```
-**체크**: PRIMARY KEY / NOT NULL / DEFAULT / CHECK 제약조건 구분
+**체크**: PRIMARY KEY / NOT NULL / CHECK / DEFAULT / FOREIGN KEY … REFERENCES 를 구분
 </details>
 
 ---

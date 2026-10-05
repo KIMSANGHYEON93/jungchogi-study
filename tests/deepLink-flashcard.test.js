@@ -2,9 +2,9 @@
 //
 // 플래시카드의 문항 딥링크 (`/flashcard?id=002`).
 //
-// 이 화면만의 문제: **덱이 둘이다**(단답형 100선 · 암기 119선 보강).
+// 이 화면만의 문제: **덱이 둘이다**(단답형 100선 · 핵심 암기 카드).
 // 계약은 `/flashcard?id=<문항 id>` 하나뿐이라 어느 덱인지는 화면이 판단해야 한다.
-// 교재 id 형식이 덱마다 달라(`001` vs `B01`) 그 모양으로 가른다.
+// 자료 id 형식이 덱마다 달라(`001` vs `K001`) 그 모양으로 가른다.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -16,9 +16,9 @@ import FlashcardPage from '../src/pages/FlashcardPage.jsx';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const QUIZ_MD = readFileSync(resolve(process.cwd(), 'tests/fixtures/quiz-sample.md'), 'utf-8');
-const BOGANG_MD = readFileSync(resolve(process.cwd(), 'tests/fixtures/bogang-sample.md'), 'utf-8');
+const CORE_MD = readFileSync(resolve(process.cwd(), 'tests/fixtures/core-sample.md'), 'utf-8');
 
-// 픽스처: 단답형 001 · 002 · 026 (3장), 보강 B01-1~3 · B02-1~2 (5장)
+// 픽스처: 단답형 001 · 002 · 026 (3장), 핵심 암기 K001~K005 (5장)
 function renderAt(url) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -57,7 +57,7 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn((url) =>
-      Promise.resolve(new Response(String(url).includes('보강') ? BOGANG_MD : QUIZ_MD, { status: 200 }))
+      Promise.resolve(new Response(String(url).includes('핵심암기') ? CORE_MD : QUIZ_MD, { status: 200 }))
     )
   );
 });
@@ -80,25 +80,24 @@ describe('지목한 카드에서 시작한다', () => {
     unmount();
   });
 
-  it('보강 카드 id(`B02-2`) 는 덱까지 바꿔서 연다', async () => {
-    const { container, unmount } = renderAt('/flashcard?id=B02-2');
+  it('핵심 암기 카드 id(`K005`) 는 덱까지 바꿔서 연다', async () => {
+    const { container, unmount } = renderAt('/flashcard?id=K005');
     await flush();
 
-    expect(activeDeck(container)).toContain('보강');
-    expect(face(container)).toContain('B02-2.');
+    expect(activeDeck(container)).toContain('핵심 암기');
+    expect(face(container)).toContain('K005.');
     expect(counter(container)).toBe('5 / 5');
     expect(notice(container)).toBe('');
     unmount();
   });
 
-  it('쪼개기 전 섹션 id(`B02`)는 그 섹션의 첫 카드로 열린다', async () => {
-    const { container, unmount } = renderAt('/flashcard?id=B02');
+  it('지금은 없는 옛 암기 119선 id(`B02-2`)는 기본 덱 첫 카드 + 안내', async () => {
+    const { container, unmount } = renderAt('/flashcard?id=B02-2');
     await flush();
 
-    expect(activeDeck(container)).toContain('보강');
-    expect(face(container)).toContain('B02-1.');
-    expect(counter(container)).toBe('4 / 5');
-    expect(notice(container)).toBe(''); // 못 찾은 것이 아니다
+    expect(activeDeck(container)).toContain('단답형');
+    expect(counter(container)).toBe('1 / 3');
+    expect(notice(container)).toContain('B02-2');
     unmount();
   });
 });
@@ -172,10 +171,10 @@ describe('기존 기능과의 얽힘', () => {
     await flush();
     expect(counter(container)).toBe('2 / 3');
 
-    await act(async () => { buttonByName(container, '암기 119선 보강').click(); });
+    await act(async () => { buttonByName(container, '핵심 암기 카드').click(); });
     await flush();
 
-    expect(activeDeck(container)).toContain('보강');
+    expect(activeDeck(container)).toContain('핵심 암기');
     expect(counter(container)).toBe('1 / 5');
     unmount();
   });

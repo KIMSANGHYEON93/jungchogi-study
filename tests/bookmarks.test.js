@@ -19,7 +19,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const fx = (name) => readFileSync(resolve(process.cwd(), 'tests/fixtures', name), 'utf-8');
 const QUIZ_MD = fx('quiz-sample.md');
-const BOGANG_MD = fx('bogang-sample.md');
+const CORE_MD = fx('core-sample.md');
 const DRILL_MD = fx('code-drill-sample.md');
 const DAY1 = '정처기_Day01_C언어.md';
 
@@ -48,7 +48,7 @@ beforeEach(() => {
     'fetch',
     vi.fn((url) => {
       const u = decodeURIComponent(String(url));
-      const body = u.includes('드릴') ? DRILL_MD : u.includes('보강') ? BOGANG_MD : u.includes('단답형') ? QUIZ_MD : '# 문서\n본문';
+      const body = u.includes('드릴') ? DRILL_MD : u.includes('핵심암기') ? CORE_MD : u.includes('단답형') ? QUIZ_MD : '# 문서\n본문';
       return Promise.resolve(new Response(body, { status: 200 }));
     })
   );
@@ -64,7 +64,9 @@ describe('bookmarkLink', () => {
   it('종류마다 그 화면의 딥링크로 간다', () => {
     expect(bookmarkLink({ type: 'lesson', id: 'c-operators' })).toBe('/lesson/24');
     expect(bookmarkLink({ type: 'quiz100', id: '001' })).toBe('/flashcard?id=001');
-    expect(bookmarkLink({ type: 'bogang', id: 'B01-2' })).toBe('/flashcard?id=B01-2');
+    expect(bookmarkLink({ type: 'core', id: 'K001' })).toBe('/flashcard?id=K001');
+    // 없어진 암기 119선 덱의 옛 북마크는 갈 곳이 없다
+    expect(bookmarkLink({ type: 'bogang', id: 'B01-2' })).toBeNull();
     expect(bookmarkLink({ type: 'codeDrill', id: 'C-01' })).toBe('/quiz?id=C-01');
     expect(bookmarkLink({ type: 'doc', id: DAY1 })).toBe('/study?doc=0');
   });
@@ -74,7 +76,8 @@ describe('bookmarkLink', () => {
     expect(bookmarkLink({ type: 'doc', id: 'gone.md' })).toBeNull();
     expect(bookmarkLink({ type: 'weird', id: 'x' })).toBeNull();
     expect(docName(DAY1)).toBe('Day 01 — C언어');
-    expect(Object.values(BOOKMARK_TYPE)).toHaveLength(5);
+    // 핵심 암기(core)와, 옛 북마크를 해제할 수 있게 남긴 암기 119선(bogang)을 포함해 6종
+    expect(Object.values(BOOKMARK_TYPE)).toEqual(['lesson', 'quiz100', 'core', 'bogang', 'codeDrill', 'doc']);
   });
 });
 
@@ -149,11 +152,11 @@ describe('각 화면의 북마크 버튼', () => {
     expect(stored()).toEqual({});
   });
 
-  it('플래시카드: 덱마다 종류가 다르다 (암기 119선은 bogang)', async () => {
-    const c = render(FlashcardPage, '/flashcard?id=B01-2');
+  it('플래시카드: 덱마다 종류가 다르다 (핵심 암기 카드는 core)', async () => {
+    const c = render(FlashcardPage, '/flashcard?id=K002');
     await flush();
-    click(byLabel(c, 'B01-2번 카드 북마크'));
-    expect(Object.keys(stored())).toEqual(['bogang:B01-2']);
+    click(byLabel(c, 'K002번 카드 북마크'));
+    expect(Object.keys(stored())).toEqual(['core:K002']);
   });
 
   it('코드 퀴즈: 문제를 북마크한다', async () => {
@@ -182,14 +185,23 @@ describe('각 화면의 북마크 버튼', () => {
   });
 });
 
-describe('북마크 화면 — 암기 119선 카드', () => {
-  it('카드 단위 id 는 카드 제목으로, 쪼개기 전 섹션 id(B02)는 첫 카드 제목으로 보여준다', async () => {
-    seed({ 'bogang:B01-2': 20, 'bogang:B02': 10 });
+describe('북마크 화면 — 핵심 암기 카드', () => {
+  it('카드 제목과 플래시카드 링크로 보여준다', async () => {
+    seed({ 'core:K003': 20 });
     const c = render(BookmarksPage);
     await flush();
     expect([...c.querySelectorAll('li a')].map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
-      ['B01-2. [보강] C언어 서식문자열 & 제어문자 — 제어문자', '/flashcard?id=B01-2'],
-      ['B02. [보강] 연산자 우선순위', '/flashcard?id=B02'],
+      ['K003. EAI 구축 유형 4가지를 쓰시오.', '/flashcard?id=K003'],
     ]);
+  });
+
+  it('없어진 암기 119선 덱의 옛 북마크는 링크 없이 보이고 해제할 수 있다', async () => {
+    seed({ 'bogang:B01-2': 20 });
+    const c = render(BookmarksPage);
+    await flush();
+    expect(c.querySelectorAll('li a')).toHaveLength(0);
+    expect(c.textContent).toContain('자료를 찾을 수 없습니다');
+    click(byLabel(c, '해제'));
+    expect(stored()).toEqual({});
   });
 });
