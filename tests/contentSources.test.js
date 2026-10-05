@@ -34,4 +34,10 @@ describe('학습 자료 출처 규칙', () => {
       expect(md.match(/^### 문제 \d+\./gm), f).toHaveLength(20);
     }
   });
+
+  it('코드 트레이싱 드릴은 자체 제작 표기를 달고 40문제다', () => {
+    const md = read('정처기_코드트레이싱_드릴.md');
+    expect(md).toContain('이 앱에서 새로 만든 문제');
+    expect(md.match(/^### [CJPS]-\d{2}\./gm)).toHaveLength(40);
+  });
 });

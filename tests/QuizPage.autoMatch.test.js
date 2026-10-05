@@ -102,7 +102,7 @@ describe('코드 퀴즈 자동 판정', () => {
   it('정답과 일치하면 정답 안내와 함께 correct 로 기록한다', async () => {
     const { container, unmount } = render();
     await flush();
-    await answer(container, '30 50');
+    await answer(container, '20 5');
 
     expect(container.querySelector('.quiz-auto-verdict.match')).not.toBeNull();
     expect(loadProgress('quiz_results', {})).toEqual({ 'C-01': 'correct' });
@@ -113,7 +113,7 @@ describe('코드 퀴즈 자동 판정', () => {
   it('공백이 달라도 일치로 본다', async () => {
     const { container, unmount } = render();
     await flush();
-    await answer(container, '  30    50 ');
+    await answer(container, '  20    5 ');
     expect(container.querySelector('.quiz-auto-verdict.match')).not.toBeNull();
     unmount();
   });

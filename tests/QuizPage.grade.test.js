@@ -66,7 +66,7 @@ function typeInto(input, value) {
 }
 
 /** 첫 문항에 답을 적는다 (정답 확인은 누르지 않는다) */
-async function typeAnswer(container, answer = '30 50') {
+async function typeAnswer(container, answer = '20 5') {
   await act(async () => { typeInto(container.querySelector('input.quiz-input'), answer); });
 }
 
@@ -85,7 +85,7 @@ describe('정답 조기 노출 방지', () => {
     expect(container.textContent).toContain('C-01');
     expect(container.textContent).not.toContain('맞았어요');
     // 풀이(추적표)는 정답 확인 전에는 화면에 없다
-    expect(container.textContent).not.toContain('추적표');
+    expect(container.textContent).not.toContain('p=&y');
 
     unmount();
   });
@@ -95,7 +95,7 @@ describe('정답 조기 노출 방지', () => {
     await flush();
     await answerFirstProblem(container);
 
-    expect(container.textContent).toContain('추적표');
+    expect(container.textContent).toContain('p=&y');
     expect(container.textContent).toContain('맞았어요');
 
     unmount();

@@ -36,24 +36,22 @@ describe('parseCodeDrill — 실제 콘텐츠 형식', () => {
     const c01 = byId(parseCodeDrill(sample), 'C-01');
     expect(c01.title).toBe('포인터 기본');
     expect(c01.code).toContain('#include <stdio.h>');
-    expect(c01.code).toContain('printf("%d %d", a, b);');
+    expect(c01.code).toContain('printf("%d %d", x, y);');
     expect(c01.code.startsWith('```')).toBe(false);
     expect(c01.code).not.toContain('```');
   });
 
   it('details 블록 본문을 answer 로, `**함정**` 류 라인을 pitfall 로 분리한다', () => {
     const c01 = byId(parseCodeDrill(sample), 'C-01');
-    expect(c01.answer).toContain('추적표:');
-    expect(c01.pitfall).toBe(
-      '`*p + b`에서 a가 30으로 바뀐 뒤, 이후 `*p + a`의 a는 이미 30임'
-    );
+    expect(c01.answer).toContain('x=4, y=9, p=&y');
+    expect(c01.pitfall).toBe('`*p` 는 "지금 p 가 가리키는 변수"다. p 를 옮긴 뒤에는 다른 변수를 바꾼다');
     expect(c01.answer).not.toContain('함정');
   });
 
-  it('라벨 목록에 없던 `**최다출제 함정**` 도 pitfall 로 잡는다', () => {
+  it('Java 문제도 `**함정**` 라인을 pitfall 로 분리한다', () => {
     const j01 = byId(parseCodeDrill(sample), 'J-01');
-    expect(j01.pitfall).toBe('변수=선언타입(부모), 메서드=실제객체(자식). 반드시 구분!');
-    expect(j01.answer).not.toContain('최다출제 함정');
+    expect(j01.pitfall).toBe('필드는 오버라이딩되지 않는다 — 변수 타입을 따른다');
+    expect(j01.answer).not.toContain('**함정**');
   });
 
   it('라벨은 고정 목록이 아니라 `**...**:` 패턴으로 판정한다', () => {
@@ -91,8 +89,8 @@ describe('parseCodeDrill — 실제 콘텐츠 형식', () => {
 
   it('answer 안의 `출력:` 이후 텍스트를 expectedOutput 으로 뽑는다', () => {
     const problems = parseCodeDrill(sample);
-    expect(byId(problems, 'C-01').expectedOutput).toBe('30 50');
-    expect(byId(problems, 'J-01').expectedOutput).toBe('10 B');
+    expect(byId(problems, 'C-01').expectedOutput).toBe('20 5');
+    expect(byId(problems, 'J-01').expectedOutput).toBe('1 Q');
   });
 
   it('풀이 문장 끝의 `... 출력` 은 건너뛰고 줄 첫머리의 `출력:` 만 본다', () => {
@@ -119,12 +117,12 @@ describe('parseCodeDrill — 실제 콘텐츠 형식', () => {
 
   it('지문 코드펜스가 둘이면 언어 태그가 붙은 쪽이 code, 나머지는 context 다', () => {
     const s01 = byId(parseCodeDrill(sample), 'S-01');
-    expect(s01.code).toContain('SELECT 부서, COUNT(*) AS 인원, AVG(급여) AS 평균');
-    expect(s01.code).toContain('HAVING COUNT(*) >= 3;');
-    expect(s01.code).not.toContain('테이블: 사원');
+    expect(s01.code).toContain('SELECT 고객, COUNT(*) AS 건수, SUM(금액) AS 합계');
+    expect(s01.code).toContain('HAVING SUM(금액) >= 1000');
+    expect(s01.code).not.toContain('테이블: 주문');
 
-    expect(s01.context).toContain('테이블: 사원(이름, 부서, 급여)');
-    expect(s01.context).toContain('| 김 | 개발 | 400 |');
+    expect(s01.context).toContain('테이블: 주문(고객, 상품, 금액)');
+    expect(s01.context).toContain('| 김 | 펜 | 300 |');
     expect(s01.context).not.toContain('SELECT');
   });
 
@@ -138,9 +136,9 @@ describe('parseCodeDrill — 실제 콘텐츠 형식', () => {
     // S-05 는 지문이 태그 없는 펜스 하나뿐이고 sql 펜스는 정답 쪽에 있다
     const s05 = byId(parseCodeDrill(sample), 'S-05');
     expect(s05.code).toContain('다음 조건에 맞는 CREATE TABLE 문을 작성하시오:');
-    expect(s05.code).not.toContain('CREATE TABLE 학생 (');
+    expect(s05.code).not.toContain('CREATE TABLE 도서 (');
     expect(s05.context).toBe('');
-    expect(s05.answer).toContain('CREATE TABLE 학생 (');
+    expect(s05.answer).toContain('CREATE TABLE 도서 (');
   });
 });
 
