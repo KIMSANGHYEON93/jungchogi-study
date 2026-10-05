@@ -40,4 +40,17 @@ describe('학습 자료 출처 규칙', () => {
     expect(md).toContain('이 앱에서 새로 만든 문제');
     expect(md.match(/^### [CJPS]-\d{2}\./gm)).toHaveLength(40);
   });
+
+  it('Day07 실전 트레이싱은 자체 제작 표기를 달고 15문제다', () => {
+    const md = read('정처기_Day07_코드종합복습.md');
+    expect(md).toContain('이 앱에서 새로 만든 문제');
+    expect(md.match(/^### 문제 \d+ \(/gm)).toHaveLength(15);
+  });
+
+  it('단답형 100선은 직접 정리 표기를 달고 100문항이며, 근거 없는 기출 분석 표기가 없다', () => {
+    const md = read('정처기_단답형_100선.md');
+    expect(md).toContain('이 앱에서 직접 정리한 해설');
+    expect(md.match(/^### \d{3}\./gm)).toHaveLength(100);
+    expect(md).not.toMatch(/기출 분석 기반|20\d\d 신유형/);
+  });
 });

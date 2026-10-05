@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""모의고사 md(Day09 · Day11)의 코드 · SQL 문항을 실제로 실행해 적힌 정답과 맞는지 확인한다.
+"""모의고사 md(Day09 · Day11)와 Day07 실전 트레이싱의 코드 · SQL 문항을 실제로 실행해 적힌 정답과 맞는지 확인한다.
 
     python3 scripts/verify-mock-exams.py
 
@@ -9,7 +9,7 @@ md 를 그대로 읽으므로 별도의 정답 사본이 없다 — 문서와 �
 import os, re, sqlite3, subprocess, sys, tempfile
 
 ROOT = os.path.join(os.path.dirname(__file__), '..', 'public', 'data')
-FILES = ['정처기_Day09_모의고사1회.md', '정처기_Day11_모의고사2회.md']
+FILES = ['정처기_Day07_코드종합복습.md', '정처기_Day09_모의고사1회.md', '정처기_Day11_모의고사2회.md']
 ENV = {k: v for k, v in os.environ.items() if k != 'JAVA_TOOL_OPTIONS'}
 
 def run_code(lang, code):
@@ -27,7 +27,13 @@ def run_code(lang, code):
     raise ValueError(lang)
 
 def parse_md_table(text):
-    lines = [l for l in text.strip().splitlines() if l.startswith('|')]
+    # 처음 나오는 표 하나만 읽는다 (뒤에 이어지는 진단표 등은 정답이 아니다)
+    lines = []
+    for l in text.strip().splitlines():
+        if l.startswith('|'):
+            lines.append(l)
+        elif lines:
+            break
     cells = [[c.strip() for c in l.strip('|').split('|')] for l in lines]
     return cells[0], [tuple(r) for r in cells[2:]]
 
@@ -42,13 +48,14 @@ def main():
     checked, bad = 0, []
     for name in FILES:
         md = open(os.path.join(ROOT, name), encoding='utf-8').read()
-        for sec in re.split(r'\n(?=### 문제 \d+\.)', md)[1:]:
-            no = re.match(r'### 문제 (\d+)\.', sec).group(1)
+        for sec in re.split(r'\n(?=### 문제 \d+[. ])', md)[1:]:
+            no = re.match(r'### 문제 (\d+)', sec).group(1)
             head = sec.split('\n', 1)[0]
-            if '프로그램의 출력' in head:
+            # Day07 은 헤딩이 `### 문제 1 (C - 변수 스코프)` 꼴이다
+            if '프로그램의 출력' in head or re.search(r'\((C|Java|Python) - ', head):
                 lang, code = re.search(r'```(c|java|python)\n(.*?)\n```', sec, re.S).groups()
                 got, want = run_code(lang, code), written_answer(sec)
-            elif 'SQL문의 실행 결과' in head:
+            elif 'SQL문의 실행 결과' in head or '(SQL - ' in head:
                 con = sqlite3.connect(':memory:')
                 for t, tbl in re.findall(r'\*\*테이블: (\w+)\*\*\n\n((?:\|.*\n)+)', sec):
                     cols, rows = parse_md_table(tbl)

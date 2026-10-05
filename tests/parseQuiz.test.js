@@ -22,10 +22,10 @@ describe('parseQuiz — 실제 콘텐츠 형식', () => {
       question: '트랜잭션의 4가지 특성(ACID)을 쓰시오.',
       category: '데이터베이스',
       answer: [
-        '- **A**tomicity (원자성): 전부 실행 또는 전부 취소',
-        '- **C**onsistency (일관성): 실행 후 일관된 상태 유지',
-        '- **I**solation (독립성/고립성): 동시 실행 시 상호 간섭 불가',
-        '- **D**urability (지속성/영속성): 완료된 결과 영구 반영',
+        '- **원자성** (Atomicity): 트랜잭션의 작업은 모두 반영되거나 하나도 반영되지 않는다',
+        '- **일관성** (Consistency): 트랜잭션 전후로 데이터베이스가 규칙(제약조건)을 지키는 상태를 유지한다',
+        '- **격리성 · 독립성** (Isolation): 동시에 실행되는 트랜잭션이 서로의 중간 결과를 보지 못한다',
+        '- **영속성 · 지속성** (Durability): 완료(COMMIT)된 결과는 장애가 나도 사라지지 않는다',
       ].join('\n'),
     });
   });
@@ -38,7 +38,7 @@ describe('parseQuiz — 실제 콘텐츠 형식', () => {
 
   it('answer 는 details 블록 내부만 담고 앞뒤 공백을 제거한다', () => {
     const q026 = parseQuiz(sample).find((q) => q.id === '026');
-    expect(q026.answer).toBe('**도출 → 분석 → 명세 → 확인** (도분명확)');
+    expect(q026.answer.startsWith('**도출 → 분석 → 명세 → 확인(검증)**')).toBe(true);
     expect(q026.answer).not.toContain('<summary>');
     expect(q026.answer).not.toContain('</details>');
   });
