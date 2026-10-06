@@ -1,7 +1,8 @@
 # Day 7 - 코드 종합 복습 (C + Java + Python 혼합 트레이싱)
 
 > **권장 학습 시간**: 20:00~22:00 *(재일이 청모 후 저녁)*
-> **목표**: C/Java/Python 혼합 기출급 15문제 트레이싱 → 약점 파악
+> **목표**: C/Java/Python/SQL 혼합 실전형 15문제 트레이싱 → 약점 파악
+> **출처**: 15문제 모두 이 앱에서 새로 만든 문제입니다. 정답은 실제로 실행해 확인했습니다.
 > **학습 후 체크**: [ ] 15문제 풀기  [ ] 오답 5개 이내  [ ] 약점 기록
 
 ---
@@ -29,37 +30,40 @@
 
 ```c
 #include <stdio.h>
+int g = 1;
+void add(int g) { g += 100; }
+void inc() { g += 10; }
 int main() {
-    int a = 7, b = 2, c = 3;
+    int a = 4;
     {
-        int a = 6, c = 5;
-        b = a;
-        {
-            int b;
-            b = b + c;
-        }
-        printf("%d %d %d\n", a, b, c);
+        int a = 9;
+        g = a + g;
     }
+    add(g);
+    inc();
+    printf("%d %d\n", a, g);
     return 0;
 }
 ```
 
 **트레이싱:**
 ```
-바깥: a=7, b=2, c=3
-블록1: a=6(새로), c=5(새로), b=a → b=___
-  블록2: b=새 지역변수(초기화X), b=b+c → 쓰레기값 (출력 안됨)
-블록1에서 printf → a=___, b=___, c=___
+전역: g=1 / main: a=4
+블록: a=9(새 지역변수), g = a + g → g=___
+add(g): 매개변수 g 는 지역변수 → 전역 g 는 ___
+inc(): 전역 g += 10 → g=___
+printf → a=___ (블록의 a 는 이미 사라짐)
 
 출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답: `6 6 5`**
-- 블록1에서 a=6(새로), c=5(새로), b=a → b=6 (바깥 b가 6으로 변경)
-- 블록2의 b는 새 지역변수 → 블록1의 b에 영향 없음
-- printf: a=6, b=6, c=5
+**정답: `4 20`**
+- 블록 안 a=9 는 블록이 끝나면 사라진다 → main 의 a=4
+- g = 9 + 1 = 10 (전역 g)
+- `add(int g)` 의 g 는 매개변수라 전역 g 를 가린다 → 전역은 그대로 10
+- inc() → 전역 g = 20
 
 </details>
 
@@ -70,40 +74,39 @@ int main() {
 ```c
 #include <stdio.h>
 int main() {
-    int a[] = {1, 2, 3, 4, 5};
-    int *p = a;
+    int a[] = {3, 6, 9, 12, 15};
+    int *p = a + 1;
+    printf("%d ", *p + 1);
+    printf("%d ", *(p + 1));
+    p += 2;
+    printf("%d ", *p--);
     printf("%d ", *p);
-    printf("%d ", *(p+2));
-    printf("%d ", *p+2);
-    p += 3;
-    printf("%d ", *p);
-    printf("%d\n", p - a);
+    printf("%d\n", (int)(p - a));
     return 0;
 }
 ```
 
 **트레이싱:**
 ```
-a = [1, 2, 3, 4, 5], p = &a[0]
-
-*p        = a[0] = ___
-*(p+2)    = a[2] = ___
-*p + 2    = a[0] + 2 = ___  ← 주의! *(p) + 2
-p += 3    → p = &a[3]
-*p        = a[3] = ___
-p - a     = 3 - 0 = ___
+p = a + 1 → a[1]=6
+*p + 1     = ___   ← 값에 +1
+*(p + 1)   = a[___] = ___
+p += 2     → p = &a[___]
+*p--       = ___, 그다음 p 는 a[___]
+*p         = ___
+p - a      = ___
 
 출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답: `1 3 3 4 3`**
-- `*p` = a[0] = 1
-- `*(p+2)` = a[2] = 3
-- `*p+2` = a[0]+2 = 1+2 = 3 (**`*p`가 먼저, +2는 정수 덧셈!**)
-- p+=3 후 `*p` = a[3] = 4
-- `p-a` = 3 (포인터 뺄셈 = 인덱스 차이)
+**정답: `7 9 12 9 2`**
+- `*p + 1` = 6 + 1 = 7 (주소 이동 아님)
+- `*(p + 1)` = a[2] = 9
+- p += 2 → a[3]
+- `*p--` 는 a[3]=12 를 쓰고 나서 p 를 a[2] 로 옮긴다
+- `*p` = 9, `p - a` = 2 (포인터 뺄셈 = 칸 수)
 
 </details>
 
@@ -113,37 +116,35 @@ p - a     = 3 - 0 = ___
 
 ```c
 #include <stdio.h>
-int func(int n) {
-    if (n <= 1) return 1;
-    return n * func(n - 2);
+int h(int n) {
+    if (n == 0) return 0;
+    return n % 10 + h(n / 10);
 }
 int main() {
-    printf("%d\n", func(7));
+    printf("%d %d\n", h(4729), h(105));
     return 0;
 }
 ```
 
 **트레이싱:**
 ```
-func(7) = 7 * func(5)
-func(5) = 5 * func(3)
-func(3) = 3 * func(1)
-func(1) = ___
+h(4729) = 9 + h(472)
+h(472)  = ___ + h(47)
+h(47)   = ___ + h(4)
+h(4)    = ___ + h(0)
+h(0)    = 0
+→ h(4729) = ___
 
-거꾸로: func(3) = 3 * ___ = ___
-        func(5) = 5 * ___ = ___
-        func(7) = 7 * ___ = ___
+h(105) = 5 + h(10) = 5 + 0 + h(1) = ___
 
 출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답: `105`**
-- func(1) = 1
-- func(3) = 3 * 1 = 3
-- func(5) = 5 * 3 = 15
-- func(7) = 7 * 15 = **105**
+**정답: `22 6`**
+- n % 10 은 마지막 자리, n / 10 은 마지막 자리를 뗀 수
+- h 는 각 자리 숫자의 합: 4+7+2+9 = 22, 1+0+5 = 6
 
 </details>
 
@@ -153,26 +154,42 @@ func(1) = ___
 
 ```c
 #include <stdio.h>
-struct Student {
-    char name[20];
-    int score;
+struct node {
+    int v;
+    struct node *next;
 };
 int main() {
-    struct Student s = {"Kim", 85};
-    struct Student *p = &s;
-    p->score += 10;
-    printf("%s %d\n", p->name, s.score);
+    struct node c = {30, NULL};
+    struct node b = {20, &c};
+    struct node a = {10, &b};
+    struct node *p = &a;
+    int sum = 0;
+    while (p != NULL) {
+        sum += p->v;
+        p = p->next;
+    }
+    a.next->v += 5;
+    printf("%d %d %d\n", sum, b.v, a.next->next->v);
     return 0;
 }
 ```
 
-**나의 답:** _______________________
+**트레이싱:**
+```
+연결: a(10) → b(20) → c(30) → NULL
+while: sum = ___ + ___ + ___ = ___
+a.next      = &b → b.v = ___
+a.next->next = &c → c.v = ___
+
+출력: ___
+```
 
 <details><summary>정답 확인</summary>
 
-**정답: `Kim 95`**
-- p->score += 10 → s.score = 85 + 10 = 95
-- p와 s는 같은 구조체 → s.score도 95
+**정답: `60 25 30`**
+- p 가 next 를 따라 a → b → c 로 이동하며 합: 60
+- `a.next->v` 는 b.v → 25
+- `a.next->next->v` 는 c.v → 30 (바뀌지 않음)
 
 </details>
 
@@ -183,35 +200,31 @@ int main() {
 ```c
 #include <stdio.h>
 int main() {
-    int a[3][3] = {{1,2,3},{4,5,6},{7,8,9}};
-    int *p = &a[1][0];
-    printf("%d ", *p);
-    printf("%d ", *(p+3));
-    printf("%d\n", *(p-1));
+    int m[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    int *p = &m[0][0];
+    int i, s = 0;
+    for (i = 0; i < 9; i += 4)
+        s += *(p + i);
+    printf("%d %d %d\n", s, *(m[1] + 2), *(*(m + 2) + 1));
     return 0;
 }
 ```
 
 **트레이싱:**
 ```
-메모리 배치: [1][2][3][4][5][6][7][8][9]
-             a[0]     a[1]     a[2]
-
-p = &a[1][0] = 4의 주소
-*p      = ___
-*(p+3)  = 4에서 3칸 뒤 = ___
-*(p-1)  = 4에서 1칸 앞 = ___
+2차원 배열은 메모리에 한 줄로: 1 2 3 4 5 6 7 8 9
+i = 0, 4, 8 → *(p+0)=___, *(p+4)=___, *(p+8)=___ → s=___
+*(m[1] + 2)     = m[1][2] = ___
+*(*(m + 2) + 1) = m[2][1] = ___
 
 출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답: `4 7 3`**
-- 메모리: [1,2,3,4,5,6,7,8,9], p→4
-- `*p` = 4
-- `*(p+3)` = 4에서 3칸 뒤 = 7
-- `*(p-1)` = 4에서 1칸 앞 = 3
+**정답: `15 6 8`**
+- p+4 는 5번째 칸 = m[1][1] = 5, p+8 = m[2][2] = 9 → 대각선 합 15
+- `*(m[i] + j)` 와 `*(*(m + i) + j)` 는 모두 m[i][j]
 
 </details>
 
@@ -221,41 +234,41 @@ p = &a[1][0] = 4의 주소
 
 ```java
 class A {
-    int x = 10;
-    void show() { System.out.print(x + " "); }
+    String name() { return "A"; }
+    String hello() { return "hi " + name(); }
 }
 class B extends A {
-    int x = 20;
-    void show() { System.out.print(x + " "); }
+    String name() { return "B"; }
 }
 class C extends B {
-    int x = 30;
-    void show() { System.out.print(x + " "); }
+    String hello() { return super.hello() + "!"; }
 }
 public class Main {
     public static void main(String[] args) {
-        A obj = new C();
-        obj.show();
-        System.out.println(obj.x);
+        A x = new C();
+        A y = new B();
+        System.out.println(x.hello() + " / " + y.hello());
     }
 }
 ```
 
 **트레이싱:**
 ```
-A obj = new C()  → 부모 타입, 자식 객체
-
-obj.show() → 오버라이딩된 메서드 → ___ 의 show() 실행 → 출력: ___
-obj.x      → 변수는 오버라이딩 안됨 → ___ 의 x → ___
+x = new C()
+x.hello()   → C 의 hello → super.hello() = ___ 의 hello
+            → "hi " + name() → name() 은 실제 객체(C) 기준 → ___ 의 name
+            → ___
+y = new B()
+y.hello()   → ___
 
 출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답: `30 10`**
-- `obj.show()` → 오버라이딩 → C의 show() → x=30 출력
-- `obj.x` → **변수는 참조 타입(A) 기준** → A.x = 10
+**정답: `hi B! / hi B`**
+- C 는 name() 을 재정의하지 않았으므로 B 의 name() "B" 를 물려받는다
+- 부모(A)의 hello() 안에서 부른 name() 도 실제 객체 기준으로 결정된다 (동적 바인딩)
 
 </details>
 
@@ -264,39 +277,40 @@ obj.x      → 변수는 오버라이딩 안됨 → ___ 의 x → ___
 ### 문제 7 (Java - 생성자 + super) ★★★★★
 
 ```java
-class Parent {
-    int x;
-    Parent() { this(10); System.out.print("A "); }
-    Parent(int x) { this.x = x; System.out.print("B "); }
+class P {
+    P() { System.out.print("p "); }
+    P(String s) { this(); System.out.print(s + " "); }
 }
-class Child extends Parent {
-    Child() { System.out.print("C "); }
-    Child(int x) { super(x); System.out.print("D "); }
+class K extends P {
+    K() { super("x"); System.out.print("k "); }
+    K(int n) { this(); System.out.print(n); }
 }
 public class Main {
     public static void main(String[] args) {
-        Child c = new Child(20);
+        new K(7);
+        System.out.println();
     }
 }
 ```
 
 **트레이싱:**
 ```
-new Child(20)
-→ Child(int x)에서 super(20) 호출
-  → Parent(20) → this.x=20, "B " 출력
-→ "D " 출력
-
-주의: Child(20)은 super(20) 명시 → Parent() 안 거침!
+new K(7)
+→ K(int) 의 this() → K()
+  → super("x") → P(String)
+    → this() → P() → "___" 출력
+    → "___" 출력
+  → "___" 출력
+→ "___" 출력
 
 출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답: `B D`**
-- Child(20) → super(20) → Parent(20) → "B " 출력 → "D " 출력
-- super(20)을 명시했으므로 Parent()의 this(10)은 호출되지 않음
+**정답: `p x k 7`**
+- 생성자 본문은 호출한 생성자가 끝난 뒤에 실행된다 → 가장 안쪽 P() 부터 출력
+- this() 를 부른 생성자는 super() 를 따로 부르지 않는다
 
 </details>
 
@@ -305,48 +319,44 @@ new Child(20)
 ### 문제 8 (Java - static + 인스턴스) ★★★★
 
 ```java
-class Calc {
+class Counter {
     static int total = 0;
-    int num;
-    Calc(int n) { num = n; total += n; }
-    static int getTotal() { return total; }
+    int mine = 0;
+    void hit(int n) {
+        total += n;
+        mine += n;
+    }
 }
 public class Main {
     public static void main(String[] args) {
-        Calc a = new Calc(10);
-        Calc b = new Calc(20);
-        Calc c = new Calc(30);
-        System.out.println(Calc.getTotal());
-        System.out.println(a.num + " " + b.num);
+        Counter a = new Counter();
+        Counter b = new Counter();
+        a.hit(2);
+        b.hit(5);
+        a.hit(3);
+        Counter c = new Counter();
+        c.hit(1);
+        System.out.println(a.mine + " " + b.mine + " " + c.mine + " " + Counter.total);
     }
 }
 ```
 
 **트레이싱:**
 ```
-static total은 모든 객체가 공유!
+total 은 static → 모든 객체가 공유, mine 은 객체마다 따로
+a.hit(2): total=___, a.mine=___
+b.hit(5): total=___, b.mine=___
+a.hit(3): total=___, a.mine=___
+c.hit(1): total=___, c.mine=___   ← 새 객체여도 total 은 이어진다
 
-new Calc(10): num=10, total=0+10=___
-new Calc(20): num=20, total=___+20=___
-new Calc(30): num=30, total=___+30=___
-
-Calc.getTotal() = ___
-a.num=___, b.num=___
-
-출력:
-___
-___
+출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답:**
-```
-60
-10 20
-```
-- static total: 10→30→60
-- a.num=10, b.num=20 (인스턴스 변수는 별도)
+**정답: `5 5 1 11`**
+- static 필드는 나중에 만든 객체(c)에서도 같은 값을 이어 쓴다
+- total = 2 + 5 + 3 + 1 = 11
 
 </details>
 
@@ -355,51 +365,43 @@ ___
 ### 문제 9 (Java - 추상클래스 + 다형성) ★★★★
 
 ```java
-abstract class Shape {
-    abstract double area();
-    void display() {
-        System.out.printf("%.1f\n", area());
+abstract class Animal {
+    abstract String sound();
+    String speak(int n) {
+        String r = "";
+        for (int i = 0; i < n; i++) r += sound();
+        return r;
     }
 }
-class Circle extends Shape {
-    double r;
-    Circle(double r) { this.r = r; }
-    double area() { return 3.14 * r * r; }
+class Cat extends Animal {
+    String sound() { return "mi"; }
 }
-class Rect extends Shape {
-    double w, h;
-    Rect(double w, double h) { this.w = w; this.h = h; }
-    double area() { return w * h; }
+class Dog extends Animal {
+    String sound() { return "wo"; }
+    String speak(int n) { return super.speak(n - 1) + "!"; }
 }
 public class Main {
     public static void main(String[] args) {
-        Shape s1 = new Circle(5);
-        Shape s2 = new Rect(4, 3);
-        s1.display();
-        s2.display();
+        Animal[] arr = { new Cat(), new Dog() };
+        System.out.println(arr[0].speak(2) + " " + arr[1].speak(3));
     }
 }
 ```
 
 **트레이싱:**
 ```
-s1.display() → area() 오버라이딩 → Circle.area() = 3.14 * 5 * 5 = ___
-s2.display() → area() 오버라이딩 → Rect.area() = 4 * 3 = ___
+arr[0] = Cat → speak(2) → sound() 를 ___ 번 → ___
+arr[1] = Dog → Dog 의 speak(3) → super.speak(___) + "!"
+             → 부모 speak 안의 sound() 는 ___ 의 것 → ___
 
-출력:
-___
-___
+출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답:**
-```
-78.5
-12.0
-```
-- Circle: 3.14 * 25 = 78.5
-- Rect: 4 * 3 = 12.0
+**정답: `mimi wowo!`**
+- Dog 의 speak(3) 은 부모 speak(2) 를 부른다 — 반복 횟수가 1 줄어든다
+- 부모 메서드 안의 sound() 는 실제 객체(Dog)의 "wo"
 
 </details>
 
@@ -408,36 +410,39 @@ ___
 ### 문제 10 (Python - 리스트 + 조건) ★★★★
 
 ```python
-a = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-result = []
-for i in a:
-    if i % 2 == 0:
-        result.append(i * 2)
-    elif i % 3 == 0:
-        result.append(i * 3)
-print(result)
+nums = [5, 12, 7, 20, 9, 14, 3]
+out = []
+for n in nums:
+    if n > 10:
+        out.append(n // 2)
+    elif n % 3 == 0:
+        out.append(-n)
+    else:
+        continue
+    if len(out) == 4:
+        break
+print(out, len(nums) - len(out))
 ```
 
 **트레이싱:**
 ```
-i=1: 2로 안나눔, 3으로 안나눔 → 스킵
-i=2: 짝수 → append(___)
-i=3: 홀수, 3의 배수 → append(___)
-i=4: 짝수 → append(___)
-i=5: 스킵
-i=6: 짝수 → append(___) ← 주의! elif이므로 3의 배수 체크 안함
-i=7: 스킵
-i=8: 짝수 → append(___)
-i=9: 홀수, 3의 배수 → append(___)
+n=5:  10 이하, 3의 배수 아님 → continue
+n=12: > 10 → append(___)
+n=7:  → ___
+n=20: → append(___)
+n=9:  → append(___)
+n=14: → append(___) → len(out)=___ → break
+n=3 은 ___
 
 출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답: `[4, 9, 8, 12, 16, 27]`**
-- 2→4, 3→9, 4→8, 6→12(elif 안탐), 8→16, 9→27
-- **주의**: 6은 짝수 조건에 먼저 걸림 → elif의 3의 배수 조건 체크 안함!
+**정답: `[6, 10, -9, 7] 3`**
+- `//` 는 몫(정수 나눗셈)
+- continue 는 아래의 break 검사까지 건너뛴다
+- 4개가 차면 break → 3 은 보지 않는다, 7 - 4 = 3
 
 </details>
 
@@ -446,22 +451,38 @@ i=9: 홀수, 3의 배수 → append(___)
 ### 문제 11 (Python - 딕셔너리 + 반복문) ★★★★
 
 ```python
-students = {"Kim": 85, "Lee": 92, "Park": 78, "Choi": 95}
-max_name = ""
-max_score = 0
-for name, score in students.items():
-    if score > max_score:
-        max_score = score
-        max_name = name
-print(max_name, max_score)
+words = ["db", "api", "db", "os", "api", "db"]
+cnt = {}
+for w in words:
+    cnt[w] = cnt.get(w, 0) + 1
+best = max(cnt, key=cnt.get)
+print(cnt)
+print(best, sum(v for k, v in cnt.items() if k != best))
 ```
 
-**나의 답:** _______________________
+**트레이싱:**
+```
+get(w, 0): 처음 보는 단어는 0 에서 시작
+cnt = {'db': ___, 'api': ___, 'os': ___}   (처음 넣은 순서 유지)
+max(cnt, key=cnt.get) → 값이 가장 큰 키 = ___
+best 를 뺀 값의 합 = ___
+
+출력:
+___
+___
+```
 
 <details><summary>정답 확인</summary>
 
-**정답: `Choi 95`**
-- 딕셔너리 순회하며 최대값 찾기
+**정답:**
+
+```
+{'db': 3, 'api': 2, 'os': 1}
+db 3
+```
+- 딕셔너리는 키를 처음 넣은 순서대로 출력된다
+- `max(d, key=d.get)` 는 값이 아니라 키를 돌려준다
+- db 를 뺀 합: 2 + 1 = 3
 
 </details>
 
@@ -470,48 +491,41 @@ print(max_name, max_score)
 ### 문제 12 (Python - 클래스 상속) ★★★★★
 
 ```python
-class A:
-    def __init__(self):
-        self.x = 1
-    def f(self):
-        self.x += 1
+class Account:
+    rate = 2
+    def __init__(self, money):
+        self.money = money
+    def total(self):
+        return self.money * self.rate
 
-class B(A):
-    def __init__(self):
-        super().__init__()
-        self.x += 10
-    def f(self):
-        super().f()
-        self.x += 100
+class Vip(Account):
+    rate = 3
+    def total(self):
+        return super().total() + 100
 
-obj = B()
-print(obj.x)
-obj.f()
-print(obj.x)
+a = Account(50)
+v = Vip(50)
+Account.rate = 4
+print(a.total(), v.total())
 ```
 
 **트레이싱:**
 ```
-B() → super().__init__() → A.__init__() → self.x = 1
-    → self.x += 10 → self.x = ___
+rate 는 클래스 변수
+Account.rate = 4 로 바꿈 → a.rate = ___
+Vip 는 자기 rate = 3 이 있음 → v.rate = ___
+a.total() = 50 * ___ = ___
+v.total() = super().total() + 100 = 50 * ___ + 100 = ___
 
-obj.f() → super().f() → A.f() → self.x += 1 → self.x = ___
-        → self.x += 100 → self.x = ___
-
-출력:
-___
-___
+출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답:**
-```
-11
-112
-```
-- B(): x=1 → x=11
-- obj.f(): x=11 → x=12(A.f) → x=112(+100)
+**정답: `200 250`**
+- 객체 생성 뒤에 클래스 변수를 바꿔도 객체는 바뀐 값을 읽는다
+- Vip 는 rate 를 따로 가지므로 Account.rate 변경의 영향을 받지 않는다
+- super().total() 안의 self.rate 는 Vip 객체 기준 = 3
 
 </details>
 
@@ -520,36 +534,29 @@ ___
 ### 문제 13 (Python - 문자열 + 리스트 컴프리헨션) ★★★★
 
 ```python
-words = ["hello", "world", "python", "java"]
-result = [w.upper() for w in words if len(w) > 4]
-print(result)
-print(len(result))
+s = "information processing"
+words = s.split()
+caps = [w[0].upper() + w[-1] for w in words]
+vowels = [c for c in s if c in "aeiou"]
+print(caps, len(vowels), "".join(sorted(set(words[0])))[:4])
 ```
 
 **트레이싱:**
 ```
-"hello" → len=5 > 4? ___ → ___
-"world" → len=5 > 4? ___ → ___
-"python" → len=6 > 4? ___ → ___
-"java" → len=4 > 4? ___ → 스킵
+words = ['information', 'processing']
+caps: 첫 글자 대문자 + 마지막 글자 → [___, ___]
+모음: information → ___ 개, processing → ___ 개 → 합 ___
+set('information') → 중복 제거 후 정렬 → 앞 4글자 = ___
 
-result = ___
-len(result) = ___
-
-출력:
-___
-___
+출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답:**
-```
-['HELLO', 'WORLD', 'PYTHON']
-3
-```
-- len > 4: hello(5), world(5), python(6) → 3개
-- java(4) → 4 > 4 거짓 → 제외
+**정답: `['In', 'Pg'] 8 afim`**
+- `w[-1]` 은 마지막 글자
+- information 의 모음 i·o·a·i·o 5개 + processing 의 o·e·i 3개 = 8
+- set 으로 중복을 지운 뒤 sorted → a f i m n o r t → 앞 4글자 afim
 
 </details>
 
@@ -561,32 +568,31 @@ ___
 #include <stdio.h>
 int main() {
     int a = 5, b = 3, c;
-    c = a++ + ++b - --a;
+    c = a++ + ++b;
+    a += b--;
+    c -= --a - b++;
     printf("%d %d %d\n", a, b, c);
     return 0;
 }
 ```
 
-**트레이싱 (왼→오 평가):**
+**트레이싱:**
 ```
-a++ : 현재 a(5)를 사용 → 5, 그 후 a=6
-++b : b를 먼저 증가 → b=4, 4를 사용
---a : a를 먼저 감소 → a=5(6에서 감소), 5를 사용
-
-c = 5 + 4 - 5 = ___
-최종: a=___, b=___, c=___
+a=5, b=3
+c = a++ + ++b  → ___ + ___ = ___  (그 뒤 a=___, b=___)
+a += b--       → a = ___ (그 뒤 b=___)
+c -= --a - b++ → --a=___, b++ 는 ___ 를 쓰고 b=___
+               → c = ___ - ___ = ___
 
 출력: ___
 ```
 
 <details><summary>정답 확인</summary>
 
-**정답: `5 4 4`**
-- a++(후위): 5 사용, a→6
-- ++b(전위): b→4, 4 사용
-- --a(전위): a→5(6-1), 5 사용
-- c = 5 + 4 - 5 = 4
-- 최종: a=5, b=4, c=4
+**정답: `9 4 3`**
+- c = 5 + 4 = 9 (a=6, b=4)
+- a = 6 + 4 = 10 (b=3)
+- c = 9 - (9 - 3) = 3, 마지막에 b=4
 
 </details>
 
@@ -594,56 +600,58 @@ c = 5 + 4 - 5 = ___
 
 ### 문제 15 (SQL - 종합) ★★★★★
 
-**테이블: 제품 (product)**
+**테이블: 강좌**
 
-| id | name  | category | price |
-|----|-------|----------|-------|
-| 1  | 사과  | 과일     | 1500  |
-| 2  | 배    | 과일     | 2000  |
-| 3  | 상추  | 채소     | 1000  |
-| 4  | 당근  | 채소     | 800   |
-| 5  | 포도  | 과일     | 3000  |
+| 강좌명 | 분야 | 수강료 | 정원 |
+|------|------|------|------|
+| 자바 | 개발 | 300 | 20 |
+| 파이썬 | 개발 | 250 | 30 |
+| 엑셀 | 사무 | 100 | 40 |
+| 회계 | 사무 | 200 | 10 |
+| 리액트 | 개발 | 350 | 15 |
+| 보안 | 보안 | 400 | 12 |
 
 ```sql
-SELECT category, COUNT(*) AS cnt, MAX(price) AS max_p
-FROM product
-WHERE price >= 1000
-GROUP BY category
-HAVING COUNT(*) >= 2
-ORDER BY max_p DESC;
+SELECT 분야, COUNT(*) AS 강좌수, SUM(정원) AS 총정원
+FROM 강좌
+WHERE 수강료 >= 200
+GROUP BY 분야
+HAVING SUM(정원) >= 12
+ORDER BY 총정원 DESC;
 ```
 
 **트레이싱:**
 ```
-WHERE price >= 1000:
-  사과(1500) ___, 배(2000) ___, 상추(1000) ___, 당근(800) ___, 포도(3000) ___
+WHERE 수강료 >= 200:
+  자바 ___, 파이썬 ___, 엑셀(100) ___, 회계 ___, 리액트 ___, 보안 ___
 
-GROUP BY category:
-  과일: cnt=___, max_p=___
-  채소: cnt=___, max_p=___
+GROUP BY 분야:
+  개발: 강좌수=___, 총정원=___
+  사무: 강좌수=___, 총정원=___
+  보안: 강좌수=___, 총정원=___
 
-HAVING COUNT(*) >= 2:
-  과일(___) → ___
-  채소(___) → ___
+HAVING SUM(정원) >= 12:
+  ___ 통과, ___ 탈락
 
 결과:
-| category | cnt | max_p |
-|----------|-----|-------|
-| ___      | ___ | ___   |
-| ___      | ___ | ___   |
+| 분야 | 강좌수 | 총정원 |
+|------|--------|--------|
+| ___  | ___    | ___    |
+| ___  | ___    | ___    |
 ```
 
 <details><summary>정답 확인</summary>
 
 **정답:**
 
-| category | cnt | max_p |
-|----------|-----|-------|
-| 과일     | 3   | 3000  |
+| 분야 | 강좌수 | 총정원 |
+|------|------|------|
+| 개발 | 3 | 65 |
+| 보안 | 1 | 12 |
 
-- WHERE >= 1000: 당근(800) 탈락 → 사과, 배, 상추, 포도
-- 과일: cnt=3, max=3000 / 채소: cnt=1, max=1000
-- HAVING >= 2: 과일만 통과 (채소 cnt=1 탈락)
+- WHERE 에서 엑셀(100)이 먼저 빠져 사무는 회계 1개(정원 10)만 남는다
+- 개발 20 + 30 + 15 = 65, 보안 12 → HAVING >= 12 는 "이상"이라 보안도 통과
+- 사무(10)는 탈락
 
 </details>
 
