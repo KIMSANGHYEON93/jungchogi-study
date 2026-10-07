@@ -28,7 +28,7 @@ function splitTemplate(template) {
  *   solution: string
  * }}} props
  */
-export default function SqlQuizCard({ item }) {
+export default function SqlQuizCard({ item, onComplete }) {
   const [values, setValues] = useState({});
   const [graded, setGraded] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
@@ -88,7 +88,11 @@ export default function SqlQuizCard({ item }) {
       </pre>
 
       <div className="sqlq-actions">
-        <button type="button" className="btn-primary" onClick={() => setGraded(true)}>
+        <button type="button" className="btn-primary" onClick={() => {
+            setGraded(true);
+            // 빈칸을 모두 맞히면 완료, 하나라도 틀리면 오답으로 남긴다
+            onComplete?.(rightCount === item.blanks.length ? 'done' : 'wrong');
+          }}>
           채점
         </button>
         <button type="button" className="btn-outline" onClick={() => setShowSolution(true)}>

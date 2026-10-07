@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import ProgressNav from '../components/ProgressNav';
+import { ITEM_STATUS, firstPendingIndex } from '../domain/progressNav';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { parseQuiz } from '../utils/parseQuiz';
@@ -75,13 +77,14 @@ export default function FlashcardPage() {
   const isKnown = useCallback((card) => !!known[card.id], [known]);
 
   // 필터 결과는 파생 상태 — effect 없이 렌더 중 계산한다
-  const filtered = useMemo(() => {
+  const applyFilters = useCallback((cat, mode) => {
     let f = allCards;
-    if (category !== '전체') f = f.filter((c) => c.category === category);
-    if (filterMode === 'unknown') f = f.filter((c) => !isKnown(c));
-    if (filterMode === 'bookmarked') f = f.filter((c) => bookmarkKey(bookmarkType, c.id) in bookmarks);
+    if (cat !== '전체') f = f.filter((c) => c.category === cat);
+    if (mode === 'unknown') f = f.filter((c) => !isKnown(c));
+    if (mode === 'bookmarked') f = f.filter((c) => bookmarkKey(bookmarkType, c.id) in bookmarks);
     return f;
-  }, [allCards, category, filterMode, isKnown, bookmarks, bookmarkType]);
+  }, [allCards, isKnown, bookmarks, bookmarkType]);
+  const filtered = useMemo(() => applyFilters(category, filterMode), [applyFilters, category, filterMode]);
 
   // 셔플은 그 대상이 지금의 filtered 와 같을 때만 유효하다
   const cards = shuffled && shuffled.source === filtered ? shuffled.order : filtered;
@@ -115,9 +118,14 @@ export default function FlashcardPage() {
     setFlipped(false);
   }, [cards, filtered, setIndex]);
 
-  // 필터를 바꾸면 첫 카드로 되돌린다 — effect 대신 이벤트 핸들러에서 리셋
-  const changeCategory = (cat) => { setCategory(cat); setIndex(0); setFlipped(false); };
-  const changeFilterMode = (mode) => { setFilterMode(mode); setIndex(0); setFlipped(false); };
+  // 필터를 바꾸면 바뀐 목록의 첫 미완료(아직 안 외운) 카드로 간다 — effect 대신 이벤트 핸들러에서
+  const startAt = (cat, mode) => Math.max(firstPendingIndex(applyFilters(cat, mode), (c) => !isKnown(c)), 0);
+  const changeCategory = (cat) => { setCategory(cat); setIndex(startAt(cat, filterMode)); setFlipped(false); };
+  const changeFilterMode = (mode) => { setFilterMode(mode); setIndex(startAt(category, mode)); setFlipped(false); };
+
+  // 카드 상태: 외움 = 완료, 모름으로 표시 = 모름, 표시 안 함 = 안 봄
+  const statusOf = (c) => (known[c.id] === true ? ITEM_STATUS.DONE : known[c.id] === false ? ITEM_STATUS.WRONG : ITEM_STATUS.TODO);
+  const pickCard = (i) => { setIndex(i); setFlipped(false); };
 
   // 덱을 바꾸면 필터·커서를 처음 상태로 돌린다. 예전에는 로드 콜백이 이 일을 했는데,
   // 그러면 카드가 도착할 때마다 커서가 0 으로 밀려 딥링크가 지워진다.
@@ -206,6 +214,16 @@ export default function FlashcardPage() {
           {deepLinkNotice}
         </div>
       )}
+
+      <ProgressNav
+        items={cards}
+        index={idx}
+        statusOf={statusOf}
+        onPick={pickCard}
+        labels={{ done: '외움', wrong: '모름', todo: '안 봄' }}
+        pending={[ITEM_STATUS.TODO, ITEM_STATUS.WRONG]}
+        collapsible
+      />
 
       {cards.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 60 }}>

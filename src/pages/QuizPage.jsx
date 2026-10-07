@@ -17,6 +17,8 @@ import BookmarkButton from '../components/ui/BookmarkButton';
 import { BOOKMARK_TYPE } from '../domain/bookmarks';
 import useStudyState from '../hooks/useStudyState';
 import CodeTracingTable from '../components/CodeTracingTable';
+import ProgressNav from '../components/ProgressNav';
+import { ITEM_STATUS, firstPendingIndex } from '../domain/progressNav';
 import { traceFor } from '../domain/traces';
 import ProblemContext from '../components/ProblemContext';
 import {
@@ -123,10 +125,18 @@ export default function QuizPage() {
     setSubmitted(false);
   };
 
-  // 언어를 바꾸면 첫 문제로 되돌린다 — effect 대신 이벤트 핸들러에서 리셋
+  // 문항 상태: 정답·풀이함 = 완료, 오답 = 오답, 기록 없음 = 미완료
+  const statusOf = (p) => {
+    const r = results[p.id];
+    if (r === QUIZ_RESULT.INCORRECT) return ITEM_STATUS.WRONG;
+    return r ? ITEM_STATUS.DONE : ITEM_STATUS.TODO;
+  };
+
+  // 언어를 바꾸면 그 언어의 첫 미완료 문제로 간다(모두 풀었으면 첫 문제) — effect 대신 이벤트 핸들러에서
   const changeLang = (l) => {
     setLang(l);
-    goTo(0);
+    const nextList = l === '전체' ? allProblems : allProblems.filter((p) => p.lang === l);
+    goTo(Math.max(firstPendingIndex(nextList, (p) => !results[p.id]), 0));
   };
 
   // 레거시 'answered' 를 정답으로도 오답으로도 세지 않는 셈은 도메인이 한다.
@@ -174,6 +184,15 @@ export default function QuizPage() {
           {deepLinkNotice}
         </div>
       )}
+
+      <ProgressNav
+        items={problems}
+        index={idx}
+        statusOf={statusOf}
+        onPick={goTo}
+        labels={{ done: '풀이 완료', wrong: '오답', todo: '미완료' }}
+        collapsible
+      />
 
       {problems.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 60 }}>문제를 불러오는 중...</div>

@@ -12,7 +12,7 @@ const EMPTY = { answer: '', graded: null, showModel: false };
  * @param {{item: {id: string, topic: string, question: string, keywords: {label: string, aliases?: string[]}[], model: string}}} props
  *   문항이 바뀌면(item.id) 입력·결과가 자동으로 초기화된다.
  */
-export default function ShortAnswerGrader({ item }) {
+export default function ShortAnswerGrader({ item, onComplete }) {
   // 문항 id 를 함께 저장해 두고, 다른 문항이 들어오면 초기 상태로 본다 (effect 로 되돌리지 않는다)
   const [state, setState] = useState({ id: item.id, ...EMPTY });
   const { answer, graded, showModel } = state.id === item.id ? state : EMPTY;
@@ -45,7 +45,12 @@ export default function ShortAnswerGrader({ item }) {
               type="button"
               className="btn-primary"
               disabled={answer.trim() === ''}
-              onClick={() => update({ graded: answer })}
+              onClick={() => {
+                update({ graded: answer });
+                // 키워드를 모두 넣었으면 완료, 빠진 게 있으면 오답으로 남긴다
+                const { missed } = gradeAnswer(answer, item.keywords);
+                onComplete?.(missed.length === 0 ? 'done' : 'wrong');
+              }}
             >
               채점
             </button>
