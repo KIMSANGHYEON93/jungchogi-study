@@ -9,6 +9,12 @@ import { TRACES, traceFor } from '../domain/traces';
 import { parseCodeDrill } from '../utils/parseCodeDrill';
 import { fetchMarkdown } from '../utils/mdCache';
 import useStudyTimer from '../hooks/useStudyTimer';
+import ProgressNav from '../components/ProgressNav';
+import { ITEM_STATUS } from '../domain/progressNav';
+import { loadProgress, saveProgress } from '../utils/storage';
+
+/** 실기 연습의 문항별 결과 저장 키 — { trace: {id: 'done'|'wrong'}, sql: {...}, short: {...} } */
+export const PRACTICE_PROGRESS_KEY = 'practice_done';
 
 const TABS = [
   { key: 'trace', label: '변수 추적표' },
@@ -27,28 +33,47 @@ function shortLabel(question) {
   return text.length > 20 ? `${text.slice(0, 20)}…` : text;
 }
 
-/** 문항 고르는 버튼 줄. 눌린 문항이 `aria-pressed` 로 드러난다. */
-function Picker({ items, activeId, onPick, labelOf }) {
+/**
+ * 탭 하나의 문항별 결과. 마지막 결과가 남는다(다시 풀어 맞히면 오답 → 완료).
+ * @param {'trace'|'sql'|'short'} tab
+ */
+function usePracticeProgress(tab) {
+  const [all, setAll] = useState(() => loadProgress(PRACTICE_PROGRESS_KEY, {}) ?? {});
+  const byId = all[tab] ?? {};
+  const statusOf = (item) => {
+    const r = byId[item.id];
+    return r === 'done' ? ITEM_STATUS.DONE : r === 'wrong' ? ITEM_STATUS.WRONG : ITEM_STATUS.TODO;
+  };
+  const record = (id, status) => {
+    setAll((prev) => {
+      const next = { ...prev, [tab]: { ...(prev[tab] ?? {}), [id]: status } };
+      saveProgress(PRACTICE_PROGRESS_KEY, next);
+      return next;
+    });
+  };
+  /** 처음 열 문항 — 아직 안 한 첫 문항, 다 했으면 첫 문항 */
+  const firstTodoId = (items) => (items.find((i) => !byId[i.id]) ?? items[0])?.id;
+  return { statusOf, record, firstTodoId };
+}
+
+/** 문항 번호판 — 완료 · 오답 · 미완료가 칩으로 보이고 "다음 미완료"로 넘어간다 */
+function Picker({ items, activeId, onPick, labelOf, statusOf }) {
+  const index = Math.max(items.findIndex((i) => i.id === activeId), 0);
   return (
-    <div className="practice-picker" role="group" aria-label="문항 선택">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className={`btn-outline${item.id === activeId ? ' active' : ''}`}
-          aria-pressed={item.id === activeId}
-          onClick={() => onPick(item.id)}
-        >
-          {labelOf(item)}
-        </button>
-      ))}
-    </div>
+    <ProgressNav
+      items={items}
+      index={index}
+      statusOf={statusOf}
+      onPick={(i) => onPick(items[i].id)}
+      labelOf={labelOf}
+    />
   );
 }
 
 function TracePanel() {
   const [problems, setProblems] = useState([]);
-  const [activeId, setActiveId] = useState(Object.keys(TRACES)[0]);
+  const progress = usePracticeProgress('trace');
+  const [activeId, setActiveId] = useState(() => progress.firstTodoId(Object.keys(TRACES).map((id) => ({ id }))));
 
   useEffect(() => {
     let cancelled = false;
@@ -65,31 +90,39 @@ function TracePanel() {
 
   return (
     <>
-      <Picker items={problems} activeId={active.id} onPick={setActiveId} labelOf={(p) => p.id} />
+      <Picker items={problems} activeId={active.id} onPick={setActiveId} labelOf={(p) => p.id} statusOf={progress.statusOf} />
       <h2 className="practice-title">{active.id}. {active.title}</h2>
-      <CodeTracingTable key={active.id} code={active.code} lang={active.lang} steps={traceFor(active.id).steps} />
+      <CodeTracingTable
+        key={active.id}
+        code={active.code}
+        lang={active.lang}
+        steps={traceFor(active.id).steps}
+        onComplete={(status) => progress.record(active.id, status)}
+      />
     </>
   );
 }
 
 function SqlPanel() {
-  const [activeId, setActiveId] = useState(SQL_BLANK_ITEMS[0].id);
+  const progress = usePracticeProgress('sql');
+  const [activeId, setActiveId] = useState(() => progress.firstTodoId(SQL_BLANK_ITEMS));
   const item = SQL_BLANK_ITEMS.find((i) => i.id === activeId) ?? SQL_BLANK_ITEMS[0];
   return (
     <>
-      <Picker items={SQL_BLANK_ITEMS} activeId={item.id} onPick={setActiveId} labelOf={(i) => i.id} />
-      <SqlQuizCard key={item.id} item={item} />
+      <Picker items={SQL_BLANK_ITEMS} activeId={item.id} onPick={setActiveId} labelOf={(i) => i.id} statusOf={progress.statusOf} />
+      <SqlQuizCard key={item.id} item={item} onComplete={(status) => progress.record(item.id, status)} />
     </>
   );
 }
 
 function ShortPanel() {
-  const [activeId, setActiveId] = useState(SHORT_ANSWER_ITEMS[0].id);
+  const progress = usePracticeProgress('short');
+  const [activeId, setActiveId] = useState(() => progress.firstTodoId(SHORT_ANSWER_ITEMS));
   const item = SHORT_ANSWER_ITEMS.find((i) => i.id === activeId) ?? SHORT_ANSWER_ITEMS[0];
   return (
     <>
-      <Picker items={SHORT_ANSWER_ITEMS} activeId={item.id} onPick={setActiveId} labelOf={(i) => shortLabel(i.question)} />
-      <ShortAnswerGrader key={item.id} item={item} />
+      <Picker items={SHORT_ANSWER_ITEMS} activeId={item.id} onPick={setActiveId} labelOf={(i) => shortLabel(i.question)} statusOf={progress.statusOf} />
+      <ShortAnswerGrader key={item.id} item={item} onComplete={(status) => progress.record(item.id, status)} />
     </>
   );
 }

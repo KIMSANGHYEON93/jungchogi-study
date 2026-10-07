@@ -23,9 +23,10 @@ const LANG_LABEL = { c: 'C', java: 'Java', python: 'Python' };
  *   code?: string,
  *   lang?: 'c'|'java'|'python',
  *   steps: {step: number, line: number, variables: Record<string, string|number|null>, output?: string}[]
+ *   onComplete?: (status: 'done'|'wrong') => void  끝 step 까지 보거나 직접 채워 채점했을 때
  * }} props
  */
-export default function CodeTracingTable({ code = '', lang, steps }) {
+export default function CodeTracingTable({ code = '', lang, steps, onComplete }) {
   const [mode, setMode] = useState('trace');
   const [cursor, setCursor] = useState(0); // 트레이싱 모드에서 공개된 마지막 step 의 인덱스
   const [showAll, setShowAll] = useState(false);
@@ -78,12 +79,14 @@ export default function CodeTracingTable({ code = '', lang, steps }) {
     setShowAll(false);
     setCursor(idx);
     setMessage(`step ${rows[idx].step} / ${rows.length} · ${rows[idx].line}번째 줄`);
+    if (idx === lastIdx) onComplete?.('done');
   }
 
   function expandAll() {
     setShowAll(true);
     setCursor(lastIdx);
     setMessage(`전체 ${rows.length}개 step 을 모두 펼쳤습니다.`);
+    onComplete?.('done');
   }
 
   function onInput(i, name, value) {
@@ -98,6 +101,7 @@ export default function CodeTracingTable({ code = '', lang, steps }) {
     setGraded(true);
     setRevealed(false);
     setMessage(`${right}/${gradable.length} 정답`);
+    onComplete?.(right === gradable.length ? 'done' : 'wrong');
   }
 
   function reveal() {

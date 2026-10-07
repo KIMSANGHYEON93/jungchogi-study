@@ -3037,3 +3037,85 @@ html { scroll-behavior: smooth; }
   background: rgba(var(--primary-rgb), 0.1);
 }
 
+
+/* ─── 문항 번호판: 완료 · 오답 · 미완료 구분 ─── */
+.pnav {
+  margin: 0 0 var(--space-md);
+}
+
+.pnav-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
+.pnav-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.pnav-count.is-done { color: var(--success); font-weight: 600; }
+.pnav-count.is-wrong { color: var(--danger, #dc2626); font-weight: 600; }
+.pnav-count.is-todo { color: var(--text-dim); }
+
+.pnav-next {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+}
+
+.pnav-details > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  padding: 6px 0;
+}
+
+.pnav-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pnav-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 44px;
+  min-height: 32px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.pnav-chip.is-done {
+  border: 1px solid var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+.pnav-chip.is-wrong {
+  border: 1px solid var(--danger, #dc2626);
+  background: color-mix(in srgb, var(--danger, #dc2626) 10%, transparent);
+  color: var(--danger, #dc2626);
+}
+
+.pnav-chip.is-current {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pnav-mark {
+  font-weight: 700;
+}
