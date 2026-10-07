@@ -37,6 +37,11 @@ export function isValidValue(key, value) {
     return isPlainObject(value) && (value.busyDates === undefined || (Array.isArray(value.busyDates) && value.busyDates.every((d) => typeof d === 'string')));
   }
   if (key === 'exam_date') return typeof value === 'string' && DATE_KEY.test(value);
+  if (key === 'practice_done') {
+    return isPlainObject(value) && Object.values(value).every(
+      (tab) => isPlainObject(tab) && Object.values(tab).every((v) => v === 'done' || v === 'wrong')
+    );
+  }
   return true;
 }
 
@@ -96,6 +101,18 @@ export function mergeValue(key, current, incoming) {
   if (key === 'calendar_busy') {
     const dates = [...new Set([...(current.busyDates ?? []), ...(incoming.busyDates ?? [])])].sort();
     return { busyDates: dates, syncedAt: Math.max(Number(current.syncedAt) || 0, Number(incoming.syncedAt) || 0) || null };
+  }
+  if (key === 'practice_done') {
+    // 실기 연습 결과: 어느 한쪽에서라도 완료했으면 완료, 아니면 이 기기의 기록을 지킨다
+    const out = {};
+    for (const tab of new Set([...Object.keys(current), ...Object.keys(incoming)])) {
+      const merged = { ...(current[tab] ?? {}) };
+      for (const [id, v] of Object.entries(incoming[tab] ?? {})) {
+        if (!(id in merged) || v === 'done') merged[id] = v;
+      }
+      out[tab] = merged;
+    }
+    return out;
   }
   // 시험일 같은 설정·모르는 키: 이 기기에 값이 있으면 그것을 지킨다
   return current;

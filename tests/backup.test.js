@@ -155,6 +155,21 @@ describe('mergeValue', () => {
     });
   });
 
+  it('실기 연습 결과: 탭별로 합치고, 어느 한쪽에서라도 완료했으면 완료', () => {
+    const current = { trace: { 'C-01': 'wrong', 'C-02': 'done' }, sql: { Q1: 'wrong' } };
+    const incoming = { trace: { 'C-01': 'done', 'C-02': 'wrong', 'C-03': 'wrong' }, short: { S1: 'done' } };
+    const merged = mergeValue('practice_done', current, incoming);
+    expect(merged).toEqual({
+      trace: { 'C-01': 'done', 'C-02': 'done', 'C-03': 'wrong' },
+      sql: { Q1: 'wrong' },
+      short: { S1: 'done' },
+    });
+    expect(mergeValue('practice_done', merged, incoming)).toEqual(merged);
+    expect(isValidValue('practice_done', merged)).toBe(true);
+    expect(isValidValue('practice_done', { trace: { 'C-01': true } })).toBe(false);
+    expect(isValidValue('practice_done', { trace: [] })).toBe(false);
+  });
+
   it('시험일 같은 설정과 모르는 키는 이 기기의 값을 지킨다', () => {
     expect(mergeValue('exam_date', '2026-10-25', '2026-11-01')).toBe('2026-10-25');
     expect(mergeValue('weird', { a: 1 }, { b: 2 })).toEqual({ a: 1 });
