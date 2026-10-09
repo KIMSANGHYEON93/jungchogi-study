@@ -7,7 +7,7 @@ import useStudyState from '../hooks/useStudyState';
 import { buildRoadmap, ROADMAP_DAYS } from '../domain/roadmap';
 import { lessonByDay } from '../domain/lessons';
 import { loadStoredBusy } from '../utils/busyStore';
-import { applyBackup, buildBackup, failureMessage, parseBackup, successMessage } from '../utils/backup';
+import { MAX_BACKUP_BYTES, applyBackup, buildBackup, failureMessage, parseBackup, successMessage } from '../utils/backup';
 import { summarizeQuizResults } from '../domain/grading';
 
 import { CORE_CARD_COUNT, CORE_DECK_KEY } from '../domain/coreDeck';
@@ -52,12 +52,13 @@ export default function DashboardPage() {
   }, []);
 
   // 학습 데이터 백업 — 형식 검증·합치기·실패 시 되돌리기는 utils/backup.js
-  const exportData = () => {
+  // `suffix` 는 덮어쓰기·초기화 직전에 남기는 복구용 백업을 구분한다
+  const exportData = (suffix = '') => {
     const blob = new Blob([JSON.stringify(buildBackup(), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `jungchogi_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `jungchogi_backup_${new Date().toISOString().slice(0, 10)}${suffix}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -70,12 +71,20 @@ export default function DashboardPage() {
     input.onchange = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+      // 읽기 전에 크기부터 본다 — 큰 파일을 통째로 읽고 파싱하면 화면이 멈출 수 있다
+      if (file.size > MAX_BACKUP_BYTES) {
+        window.alert(failureMessage('size'));
+        return;
+      }
       const parsed = parseBackup(await file.text());
       if (!parsed.ok) {
         window.alert(failureMessage(parsed.reason));
         return;
       }
-      if (mode === 'replace' && !window.confirm(`이 기기의 학습 기록 ${Object.keys(parsed.items).length}개 항목을 백업 값으로 덮어씁니다.\n(백업에 없는 항목은 그대로입니다) 계속할까요?`)) return;
+      if (mode === 'replace') {
+        if (!window.confirm(`이 기기의 학습 기록 ${Object.keys(parsed.items).length}개 항목을 백업 값으로 덮어씁니다.\n(백업에 없는 항목은 그대로입니다)\n\n덮어쓰기 전에 지금 기록을 복구용 파일로 내려받습니다. 계속할까요?`)) return;
+        exportData('_before-replace');
+      }
       const result = applyBackup(parsed, mode);
       if (!result.ok) {
         window.alert(failureMessage(result.reason));
@@ -419,8 +428,12 @@ export default function DashboardPage() {
             );
           })()}
         </div>
+        <p className="data-retention-note" style={{ fontSize: '0.85rem', color: 'var(--text-dim)', margin: '0 0 12px' }}>
+          학습 기록은 서버 없이 <strong>이 브라우저에만</strong> 저장됩니다. 다른 기기·다른 브라우저에서는 보이지 않고,
+          브라우저의 사이트 데이터 삭제·사생활 보호 모드 종료 시 사라집니다. 기기를 바꾸거나 데이터를 지우기 전에 내보내기 파일을 보관하세요.
+        </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn-outline" onClick={exportData}>
+          <button className="btn-outline" onClick={() => exportData()}>
             학습 데이터 내보내기
           </button>
           <button className="btn-outline" onClick={() => importData('merge')}>
@@ -433,7 +446,8 @@ export default function DashboardPage() {
             className="btn-outline"
             style={{ color: 'var(--danger)' }}
             onClick={() => {
-              if (!window.confirm('모든 학습 진도를 초기화하시겠습니까?\n(플래시카드, 퀴즈, 오답노트, Day 체크 등 모든 데이터가 삭제됩니다)')) return;
+              if (!window.confirm('모든 학습 진도를 초기화하시겠습니까?\n(플래시카드, 퀴즈, 오답노트, 레슨·체크리스트, 로드맵 완료 등 모든 데이터가 삭제됩니다)\n\n지우기 전에 지금 기록을 복구용 파일로 내려받습니다. 이 파일을 "가져오기"하면 되돌릴 수 있어요.')) return;
+              exportData('_before-reset');
               const keysToRemove = [];
               for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);

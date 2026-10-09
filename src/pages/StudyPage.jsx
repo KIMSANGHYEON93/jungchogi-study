@@ -9,6 +9,7 @@ import { fetchMarkdown } from '../utils/mdCache';
 import { STUDY_FILES as FILES } from '../domain/studyFiles';
 import { buildRoadmap, daysForStudyDoc } from '../domain/roadmap';
 import { getExamDate, toLocalDateKey } from '../utils/storage';
+import { checklistItemsOf, getChecklist, setChecklistItem } from '../utils/studyChecklist';
 
 // `/study?day=6` → FILES 인덱스. Day N 은 FILES[N-1] 이다.
 // 오늘의 계획 카드의 study_day 항목이 이 경로로 들어온다.
@@ -51,6 +52,21 @@ export default function StudyPage() {
   const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks: study.checks });
   const planned = selectedIdx < 14 ? daysForStudyDoc(roadmap, selectedIdx + 1) : null;
   const plannedDone = planned !== null && planned.length > 0 && planned.every((d) => d.done);
+
+  // 체크리스트 상태 — 문서마다 따로 저장한다. 다른 문서로 바꾸면 저장소에서 다시 읽는다(effect 없이).
+  const file = FILES[selectedIdx].file;
+  const [checkState, setCheckState] = useState(() => ({ file, checks: getChecklist(file), saveFailed: false }));
+  const checks = checkState.file === file ? checkState.checks : getChecklist(file);
+  const checkSaveFailed = checkState.file === file && checkState.saveFailed;
+  const checklist = {
+    isChecked: (item) => !!checks[item],
+    onToggle: (item, on) => {
+      const { checks: next, saved } = setChecklistItem(file, item, on);
+      setCheckState({ file, checks: next, saveFailed: !saved });
+    },
+  };
+  const items = loading ? [] : [...new Set(checklistItemsOf(content))];
+  const checkedCount = items.filter((i) => checks[i]).length;
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +129,19 @@ export default function StudyPage() {
                   <Link to="/roadmap">로드맵 보기</Link>
                 </p>
               ) : null}
-              <MarkdownViewer content={content} />
+              {items.length > 0 ? (
+                <p className="study-checklist-status" role="status">
+                  학습 완료 체크리스트 <strong>{checkedCount}/{items.length}</strong> — 문서 맨 아래에서 체크하면 이 기기에 저장됩니다.
+                  자기 점검용 기록이라 정답률·이해도로 세지 않고, 로드맵 일차 완료도 자동으로 바뀌지 않아요.
+                  {planned && planned.length > 0 && checkedCount === items.length && !plannedDone
+                    ? ' 체크리스트를 다 채웠어요 — 로드맵에서 해당 일차를 완료로 표시할 수 있습니다.'
+                    : ''}
+                </p>
+              ) : null}
+              {checkSaveFailed ? (
+                <p role="alert" className="study-checklist-status">브라우저 저장소에 기록하지 못했습니다. 새로고침하면 체크가 사라질 수 있어요.</p>
+              ) : null}
+              <MarkdownViewer content={content} checklist={checklist} />
             </div>
           )}
         </div>

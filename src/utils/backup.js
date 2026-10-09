@@ -12,6 +12,12 @@
 const PREFIX = 'jungchogi_';
 export const BACKUP_SCHEMA = 1;
 
+/**
+ * 가져올 백업 파일의 최대 크기. 브라우저 저장소(대개 5MB 안팎)에 들어갈 수 없는 크기는 읽기 전에 거절한다 —
+ * 큰 파일을 통째로 JSON 파싱하면 화면이 멈출 수 있다.
+ */
+export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isFiniteNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -19,7 +25,7 @@ const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 // ─── 키별 모양 검증과 합치기 규칙 ───────────────────────────────────────
 
 const isFlagKey = (k) => k === 'roadmap_checks' || k === 'day_checks' || k === 'lesson_bookmarks' || k.startsWith('flashcard_known_');
-const isResultKey = (k) => k === 'quiz_results' || k === 'exam_results';
+const isResultKey = (k) => k === 'quiz_results' || k === 'exam_results' || k === 'lesson_results';
 
 /** 학습 상태 점수: 채점된 결과(correct/incorrect)가 '시도만 함(answered)' 보다 정보가 많다 */
 const resultRank = (v) => (v === 'correct' || v === 'incorrect' ? 2 : v === 'answered' ? 1 : 0);
@@ -37,9 +43,16 @@ export function isValidValue(key, value) {
     return isPlainObject(value) && (value.busyDates === undefined || (Array.isArray(value.busyDates) && value.busyDates.every((d) => typeof d === 'string')));
   }
   if (key === 'exam_date') return typeof value === 'string' && DATE_KEY.test(value);
+  if (key === 'exam_sessions') {
+    return Array.isArray(value) && value.every((x) => isPlainObject(x) && typeof x.id === 'string' && Array.isArray(x.items)
+      && x.items.every((i) => isPlainObject(i) && typeof i.qid === 'string' && (i.verdict === null || i.verdict === 'correct' || i.verdict === 'incorrect')));
+  }
+  if (key === 'study_checklist') {
+    return isPlainObject(value) && Object.values(value).every((doc) => isPlainObject(doc) && Object.values(doc).every((v) => v === true));
+  }
   if (key === 'practice_done') {
     return isPlainObject(value) && Object.values(value).every(
-      (tab) => isPlainObject(tab) && Object.values(tab).every((v) => v === 'done' || v === 'wrong')
+      (tab) => isPlainObject(tab) && Object.values(tab).every((v) => v === 'done' || v === 'wrong' || v === 'viewed')
     );
   }
   return true;
@@ -94,6 +107,9 @@ export function mergeValue(key, current, incoming) {
       const reviews = Math.max(aCount, bCount);
       if ('reviewCount' in base || reviews > 0) merged.reviewCount = reviews;
       if (a.mastered || note.mastered) merged.mastered = true;
+      // 틀린 횟수는 많은 쪽 — 두 기기에서 따로 틀린 것을 더하면 같은 파일을 두 번 가져올 때 불어난다
+      const wrongs = Math.max(Number(a.wrongCount) || 0, Number(note.wrongCount) || 0);
+      if (wrongs > 0) merged.wrongCount = wrongs;
       out[i] = merged;
     }
     return out;
@@ -102,13 +118,30 @@ export function mergeValue(key, current, incoming) {
     const dates = [...new Set([...(current.busyDates ?? []), ...(incoming.busyDates ?? [])])].sort();
     return { busyDates: dates, syncedAt: Math.max(Number(current.syncedAt) || 0, Number(incoming.syncedAt) || 0) || null };
   }
+  if (key === 'exam_sessions') {
+    // 회차 id 로 합친다. 같은 회차면 더 많이 채점한 쪽을 쓰고, 시작 시각 순으로 최근 20회차만 남긴다
+    const gradedOf = (x) => x.items.filter((i) => i.verdict).length;
+    const byId = new Map(current.map((x) => [x.id, x]));
+    for (const x of incoming) {
+      const cur = byId.get(x.id);
+      if (!cur || gradedOf(x) > gradedOf(cur)) byId.set(x.id, x);
+    }
+    return [...byId.values()].sort((a, b) => (Number(a.startedAt) || 0) - (Number(b.startedAt) || 0)).slice(-20);
+  }
+  if (key === 'study_checklist') {
+    // 문서별 체크 합집합 — 한쪽에서라도 체크했으면 체크
+    const out = { ...current };
+    for (const [file, doc] of Object.entries(incoming)) out[file] = { ...(current[file] ?? {}), ...doc };
+    return out;
+  }
   if (key === 'practice_done') {
-    // 실기 연습 결과: 어느 한쪽에서라도 완료했으면 완료, 아니면 이 기기의 기록을 지킨다
+    // 실기 연습 결과: 정답(done) > 오답(wrong) > 넘겨 보기만 함(viewed). 같은 수준이면 이 기기의 기록을 지킨다
+    const rank = { done: 3, wrong: 2, viewed: 1 };
     const out = {};
     for (const tab of new Set([...Object.keys(current), ...Object.keys(incoming)])) {
       const merged = { ...(current[tab] ?? {}) };
       for (const [id, v] of Object.entries(incoming[tab] ?? {})) {
-        if (!(id in merged) || v === 'done') merged[id] = v;
+        if (!(id in merged) || (rank[v] ?? 0) > (rank[merged[id]] ?? 0)) merged[id] = v;
       }
       out[tab] = merged;
     }
@@ -142,9 +175,10 @@ export function buildBackup(storage = localStorage, now = new Date()) {
  *
  * @param {string} text
  * @returns {{ok: true, schema: number, legacy: boolean, items: Record<string, unknown>, skipped: {key: string, reason: string}[]}
- *   | {ok: false, reason: 'json'|'shape'|'schema'|'empty'}}
+ *   | {ok: false, reason: 'size'|'json'|'shape'|'schema'|'empty'}}
  */
 export function parseBackup(text) {
+  if (typeof text !== 'string' || text.length > MAX_BACKUP_BYTES) return { ok: false, reason: 'size' };
   let body;
   try {
     body = JSON.parse(text);
@@ -264,6 +298,7 @@ export function applyBackup(parsed, mode = 'merge', storage = localStorage) {
 // ─── 화면에 보일 문구 ────────────────────────────────────────────────────
 
 const FAIL_MESSAGE = {
+  size: `백업 파일이 너무 큽니다(최대 ${MAX_BACKUP_BYTES / 1024 / 1024}MB). 이 앱에서 내보낸 파일인지 확인해 주세요.`,
   json: '백업 파일을 읽을 수 없습니다. JSON 형식이 아니거나 파일이 손상됐습니다.',
   shape: '백업 파일의 구조가 올바르지 않습니다. 이 앱에서 내보낸 파일인지 확인해 주세요.',
   schema: '이 앱보다 새 버전에서 만든 백업이라 가져올 수 없습니다. 앱을 새로고침해 최신 버전으로 열어 보세요.',

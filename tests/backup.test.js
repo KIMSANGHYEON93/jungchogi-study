@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  BACKUP_SCHEMA, applyBackup, buildBackup, failureMessage, isValidValue, mergeValue, parseBackup, successMessage,
+  BACKUP_SCHEMA, MAX_BACKUP_BYTES, applyBackup, buildBackup, failureMessage, isValidValue, mergeValue, parseBackup, successMessage,
 } from '../src/utils/backup.js';
 
 /** setItem 을 n 번째 호출부터 던지게 할 수 있는 메모리 저장소 */
@@ -283,5 +283,44 @@ describe('문구', () => {
     expect(successMessage({ written: 5, skipped: 0 }, 'merge')).toBe('5개 항목을 합쳤습니다.');
     expect(successMessage({ written: 5, skipped: 2 }, 'replace')).toContain('덮어썼습니다');
     expect(successMessage({ written: 5, skipped: 2 }, 'replace')).toContain('2개 항목은 건너뛰었습니다');
+  });
+});
+
+describe('잘못된 가져오기 파일은 기존 학습 데이터를 건드리지 않는다', () => {
+  it('크기 제한을 넘는 파일은 파싱 전에 거절한다', () => {
+    expect(parseBackup('x'.repeat(MAX_BACKUP_BYTES + 1))).toEqual({ ok: false, reason: 'size' });
+    expect(parseBackup(null)).toEqual({ ok: false, reason: 'size' });
+    expect(failureMessage('size')).toMatch(/너무 큽니다/);
+  });
+
+  it('형식이 틀린 파일 · 모양이 틀린 키는 저장소에 아무것도 쓰지 않는다', () => {
+    // parseBackup 이 실패하면 applyBackup 까지 가지 않는다 — 화면(DashboardPage)도 실패 시 바로 멈춘다
+    const store = new Map([['jungchogi_quiz_results', JSON.stringify({ 'C-01': 'correct' })]]);
+    for (const bad of ['{', '[]', JSON.stringify({ schema: 99, data: {} }), JSON.stringify({ schema: 1, data: { jungchogi_quiz_results: '"nope"' } })]) {
+      const parsed = parseBackup(bad);
+      expect(parsed.ok).toBe(false);
+    }
+    expect(store.get('jungchogi_quiz_results')).toBe(JSON.stringify({ 'C-01': 'correct' }));
+  });
+
+  it('새 기록(레슨 결과 · 모의고사 회차 · 체크리스트)의 모양을 검증한다', () => {
+    expect(isValidValue('lesson_results', { 'python-basics:q1': 'incorrect' })).toBe(true);
+    expect(isValidValue('lesson_results', { 'python-basics:q1': 3 })).toBe(false);
+    const session = { id: 'exam-1', startedAt: 1, items: [{ qid: 'C-01', area: 'code', verdict: null }] };
+    expect(isValidValue('exam_sessions', [session])).toBe(true);
+    expect(isValidValue('exam_sessions', [{ ...session, items: [{ qid: 'C-01', verdict: 'maybe' }] }])).toBe(false);
+    expect(isValidValue('practice_done', { trace: { 'C-01': 'viewed' } })).toBe(true);
+  });
+
+  it('모의고사 회차 합치기: 같은 회차는 더 많이 채점한 쪽, 시작 순, 최근 20회', () => {
+    const a = { id: 'e1', startedAt: 1, items: [{ qid: 'x', area: 'code', verdict: null }] };
+    const b = { id: 'e1', startedAt: 1, items: [{ qid: 'x', area: 'code', verdict: 'correct' }] };
+    const c = { id: 'e2', startedAt: 2, items: [] };
+    expect(mergeValue('exam_sessions', [a], [c, b])).toEqual([b, c]);
+  });
+
+  it('실기 연습: 채점 결과가 "봄"보다 우선한다', () => {
+    expect(mergeValue('practice_done', { trace: { a: 'viewed' } }, { trace: { a: 'wrong' } })).toEqual({ trace: { a: 'wrong' } });
+    expect(mergeValue('practice_done', { trace: { a: 'done' } }, { trace: { a: 'viewed' } })).toEqual({ trace: { a: 'done' } });
   });
 });

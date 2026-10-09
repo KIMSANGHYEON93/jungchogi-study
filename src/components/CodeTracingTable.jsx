@@ -23,7 +23,8 @@ const LANG_LABEL = { c: 'C', java: 'Java', python: 'Python' };
  *   code?: string,
  *   lang?: 'c'|'java'|'python',
  *   steps: {step: number, line: number, variables: Record<string, string|number|null>, output?: string}[]
- *   onComplete?: (status: 'done'|'wrong') => void  끝 step 까지 보거나 직접 채워 채점했을 때
+ *   onComplete?: (status: 'viewed'|'done'|'wrong') => void  끝 step 까지 봤으면 'viewed'(정답률에 넣지 않음),
+ *     직접 채워 채점했으면 모두 맞을 때 'done', 아니면 'wrong'
  * }} props
  */
 export default function CodeTracingTable({ code = '', lang, steps, onComplete }) {
@@ -79,14 +80,14 @@ export default function CodeTracingTable({ code = '', lang, steps, onComplete })
     setShowAll(false);
     setCursor(idx);
     setMessage(`step ${rows[idx].step} / ${rows.length} · ${rows[idx].line}번째 줄`);
-    if (idx === lastIdx) onComplete?.('done');
+    if (idx === lastIdx) onComplete?.('viewed');
   }
 
   function expandAll() {
     setShowAll(true);
     setCursor(lastIdx);
     setMessage(`전체 ${rows.length}개 step 을 모두 펼쳤습니다.`);
-    onComplete?.('done');
+    onComplete?.('viewed');
   }
 
   function onInput(i, name, value) {

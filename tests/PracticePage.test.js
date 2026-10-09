@@ -99,7 +99,7 @@ describe('실기 연습 화면', () => {
     expect(c.querySelector('table')).not.toBeNull();
   });
 
-  it('추적표를 끝 step 까지 보면 완료로 표시되고, 다시 열면 첫 미완료 문항에서 시작한다', async () => {
+  it('추적표를 끝 step 까지 보면 완료(봄)로 표시되고 — 정답률에는 넣지 않는다 — 다시 열면 첫 미완료 문항에서 시작한다', async () => {
     const ids = Object.keys(TRACES);
     let c = render();
     await flush();
@@ -109,7 +109,7 @@ describe('실기 연습 화면', () => {
     const first = pickers(c).find((b) => chipLabel(b) === ids[0]);
     expect(first.classList.contains('is-done')).toBe(true);
     expect(first.getAttribute('aria-label')).toBe(`${ids[0]} 완료`);
-    expect(JSON.parse(localStorage.getItem('jungchogi_practice_done'))).toEqual({ trace: { [ids[0]]: 'done' } });
+    expect(JSON.parse(localStorage.getItem('jungchogi_practice_done'))).toEqual({ trace: { [ids[0]]: 'viewed' } });
 
     // 새로 열면 끝낸 문항을 건너뛴다
     c = render();

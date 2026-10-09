@@ -51,7 +51,7 @@ export default function GuidePage() {
 
       <section className="card guide-section" aria-labelledby="guide-weight">
         <h2 id="guide-weight" className="guide-title">
-          <Icon name="target" size={18} /> 3. 출제 비중 및 핵심 출제 영역 안내
+          <Icon name="target" size={18} /> 3. 학습 우선순위 (앱의 판단 — 공식 출제 비중 아님)
         </h2>
         <ul className="guide-weights">
           {WEIGHT_NOTES.map((note) => (

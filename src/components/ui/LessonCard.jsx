@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import BookmarkButton from './BookmarkButton';
+import { TOPIC_MINUTES } from '../../domain/studyTime';
 
 const TRACK_STYLE = {
   C: 'tw:bg-primary/15 tw:text-primary-dim',
@@ -29,7 +30,7 @@ export default function LessonCard({ lesson, done, bookmarked, onToggleBookmark 
           <span className={`tw:rounded-md tw:px-2 tw:py-0.5 tw:font-semibold ${TRACK_STYLE[lesson.track] ?? ''}`}>
             {lesson.track}
           </span>
-          <span className="tw:text-dim">약 {lesson.minutes}분 · 퀴즈 {lesson.questions.length}문항</span>
+          <span className="tw:text-dim">필수 {TOPIC_MINUTES}분 · 퀴즈 {lesson.questions.length}문항</span>
           {done ? <span className="tw:font-semibold tw:text-success">✓ 완료</span> : null}
         </div>
         <h3 className="tw:text-base tw:font-bold tw:text-ink">

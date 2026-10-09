@@ -53,4 +53,21 @@ describe('학습 자료 출처 규칙', () => {
     expect(md.match(/^### \d{3}\./gm)).toHaveLength(100);
     expect(md).not.toMatch(/기출 분석 기반|20\d\d 신유형/);
   });
+
+  it('출처 없는 출제 빈도 단정(최빈출 · 최신 기출 · 매회 출제)을 쓰지 않는다 — 외부 글 제목은 예외', () => {
+    for (const f of files) {
+      const body = read(f).split('\n').filter((l) => !l.includes('https://')).join('\n');
+      expect(body, f).not.toMatch(/최빈출|최신 기출|매회 출제|시험 단골/);
+    }
+  });
+
+  it('TRUNCATE · DROP 롤백을 DBMS 전제 없이 "불가"로 단정하지 않는다', () => {
+    for (const f of files) {
+      for (const line of read(f).split('\n')) {
+        if (/TRUNCATE/.test(line) && /롤백 ?(불가|X)/.test(line)) {
+          expect(line, f).toMatch(/Oracle|MySQL|\*/);
+        }
+      }
+    }
+  });
 });

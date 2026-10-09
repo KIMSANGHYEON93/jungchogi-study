@@ -4,12 +4,16 @@ import Icon from './Icon';
 import { addDays } from '../domain/dailyPlan';
 import { summarizeBusyDays } from '../domain/calendarBusy';
 import { lessonByDay } from '../domain/lessons';
-import { buildRoadmap, dayBlocks, roadmapSchedule, topicLinks, upcomingDays } from '../domain/roadmap';
+import { ROADMAP_DAYS, buildRoadmap, dayBlocks, roadmapSchedule, topicLinks, upcomingDays } from '../domain/roadmap';
+import { adjustmentFor, catchUpPlan, evaluateGate } from '../domain/planAdvice';
+import { CatchUpPanel, GateBands, LoadNote } from './PlanAdvice';
 import useStudyState from '../hooks/useStudyState';
 import { fetchCalendarEvents, isGoogleCalendarConfigured, loadGisScript } from '../services/googleCalendar';
 import { buildIcs, downloadIcs } from '../utils/icsExport';
 import { clearBusy, loadStoredBusy, saveBusy } from '../utils/busyStore';
-import { toLocalDateKey } from '../utils/storage';
+import { getExamSessions, loadProgress, toLocalDateKey } from '../utils/storage';
+
+const GATE_DAYS = ROADMAP_DAYS.filter((x) => x.gate);
 
 const SCOPE_LABEL = { common: '공통', engineer: '기사 특화' };
 const UPCOMING_COUNT = 6;
@@ -36,6 +40,10 @@ export default function TodayRoadmapCard({ examDate }) {
   // 'idle' | 'loading' | 'done' | 'error' — 가져오기 진행 상태
   const [sync, setSync] = useState({ status: 'idle', message: '' });
   const study = useStudyState();
+  const [diag] = useState(() => ({
+    sessions: getExamSessions(),
+    traceProgress: loadProgress('practice_done', {})?.trace ?? {},
+  }));
 
   const roadmap = useMemo(
     () => buildRoadmap({ examDate: examDate || null, today, checks: study.checks, busyDates: busy.busyDates }),
@@ -45,6 +53,8 @@ export default function TodayRoadmapCard({ examDate }) {
   const { status, today: day, progress, late } = roadmap;
   const upcoming = upcomingDays(roadmap, UPCOMING_COUNT);
   const lesson = day ? lessonByDay(day.d) : null;
+  const catchUp = catchUpPlan(roadmap);
+  const adjustment = day && day.d > 0 ? adjustmentFor(day, { ...diag, gateDays: GATE_DAYS }) : null;
 
   // 지금 시점의 남은 일정을 .ics 로 내려받는다. 날짜별 UID 가 고정이라 다시 가져와도
   // 새 이벤트가 쌓이지 않는다(완료 체크로 일정이 바뀐 뒤 다시 내보내면 갱신).
@@ -129,7 +139,7 @@ export default function TodayRoadmapCard({ examDate }) {
             </span>
             <strong className="goal-unit-title">{day.title}</strong>
             {dayBlocks(day).length > 0 ? (
-              <ul className="goal-blocks" aria-label="오늘 2시간 배분">
+              <ul className="goal-blocks" aria-label="오늘 학습 배분">
                 {dayBlocks(day).map((b) => (
                   <li key={b.key} className={`goal-block is-${b.key}`}>
                     <strong>{b.label} {b.minutes}분</strong>
@@ -138,13 +148,9 @@ export default function TodayRoadmapCard({ examDate }) {
                 ))}
               </ul>
             ) : null}
-            {day.gate ? (
-              <p className="road-gate" role="note">
-                <strong>기준 · {day.gate.metric}</strong>
-                <span>{day.gate.pass}</span>
-                <span>{day.gate.below}</span>
-              </p>
-            ) : null}
+            <LoadNote day={day} />
+            {adjustment ? <p className="road-adjust" role="note">배분 조정 · {adjustment.text}</p> : null}
+            {day.gate ? <GateBands gate={day.gate} evaluation={evaluateGate(day, diag)} /> : null}
             <ul className="road-topics">
               {day.topics.map((topic) => (
                 <li key={topic.text} className={`road-topic is-${topic.scope}`}>
@@ -182,13 +188,7 @@ export default function TodayRoadmapCard({ examDate }) {
         </div>
       ) : null}
 
-      {(status === 'ok' || status === 'before') && late.length > 0 ? (
-        <p className="goal-hint goal-late" role="status">
-          밀린 일차 {late.length}개 ({late.slice(0, 4).map((d) => `D-${d}`).join(' · ')}
-          {late.length > 4 ? ' …' : ''}) —{' '}
-          <Link to="/roadmap">로드맵에서 이어하기</Link>
-        </p>
-      ) : null}
+      {status === 'ok' && late.length > 0 && catchUp ? <CatchUpPanel plan={catchUp} compact /> : null}
 
       {status === 'ok' || status === 'before' ? (
         <>

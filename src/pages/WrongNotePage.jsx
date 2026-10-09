@@ -2,14 +2,29 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
-import { getWrongNotes, removeWrongNote, markWrongNoteReviewed, clearAllWrongNotes } from '../utils/storage';
+import { getWrongNotes, removeWrongNote, recordWrongNoteRetry, clearAllWrongNotes } from '../utils/storage';
+import { gradeLessonNote, LESSON_SOURCE } from '../domain/lessonQuiz';
+import { matchesExpectedOutput } from '../domain/grading';
 import Icon from '../components/Icon';
 import ProblemContext from '../components/ProblemContext';
 import { useThemeContext } from '../hooks/useTheme';
 import { useDeepLinkId, formatDeepLinkId, DEEP_LINK_NOTICE_STYLE } from '../hooks/useDeepLink';
 
-const SOURCE_LABEL = { quiz: '코드퀴즈', exam: '모의고사' };
-const FILTER_OPTIONS = ['전체', '코드퀴즈', '모의고사', '미복습', '복습완료'];
+const SOURCE_LABEL = { quiz: '코드퀴즈', exam: '모의고사', [LESSON_SOURCE]: '레슨' };
+const SOURCE_BADGE = { quiz: 'badge-primary', exam: 'badge-warning', [LESSON_SOURCE]: 'badge-success' };
+const FILTER_OPTIONS = ['전체', '코드퀴즈', '모의고사', '레슨', '미복습', '복습완료'];
+
+/**
+ * 다시 푼 답을 자동 채점할 수 있으면 true/false, 사람이 봐야 하면 null.
+ * - 레슨 문항: 레슨 화면과 같은 규칙
+ * - 코드 문항: 저장된 정답 출력(`expectedOutput`)이 있을 때만 출력 비교
+ * - 단답형: 표현이 여러 가지라 직접 채점
+ */
+function autoGrade(note, input) {
+  if (note.source === LESSON_SOURCE) return gradeLessonNote(note, input);
+  if (note.type === 'code' && note.expectedOutput) return matchesExpectedOutput(input, note.expectedOutput);
+  return null;
+}
 
 // 오답 하나를 가리키는 키. 같은 id 가 코드퀴즈·모의고사 양쪽에 있을 수 있다.
 const noteKey = (note) => `${note.source}_${note.id}`;
@@ -35,6 +50,8 @@ export default function WrongNotePage() {
   const [retryMode, setRetryMode] = useState(null); // { source, id }
   const [retryAnswer, setRetryAnswer] = useState('');
   const [retrySubmitted, setRetrySubmitted] = useState(false);
+  // 자동 채점 결과(true/false) 또는 직접 채점 대기(null). 기록이 끝나면 'recorded'
+  const [retryVerdict, setRetryVerdict] = useState(null);
 
   const reload = useCallback(() => setNotes(getWrongNotes()), []);
 
@@ -53,6 +70,7 @@ export default function WrongNotePage() {
   const filtered = notes.filter((n) => {
     if (filter === '코드퀴즈') return n.source === 'quiz';
     if (filter === '모의고사') return n.source === 'exam';
+    if (filter === '레슨') return n.source === LESSON_SOURCE;
     if (filter === '미복습') return n.reviewCount === 0;
     if (filter === '복습완료') return n.reviewCount > 0;
     return true;
@@ -67,11 +85,27 @@ export default function WrongNotePage() {
     setRetryMode({ source: note.source, id: note.id });
     setRetryAnswer('');
     setRetrySubmitted(false);
+    setRetryVerdict(null);
   };
 
+  // 제출할 때만 기록한다. 자동 채점이 되는 문항은 바로, 아니면 정답을 본 뒤 직접 채점해야 기록된다 —
+  // 예전에는 제출만 하면 맞든 틀리든 "복습 완료"가 됐다.
   const handleRetrySubmit = (note) => {
+    if (!retryAnswer.trim()) return;
     setRetrySubmitted(true);
-    markWrongNoteReviewed(note.source, note.id);
+    const verdict = autoGrade(note, retryAnswer);
+    if (verdict === true || verdict === false) {
+      recordWrongNoteRetry(note.source, note.id, verdict);
+      setRetryVerdict(verdict);
+      reload();
+    } else {
+      setRetryVerdict(null);
+    }
+  };
+
+  const handleSelfGrade = (note, correct) => {
+    recordWrongNoteRetry(note.source, note.id, correct);
+    setRetryVerdict(correct);
     reload();
   };
 
@@ -138,7 +172,7 @@ export default function WrongNotePage() {
           </div>
           <p style={{ color: 'var(--text-dim)' }}>
             {totalCount === 0
-              ? '오답이 없습니다! 퀴즈나 모의고사에서 틀린 문제가 여기에 추가됩니다.'
+              ? '오답이 없습니다! 레슨 확인 퀴즈에서 틀린 문제와, 코드 퀴즈·모의고사에서 "오답노트에 추가"한 문제가 여기에 모입니다.'
               : '해당 필터에 맞는 오답이 없습니다.'}
           </p>
         </div>
@@ -167,9 +201,20 @@ export default function WrongNotePage() {
               >
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span className={`badge ${note.source === 'quiz' ? 'badge-primary' : 'badge-warning'}`}>
-                      {SOURCE_LABEL[note.source]}
+                    <span className={`badge ${SOURCE_BADGE[note.source] ?? 'badge-warning'}`}>
+                      {SOURCE_LABEL[note.source] ?? note.source}
                     </span>
+                    {note.source === LESSON_SOURCE && note.topic && (
+                      <span className="badge badge-primary">{note.topic}</span>
+                    )}
+                    {Number(note.wrongCount) > 1 && (
+                      <span className="badge badge-danger">{note.wrongCount}번 틀림</span>
+                    )}
+                    {note.lastResult && (
+                      <span className={`badge ${note.lastResult === 'correct' ? 'badge-success' : 'badge-danger'}`}>
+                        {note.lastResult === 'correct' ? '재풀이 정답' : '재풀이 오답'}
+                      </span>
+                    )}
                     {note.type === 'code' && (
                       <span className="badge badge-danger">{note.lang?.toUpperCase()}</span>
                     )}
@@ -178,7 +223,9 @@ export default function WrongNotePage() {
                     )}
                   </div>
                   <h3 style={{ fontSize: '1rem', marginTop: 8, lineHeight: 1.6 }}>
-                    {note.type === 'code' ? `${note.id}. ${note.title}` : `${note.id}. ${note.question}`}
+                    {note.source === LESSON_SOURCE
+                      ? note.title
+                      : note.type === 'code' ? `${note.id}. ${note.title}` : `${note.id}. ${note.question}`}
                   </h3>
                 </div>
                 <span style={{ color: 'var(--text-dim)', flexShrink: 0 }}>
@@ -190,8 +237,9 @@ export default function WrongNotePage() {
               {isExpanded && (
                 <div style={{ marginTop: 16 }}>
                   {/* Code block for code type */}
+                  {note.source === LESSON_SOURCE && <p style={{ fontWeight: 600, marginBottom: 8 }}>{note.question}</p>}
                   {note.type === 'code' && <ProblemContext text={note.context} fontSize="0.9rem" />}
-                  {note.type === 'code' && note.code && (
+                  {(note.type === 'code' || note.source === LESSON_SOURCE) && note.code && (
                     <SyntaxHighlighter
                       language={note.lang}
                       style={syntaxTheme}
@@ -221,10 +269,10 @@ export default function WrongNotePage() {
                         value={retryAnswer}
                         onChange={(e) => setRetryAnswer(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleRetrySubmit(note); }}
-                        placeholder={note.type === 'code' ? '출력 결과를 입력하세요' : '정답을 입력하세요'}
+                        placeholder={note.type === 'code' || note.source === LESSON_SOURCE ? '답(출력 결과)을 입력하세요' : '정답을 입력하세요'}
                         autoFocus
                       />
-                      <button className="btn-primary" onClick={() => handleRetrySubmit(note)} style={{ marginTop: 8 }}>
+                      <button className="btn-primary" onClick={() => handleRetrySubmit(note)} disabled={!retryAnswer.trim()} style={{ marginTop: 8 }}>
                         정답 확인
                       </button>
                     </div>
@@ -233,10 +281,22 @@ export default function WrongNotePage() {
                   {/* Answer (shown when not retrying, or after retry submit) */}
                   {(!isRetrying || retrySubmitted) && (
                     <div className="quiz-result correct" style={{ marginTop: 12 }}>
+                      {isRetrying && retrySubmitted && retryVerdict !== null ? (
+                        <p role="status" style={{ fontWeight: 700, marginBottom: 8, color: retryVerdict ? 'var(--success)' : 'var(--danger)' }}>
+                          {retryVerdict ? '맞았습니다 — 복습 1회로 기록했어요.' : '또 틀렸습니다 — 내일 다시 나오도록 복습 단계를 처음으로 되돌렸어요.'}
+                        </p>
+                      ) : null}
                       <h4 style={{ marginBottom: 8, color: 'var(--success)' }}>정답</h4>
-                      <div className="md-content" style={{ fontSize: '0.9rem' }}>
-                        <ReactMarkdown>{note.answer}</ReactMarkdown>
-                      </div>
+                      {note.source === LESSON_SOURCE ? (
+                        <>
+                          <pre className="md-content" style={{ fontSize: '0.9rem', whiteSpace: 'pre-wrap' }}>{note.answer}</pre>
+                          {note.explain && <p style={{ marginTop: 8, color: 'var(--text-dim)' }}>{note.explain}</p>}
+                        </>
+                      ) : (
+                        <div className="md-content" style={{ fontSize: '0.9rem' }}>
+                          <ReactMarkdown>{note.answer}</ReactMarkdown>
+                        </div>
+                      )}
                       {note.pitfall && (
                         <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(251,191,36,0.1)', borderRadius: 8, border: '1px solid var(--warning)' }}>
                           <strong style={{ color: 'var(--warning)' }}>함정:</strong> {note.pitfall}
@@ -252,7 +312,14 @@ export default function WrongNotePage() {
                         다시 풀기
                       </button>
                     )}
-                    {isRetrying && retrySubmitted && (
+                    {isRetrying && retrySubmitted && retryVerdict === null && (
+                      <>
+                        <span style={{ alignSelf: 'center', color: 'var(--text-dim)', fontSize: '0.9rem' }}>정답과 비교해 직접 채점:</span>
+                        <button className="btn-success" onClick={() => handleSelfGrade(note, true)}>맞았어요</button>
+                        <button className="btn-danger" onClick={() => handleSelfGrade(note, false)}>틀렸어요</button>
+                      </>
+                    )}
+                    {isRetrying && retrySubmitted && retryVerdict !== null && (
                       <button className="btn-primary" onClick={() => setRetryMode(null)}>
                         닫기
                       </button>

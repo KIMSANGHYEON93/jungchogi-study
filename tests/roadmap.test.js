@@ -5,6 +5,8 @@ import {
   DAILY_BLOCKS,
   DAILY_MINUTES,
   dayBlocks,
+  dayLoad,
+  gateBand,
   ROADMAP_DAYS,
   ROADMAP_PHASES,
   buildRoadmap,
@@ -14,6 +16,7 @@ import {
   topicsFor,
   upcomingDays,
 } from '../src/domain/roadmap.js';
+import { EXAM_SPEC, MOCK_EXAM } from '../src/domain/studyTime.js';
 
 const base = { examDate: '2026-10-25', today: '2026-10-01' };
 const allDays = (r) => r.phases.flatMap((p) => p.days);
@@ -33,7 +36,7 @@ describe('25일 구성', () => {
       '코딩 · SQL 집중',
       '인프라 · 테스트',
       '기사 특화',
-      '기출 회독 · 최종 점검',
+      '실전 모의고사 · 최종 점검',
     ]);
     expect(r.phases.map(range)).toEqual([
       [24, 16, 9],
@@ -157,7 +160,7 @@ describe('주제 링크', () => {
     expect(text(9, 4)).toMatch(/디자인패턴/);
     expect(text(9, 4)).toMatch(/연계/);
     expect(text(9, 4)).toMatch(/보안/);
-    expect(text(3, 1)).toMatch(/기출/);
+    expect(text(3, 1)).toMatch(/모의고사/);
     expect(text(3, 1)).toMatch(/공식/);
   });
 });
@@ -320,13 +323,30 @@ describe('하루 2시간 배분 · 기출 실전일 · 점검 기준', () => {
     expect(DAILY_BLOCKS[0].minutes).toBeGreaterThanOrEqual(60);
   });
 
-  it('보통 학습일은 고정 블록, 기출 실전일은 기출 한 덩어리(2시간), 시험 당일은 없음', () => {
+  it('보통 학습일은 고정 블록, 실전 모의고사일은 실제 시험 시간 풀이 + 채점·오답 정리, 시험 당일은 없음', () => {
     expect(dayBlocks(byD(22))).toBe(DAILY_BLOCKS);
+    expect(DAILY_BLOCKS.reduce((s, b) => s + b.minutes, 0)).toBe(DAILY_MINUTES);
     const practice = dayBlocks(byD(10));
-    expect(practice).toHaveLength(1);
-    expect(practice[0].minutes).toBe(DAILY_MINUTES);
+    expect(practice.map((b) => [b.key, b.minutes])).toEqual([['exam', EXAM_SPEC.minutes], ['grade', 30]]);
     expect(practice[0].to).toBe('/exam');
     expect(dayBlocks(buildRoadmap(base).examDay)).toEqual([]);
+  });
+
+  it('하루 가용 시간을 넘는 날은 초과분과 넘길 수 있는 몫을 계산한다', () => {
+    expect(dayLoad(byD(22))).toEqual({ planned: 120, available: 120, overflow: 0, carryKey: null, carryMinutes: 0 });
+    expect(dayLoad(byD(10))).toEqual({ planned: 180, available: 120, overflow: 60, carryKey: 'grade', carryMinutes: 30 });
+    expect(dayLoad(byD(10), 200).overflow).toBe(0);
+  });
+
+  it('로드맵의 모의고사 시간은 모의고사 화면과 같은 공통 값(실전 150분)이다', () => {
+    expect(MOCK_EXAM.minutes).toBe(EXAM_SPEC.minutes);
+    expect(EXAM_SPEC.minutes).toBe(150);
+    for (const d of [10, 4, 3, 2]) expect(dayBlocks(byD(d))[0].minutes).toBe(MOCK_EXAM.minutes);
+  });
+
+  it('복원 기출이라고 표시하지 않는다 (이 앱의 모의고사는 자체 제작)', () => {
+    const all = JSON.stringify(ROADMAP_DAYS) + JSON.stringify(ROADMAP_PHASES);
+    expect(all).not.toMatch(/복원 기출|기출 \d회분|기출 [①②③④]/);
   });
 
   it('기출 실전일은 D-10 · D-4 · D-3 · D-2 — 2·3단계 점검일과 4단계', () => {
@@ -336,13 +356,29 @@ describe('하루 2시간 배분 · 기출 실전일 · 점검 기준', () => {
     expect(buildRoadmap(base).examDay.kind).toBe('exam');
   });
 
-  it('점검일마다 기준치와 미달 시 분기가 있다 — D-16 코드 진단은 85%', () => {
+  it('점검일마다 점수 구간이 0~100 을 빈틈없이 덮는다 — D-16 코드 진단은 85%', () => {
     expect(days.filter((x) => x.gate).map((x) => x.d)).toEqual([16, 10, 4]);
-    expect(byD(16).gate.pass).toMatch(/85%/);
-    expect(byD(16).gate.below).toMatch(/코드 80분/);
+    expect(byD(16).gate.bands[0]).toMatchObject({ min: 85 });
+    expect(byD(16).gate.bands[1].action).toMatch(/코드 80분/);
     for (const d of [16, 10, 4]) {
-      for (const key of ['metric', 'pass', 'below']) expect(typeof byD(d).gate[key]).toBe('string');
+      const { bands } = byD(d).gate;
+      expect(bands.at(-1).min).toBe(0);
+      for (let i = 1; i < bands.length; i++) expect(bands[i].min).toBeLessThan(bands[i - 1].min);
+      for (let v = 0; v <= 100; v++) expect(gateBand(byD(d).gate, v)).not.toBeNull();
     }
     expect(byD(22).gate).toBeNull();
+  });
+
+  it('경계값 39·40·49·50·59·60 에서 D-10 · D-4 구간이 하나로 정해진다', () => {
+    const d10 = (v) => gateBand(byD(10).gate, v).label;
+    expect([39, 40, 49, 50, 59, 60].map(d10)).toEqual(['40점 미만', '40~49점', '40~49점', '50점 이상', '50점 이상', '50점 이상']);
+    const d4 = (v) => gateBand(byD(4).gate, v).label;
+    expect([39, 40, 49, 50, 59, 60].map(d4)).toEqual(['60점 미만', '60점 미만', '60점 미만', '60점 미만', '60점 미만', '60점 이상']);
+  });
+
+  it('4단계 원칙(새 단원 금지)과 D-4 구간 지침이 충돌하지 않는다', () => {
+    expect(ROADMAP_PHASES[3].focus).toMatch(/새 단원은 시작하지 않는다/);
+    for (const b of byD(4).gate.bands) expect(b.action).toMatch(/새 단원은 시작하지 않음/);
+    expect(JSON.stringify(byD(4).gate)).not.toMatch(/이론 범위를 넓혀도/);
   });
 });

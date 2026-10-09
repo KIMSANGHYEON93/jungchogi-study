@@ -1,6 +1,6 @@
 # Day 3 - Python 기초 + SQL 핵심
 
-> **권장 학습 시간**: 19:00~22:00
+> **학습 시간**: 로드맵 하루 120분 배분(코드 60 · 주제 40 · 복습 20)을 따릅니다. 이 문서는 그날 주제 블록의 참고 자료이고, 끝까지 정독하는 것은 추가 학습입니다.
 > **목표**: Python 기출 개념 마스터 + SQL SELECT/JOIN 완벽 정리
 > **학습 후 체크**: [ ] 이론 이해  [ ] 연습 10문제  [ ] 오답 정리
 
@@ -8,7 +8,7 @@
 
 ## PART 1: Python 자료형 핵심
 
-### 1-1. 리스트 (List) — 가장 빈출!
+### 1-1. 리스트 (List) — 핵심
 
 ```python
 a = [1, 2, 3, 4, 5]
@@ -37,7 +37,7 @@ a[::-1]    # [5, 4, 3, 2, 1, 0]  → 역순
 
 > **시험 포인트**: `a[start:end]`에서 **end는 미포함**! `a[2:6]`은 인덱스 2,3,4,5
 
-### 1-3. 문자열 슬라이싱 (기출 단골)
+### 1-3. 문자열 슬라이싱 (핵심)
 
 ```python
 s = "SPRING SUMMER FALL"
@@ -232,7 +232,7 @@ HAVING AVG(salary) >= 3000000;
 
 > **WHERE vs HAVING**: WHERE는 그룹 전 필터, HAVING은 그룹 후 필터!
 
-### 3-5. JOIN (최빈출!)
+### 3-5. JOIN (핵심)
 
 **테이블 예시:**
 
@@ -302,12 +302,12 @@ DELETE FROM student WHERE id = 4;
 
 > **시험 함정**: `DELETE` vs `TRUNCATE` vs `DROP`
 > - `DELETE`: 행 삭제 (롤백 가능, WHERE 가능)
-> - `TRUNCATE`: 전체 삭제 (롤백 불가, 구조 유지)
+> - `TRUNCATE`: 전체 삭제 (구조 유지, 롤백은 DBMS마다 다름 — Oracle·MySQL 불가, PostgreSQL·SQL Server 는 트랜잭션 안에서 가능)
 > - `DROP`: 테이블 자체 삭제
 
 ---
 
-## PART 4: SQL 심화 — 기출 빈출 패턴
+## PART 4: SQL 심화 — 자주 쓰는 패턴
 
 ### 4-1. DISTINCT
 
@@ -341,7 +341,7 @@ SELECT s.name FROM student s;  -- 테이블 별칭
 
 > `%` = 0개 이상 문자, `_` = 정확히 1개 문자
 
-### 4-5. WINDOW 함수 (최신 기출)
+### 4-5. WINDOW 함수 (심화)
 
 ```sql
 SELECT name, dept, salary,
@@ -759,7 +759,7 @@ GAMN
 | 배열 인덱스 | `a[0]` | `a[0]` | `a[0]` |
 | 문자열 길이 | `len(s)` | `s.length()` | `strlen(s)` |
 | 출력 | `print()` | `System.out.println()` | `printf()` |
-| 줄바꿈 방지 | `end=''` | `print()` | 없음 |
+| 출력 끝 줄바꿈 | `print()` 는 끝에 줄바꿈을 붙인다 — 막으려면 `print(x, end='')` | `println()` 은 붙이고 `print()` 는 안 붙인다 | `printf()` 는 자동으로 줄바꿈하지 않는다 — `\n` 을 직접 써야 줄이 바뀐다 |
 | 클래스 상속 | `class C(P):` | `class C extends P` | 없음 |
 | 정수 나눗셈 | `//` | `/` (int끼리) | `/` (int끼리) |
 | 논리 연산 | `and, or, not` | `&&, \|\|, !` | `&&, \|\|, !` |

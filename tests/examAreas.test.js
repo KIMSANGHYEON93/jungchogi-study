@@ -68,7 +68,7 @@ describe('영역 안내 화면', () => {
     const c = render();
     expect(c.textContent).toContain('1. 실기시험 기본 개요');
     expect(c.textContent).toContain('2. 실기 출제기준 주요 항목 (총 12개)');
-    expect(c.textContent).toContain('3. 출제 비중 및 핵심 출제 영역 안내');
+    expect(c.textContent).toContain('3. 학습 우선순위 (앱의 판단 — 공식 출제 비중 아님)');
     expect(c.querySelectorAll('.guide-area')).toHaveLength(12);
   });
 
@@ -76,7 +76,8 @@ describe('영역 안내 화면', () => {
     const c = render();
     expect(c.querySelectorAll('.guide-area.is-core')).toHaveLength(2);
     expect(c.querySelectorAll('.guide-area.is-calc')).toHaveLength(1);
-    expect(c.textContent).toContain('약 40~50% 이상');
+    expect(c.textContent).not.toContain('40~50%');
+    expect(c.textContent).toContain('공식 배점 비율을 근거로 한 것은 아닙니다');
   });
 
   it('영역마다 인코딩된 검색 링크를 준다', () => {

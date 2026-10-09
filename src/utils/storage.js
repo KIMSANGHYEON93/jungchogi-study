@@ -91,18 +91,28 @@ export function getWrongNotes() {
   return Array.isArray(notes) ? notes : [];
 }
 
+/**
+ * 오답을 남긴다. 같은 `source + id` 가 이미 있으면 **새 항목을 만들지 않고** 그 항목을 갱신한다 —
+ * 같은 문항을 여러 번 틀려도 오답노트가 불어나지 않는다.
+ *
+ * 다시 틀렸다는 사실은 버리지 않는다: `wrongCount`(틀린 횟수)를 올리고, 간격 반복을 처음부터
+ * 다시 돌도록 `addedAt` 을 지금으로 바꾼다. 복습 횟수(`reviewCount`)는 지금까지처럼 이어 간다.
+ * 옛 항목에는 `wrongCount` 가 없으므로 1 번 틀린 것으로 본다.
+ */
 export function addWrongNote(note) {
   const notes = getWrongNotes();
-  // 중복 방지: 같은 source + id 조합이면 업데이트
   const existIdx = notes.findIndex((n) => n?.source === note.source && n?.id === note.id);
   const entry = {
     ...note,
     addedAt: Date.now(),
     reviewCount: 0,
     mastered: false,
+    wrongCount: 1,
   };
   if (existIdx >= 0) {
-    entry.reviewCount = toReviewCount(notes[existIdx].reviewCount);
+    const prev = notes[existIdx];
+    entry.reviewCount = toReviewCount(prev.reviewCount);
+    entry.wrongCount = toReviewCount(prev.wrongCount ?? 1) + 1;
     notes[existIdx] = entry;
   } else {
     notes.push(entry);
@@ -123,6 +133,30 @@ export function markWrongNoteReviewed(source, id) {
       : n
   );
   saveProgress(WRONG_NOTES_KEY, notes);
+}
+
+/**
+ * 오답을 다시 푼 결과를 남긴다. 맞히면 복습 1회로 세고 다음 간격으로 넘어간다.
+ * 또 틀리면 복습 횟수를 0 으로 되돌려 1일 뒤부터 다시 돌게 하고 틀린 횟수를 올린다 —
+ * "다시 풀기"만 누르면 맞든 틀리든 복습 완료가 되던 것을 바로잡는다.
+ *
+ * @param {string} source
+ * @param {string} id
+ * @param {boolean} correct
+ * @returns {boolean} 해당 오답이 있었는지
+ */
+export function recordWrongNoteRetry(source, id, correct) {
+  let found = false;
+  const now = Date.now();
+  const notes = getWrongNotes().map((n) => {
+    if (!(n?.source === source && n?.id === id)) return n;
+    found = true;
+    return correct
+      ? { ...n, reviewCount: toReviewCount(n.reviewCount) + 1, lastReviewed: now, lastResult: 'correct' }
+      : { ...n, reviewCount: 0, lastReviewed: now, lastResult: 'incorrect', wrongCount: toReviewCount(n.wrongCount ?? 1) + 1 };
+  });
+  if (found) saveProgress(WRONG_NOTES_KEY, notes);
+  return found;
 }
 
 export function clearAllWrongNotes() {
@@ -260,4 +294,47 @@ export function getExamResults() {
  */
 export function saveExamResults(results) {
   return saveProgress(EXAM_RESULTS_KEY, results);
+}
+
+// ─── 레슨 확인 퀴즈 채점 결과 ───
+
+/**
+ * 레슨 확인 퀴즈의 마지막 채점 결과. 키는 `<레슨 id>:<문항 id>`, 값은 `quiz_results` 와 같은
+ * `'correct'|'incorrect'`. 코드 퀴즈 40문항 진도(`quiz_results`)와 섞지 않는다.
+ * 답을 입력만 하고 채점하지 않으면 기록하지 않는다.
+ */
+export const LESSON_RESULTS_KEY = 'lesson_results';
+
+export function getLessonResults() {
+  const results = loadProgress(LESSON_RESULTS_KEY, {});
+  return results !== null && typeof results === 'object' && !Array.isArray(results) ? results : {};
+}
+
+/** @returns {boolean} 저장 성공 여부 */
+export function saveLessonResult(key, verdict) {
+  return saveProgress(LESSON_RESULTS_KEY, { ...getLessonResults(), [key]: verdict });
+}
+
+// ─── 모의고사 회차 기록 ───
+
+/**
+ * 모의고사 한 회차의 문항과 직접 채점 결과. 계획(점검일 점수 구간 · 영역별 배분)의 진단 데이터다.
+ * `exam_results` 는 문항 id 별 마지막 결과라 회차가 섞이므로 회차 점수는 여기서만 센다.
+ *
+ * 값: [{ id, startedAt, items: [{ qid, area: 'code'|'sql'|'theory', verdict: 'correct'|'incorrect'|null }] }]
+ * 오래된 것부터 지우고 최근 EXAM_SESSIONS_LIMIT 회차만 남긴다.
+ */
+export const EXAM_SESSIONS_KEY = 'exam_sessions';
+export const EXAM_SESSIONS_LIMIT = 20;
+
+export function getExamSessions() {
+  const value = loadProgress(EXAM_SESSIONS_KEY, []);
+  return Array.isArray(value) ? value.filter((s) => s && typeof s === 'object' && Array.isArray(s.items)) : [];
+}
+
+/** 회차를 추가하거나(같은 id 면) 바꾼다. @returns {boolean} 저장 성공 여부 */
+export function saveExamSession(session) {
+  const rest = getExamSessions().filter((s) => s.id !== session.id);
+  const next = [...rest, session].slice(-EXAM_SESSIONS_LIMIT);
+  return saveProgress(EXAM_SESSIONS_KEY, next);
 }

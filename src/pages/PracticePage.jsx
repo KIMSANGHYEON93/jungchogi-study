@@ -13,7 +13,10 @@ import ProgressNav from '../components/ProgressNav';
 import { ITEM_STATUS } from '../domain/progressNav';
 import { loadProgress, saveProgress } from '../utils/storage';
 
-/** 실기 연습의 문항별 결과 저장 키 — { trace: {id: 'done'|'wrong'}, sql: {...}, short: {...} } */
+/**
+ * 실기 연습의 문항별 결과 저장 키 — { trace: {id: 'viewed'|'done'|'wrong'}, sql: {...}, short: {...} }
+ * 'viewed' 는 추적표를 끝까지 넘겨 본 것(완료로 표시하지만 정답률에는 넣지 않는다), 'done'·'wrong' 은 채점 결과다.
+ */
 export const PRACTICE_PROGRESS_KEY = 'practice_done';
 
 const TABS = [
@@ -42,10 +45,12 @@ function usePracticeProgress(tab) {
   const byId = all[tab] ?? {};
   const statusOf = (item) => {
     const r = byId[item.id];
-    return r === 'done' ? ITEM_STATUS.DONE : r === 'wrong' ? ITEM_STATUS.WRONG : ITEM_STATUS.TODO;
+    return r === 'done' || r === 'viewed' ? ITEM_STATUS.DONE : r === 'wrong' ? ITEM_STATUS.WRONG : ITEM_STATUS.TODO;
   };
   const record = (id, status) => {
     setAll((prev) => {
+      // 끝까지 넘겨 본 것('viewed')으로 채점 결과를 덮지 않는다
+      if (status === 'viewed' && (prev[tab]?.[id] === 'done' || prev[tab]?.[id] === 'wrong')) return prev;
       const next = { ...prev, [tab]: { ...(prev[tab] ?? {}), [id]: status } };
       saveProgress(PRACTICE_PROGRESS_KEY, next);
       return next;
