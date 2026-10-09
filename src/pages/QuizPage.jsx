@@ -7,6 +7,7 @@ import {
   saveProgress,
   loadProgress,
   addWrongNote,
+  recordWrongNoteRetry,
   getWrongNotes,
   removeWrongNote,
 } from '../utils/storage';
@@ -42,6 +43,23 @@ const SELF_GRADE_STATE = {
   [QUIZ_RESULT.CORRECT]: '정답으로 기록됨',
   [QUIZ_RESULT.INCORRECT]: '오답으로 기록됨',
 };
+
+/** 코드 퀴즈 문항 → 오답노트 항목 */
+function quizWrongNote(problem, userAnswer) {
+  return {
+    id: problem.id,
+    source: 'quiz',
+    type: 'code',
+    title: problem.title,
+    context: problem.context,
+    code: problem.code,
+    lang: problem.lang,
+    answer: problem.answer,
+    pitfall: problem.pitfall,
+    expectedOutput: problem.expectedOutput || undefined,
+    userAnswer,
+  };
+}
 
 export default function QuizPage() {
   useStudyTimer();
@@ -99,7 +117,7 @@ export default function QuizPage() {
     // 일치는 확정 정답으로 바로 기록한다. 불일치는 표현 차이일 수 있어 기록하지 않고
     // 아래 자기 채점에 맡긴다.
     if (match === true) {
-      saveResults(withQuizResult(currentResults, current.id, QUIZ_RESULT.CORRECT));
+      recordGrade(QUIZ_RESULT.CORRECT);
       return;
     }
     // 시도 자체는 바로 남긴다(진도 표시가 여기에 걸려 있다). 정오는 아직 모르므로
@@ -116,6 +134,14 @@ export default function QuizPage() {
    */
   const recordGrade = (verdict) => {
     saveResults(withQuizResult(currentResults, current.id, verdict));
+    // 채점 → 오답 저장을 한 번에: 틀렸으면 오답노트에(같은 문항은 하나로 합쳐진다),
+    // 오답노트에 있던 문항을 맞혔으면 복습 1회로 센다
+    if (verdict === QUIZ_RESULT.INCORRECT) {
+      addWrongNote(quizWrongNote(current, userAnswer));
+      setWrongIds((prev) => new Set(prev).add(current.id));
+    } else if (verdict === QUIZ_RESULT.CORRECT) {
+      recordWrongNoteRetry('quiz', current.id, true);
+    }
   };
 
   const goTo = (newIdx) => {
@@ -268,18 +294,7 @@ export default function QuizPage() {
                     <button
                       className="btn-danger"
                       onClick={() => {
-                        addWrongNote({
-                          id: current.id,
-                          source: 'quiz',
-                          type: 'code',
-                          title: current.title,
-                          context: current.context,
-                          code: current.code,
-                          lang: current.lang,
-                          answer: current.answer,
-                          pitfall: current.pitfall,
-                          userAnswer: userAnswer,
-                        });
+                        addWrongNote(quizWrongNote(current, userAnswer));
                         setWrongIds((prev) => new Set(prev).add(current.id));
                       }}
                     >

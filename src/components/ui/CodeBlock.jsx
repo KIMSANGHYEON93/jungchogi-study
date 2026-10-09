@@ -12,7 +12,7 @@ export default function CodeBlock({ code, lang, output }) {
       {output ? (
         <figcaption className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-2 tw:border-t tw:border-line tw:bg-card tw:px-3 tw:py-2 tw:text-sm">
           <span className="tw:font-semibold tw:text-success">실행 결과</span>
-          <code className="tw:font-mono tw:text-ink">{output}</code>
+          <code className="tw:font-mono tw:whitespace-pre-wrap tw:text-ink">{output}</code>
         </figcaption>
       ) : null}
     </figure>

@@ -3,48 +3,41 @@
 // `dailyPlan.js`(Day01~14 학습 문서를 남은 날에 균등 분배)와 달리 이쪽은 **기간별 단계**가 먼저다.
 // 단계가 정해진 뒤 그 안의 하루 학습 주제가 정해진다.
 //
-// **정보처리기사·산업기사를 함께 준비하는 하나의 공통 계획이다.** 시험 종류별로 갈라지지 않고,
-// 두 시험이 겹치는 공통 모듈(코딩·SQL·OS/네트워크·테스트)을 먼저 두고 기사 특화 주제는 그 뒤에 둔다.
+// **목표 자격은 정보처리기사 실기다.** 산업기사는 지원하지 않는다 — 산업기사 출제기준·범위·시험 설정을
+// 이 앱에서 확인·반영하지 않았다. 공통 모듈(코딩·SQL·OS/네트워크·테스트)을 먼저 두고 기사 특화 주제는 그 뒤에 둔다.
 //
 // 이 로드맵이 앱의 **유일한 학습 계획**이다. 예전 "일일 플랜"(Day01~14 문서를 남은 날에 균등 분배)은 없앴다.
 // 하루 일정이 날짜에 고정돼 있어 계획이 매일 바뀌지 않고, 밀리면 "밀린 일차"로 보여 준다.
 //
-// **하루 2시간 배분**(`DAILY_BLOCKS`)은 일차와 별개로 고정이다 — 코드 60 · 주제 40 · 복습 20.
-// 코드가 약점인 수험자를 기준으로 짰다: 코드 블록은 그날 주제가 무엇이든 매일 돈다.
-// 기출 실전일(`kind: 'practice'`)은 블록 대신 복원 기출 1회분을 2시간 안에 푼다.
-// 점검일에는 `gate`(기준치와 미달 시 분기)가 붙는다 — 다음 구간의 배분을 결정하는 숫자다.
+// **하루 2시간 배분**(`DAILY_BLOCKS`, studyTime.js)은 일차와 별개로 고정이다 — 코드 60 · 주제 40 · 복습 20.
+// 실전 모의고사일(`kind: 'practice'`)은 블록 대신 자체 모의고사를 실제 시험 시간(150분)으로 풀고 채점·오답 정리 30분을
+// 따로 잡는다. 하루 가용 시간(120분)을 넘으므로 화면이 초과분과 넘길 방법을 함께 보여 준다(`dayLoad`).
+// 이 앱에는 연도·회차별 복원 기출 데이터가 없다 — 모의고사는 모두 자체 제작 문항이다(docs/content-sources.md).
+// 점검일에는 `gate`(점수 구간별 후속 계획)가 붙는다. 구간은 0~100 을 빈틈없이 덮는다(`gateBand`).
 //
 // 날짜는 시험일에서 d 일을 빼서 만든다. 시험일을 바꿔도 "D-n 일차"의 의미(와 체크 기록)가
 // 그대로 이어지도록 체크는 날짜가 아니라 d 번호로 저장한다.
 
 import { addDays, daysUntil, resolveExamDate } from './dailyPlan';
+import { DAILY_BLOCKS, DAILY_MINUTES, MOCK_EXAM } from './studyTime';
+
+// 예전 import 경로를 그대로 쓰는 화면·테스트를 위해 다시 내보낸다 — 값의 원본은 studyTime.js 다.
+export { DAILY_BLOCKS, DAILY_MINUTES };
 
 /** 로드맵 길이: D-24 ~ D-Day = 25칸. 체크는 D-24 ~ D-1 의 24일 학습일에만 있다. */
 export const ROADMAP_START_D = 24;
 
-/** 하루 학습 시간(분). 수험자가 실제로 낼 수 있는 시간이다 */
-export const DAILY_MINUTES = 120;
-
-/**
- * 하루 2시간의 고정 배분. 일차 주제와 무관하게 매일 같다.
- * 코드 블록이 가장 크고 맨 앞이다 — 코드 문항(6~8문제 × 5점)이 합격선을 가르는데, 하루 쉬면 감각이 떨어진다.
- */
-export const DAILY_BLOCKS = Object.freeze([
-  { key: 'code', label: '코드', minutes: 60, text: '코드 퀴즈 · 변수 추적표 — 주제와 무관하게 매일', to: '/quiz' },
-  { key: 'topic', label: '주제', minutes: 40, text: '오늘 일차 레슨 — 퀴즈 먼저, 모르는 것만 본문' },
-  { key: 'review', label: '복습', minutes: 20, text: '오답노트 재풀이 · 치트시트 공식', to: '/wrong' },
-]);
-
-/** 기출 실전일의 배분 — 세 블록 대신 한 덩어리 */
+/** 실전 모의고사일의 배분 — 풀이(실제 시험 시간)와 채점·오답 정리를 따로 잡는다 */
 const PRACTICE_BLOCKS = Object.freeze([
-  { key: 'practice', label: '기출', minutes: DAILY_MINUTES, text: '복원 기출 1회분 — 타이머 · 손으로 답안 작성 · 채점까지', to: '/exam' },
+  { key: 'exam', label: '실전 모의고사', minutes: MOCK_EXAM.minutes, required: true, text: `자체 모의고사 ${MOCK_EXAM.questions}문항 — 실전 시간 타이머, 손으로 답안 작성`, to: '/exam' },
+  { key: 'grade', label: '채점 · 오답 정리', minutes: MOCK_EXAM.reviewMinutes, required: true, text: '직접 채점 → 틀린 문항 오답노트에 → 가장 약한 영역 확인', to: '/wrong' },
 ]);
 
 export const ROADMAP_PHASES = [
   { no: 1, name: '코딩 · SQL 집중', fromD: 24, toD: 16, focus: 'C · Java · Python 코드 트레이싱과 SQL 을 먼저 굳힌다' },
   { no: 2, name: '인프라 · 테스트', fromD: 15, toD: 10, focus: 'OS · 네트워크 계산 문제와 테스트 이론' },
   { no: 3, name: '기사 특화', fromD: 9, toD: 4, focus: 'SDLC · 디자인패턴 · 연계 · 보안' },
-  { no: 4, name: '기출 회독 · 최종 점검', fromD: 3, toD: 1, focus: '기출 실전 2회분과 핵심 공식 최종 점검 — 새 내용은 보지 않는다' },
+  { no: 4, name: '실전 모의고사 · 최종 점검', fromD: 3, toD: 1, focus: '실전 모의고사 2회와 핵심 공식 최종 점검 — 새 단원은 시작하지 않는다(이미 공부한 범위의 오답·암기 카드 복습은 된다)' },
 ];
 
 /**
@@ -76,8 +69,11 @@ const DAYS = [
     ],
     gate: {
       metric: '변수 추적표 정답률',
-      pass: '85% 이상 → 계획대로 2단계',
-      below: '85% 미만 → D-14~D-11 은 코드 80분 · 주제 20분으로',
+      unit: '%',
+      bands: [
+        { min: 85, label: '85% 이상', action: '계획대로 2단계' },
+        { min: 0, label: '85% 미만', action: 'D-14~D-11 은 코드 80분 · 주제 20분 · 복습 20분 (하루 120분은 그대로)' },
+      ],
     },
   },
 
@@ -89,16 +85,20 @@ const DAYS = [
   { d: 11, title: '애플리케이션 테스트', topics: [{ text: '테스트 — 블랙박스 · 화이트박스 · 순환 복잡도 · 테스트 레벨', scope: COMMON, study: 6, query: '블랙박스' }] },
   {
     d: 10,
-    title: '2단계 점검 — 기출 ①',
+    title: '2단계 점검 — 모의고사 ①',
     kind: 'practice',
     topics: [
-      { text: '복원 기출 1회분 실전 — 2시간 타이머, 손으로 답안 작성', scope: COMMON, to: '/exam' },
-      { text: '채점 후 계산 문제(치트시트)와 틀린 코드만 오답노트에', scope: COMMON, to: '/wrong' },
+      { text: '자체 모의고사 1회 — 앱 모의고사(랜덤 20문항) 또는 학습 노트 Day 09 고정 세트, 실전 150분', scope: COMMON, study: 9, to: '/exam' },
+      { text: '직접 채점 후 틀린 문항은 오답노트에, 계산 문제는 치트시트로 확인', scope: COMMON, to: '/wrong' },
     ],
     gate: {
-      metric: '기출 ① 점수',
-      pass: '50점 이상 → 계획대로 3단계',
-      below: '40점 미만 → 3단계 주제 블록을 코드로 돌림',
+      metric: '모의고사 ① 점수',
+      unit: '점',
+      bands: [
+        { min: 50, label: '50점 이상', action: '계획대로 3단계' },
+        { min: 40, label: '40~49점', action: '3단계 진행 — 주제 블록 40분 중 20분을 가장 낮은 영역(코딩 · SQL · 이론) 보충으로' },
+        { min: 0, label: '40점 미만', action: '3단계 주제 블록 40분을 모두 가장 낮은 영역 보충으로 — 기사 특화 주제는 레슨 확인 퀴즈만' },
+      ],
     },
   },
 
@@ -145,22 +145,25 @@ const DAYS = [
   },
   {
     d: 4,
-    title: '3단계 점검 — 기출 ②',
+    title: '3단계 점검 — 모의고사 ②',
     kind: 'practice',
     topics: [
-      { text: '복원 기출 1회분 실전 — 2시간 타이머, 손으로 답안 작성', scope: COMMON, to: '/exam' },
-      { text: '기사 특화 총정리 — 이론 용어 암기 (채점 후 남는 시간만)', scope: ENGINEER, study: 8 },
+      { text: '자체 모의고사 2회 — 앱 모의고사(랜덤 20문항) 또는 학습 노트 Day 11 고정 세트, 실전 150분', scope: COMMON, study: 11, to: '/exam' },
+      { text: '기사 특화 총정리 — 이론 용어 암기 (추가 학습: 채점·오답 정리 뒤 시간이 남을 때만)', scope: ENGINEER, study: 8 },
     ],
     gate: {
-      metric: '기출 ② 점수',
-      pass: '60점 이상 → D-3 부터 이론 범위를 넓혀도 됨',
-      below: '60점 미만 → D-3 · D-2 는 틀린 유형만 반복',
+      metric: '모의고사 ② 점수',
+      unit: '점',
+      bands: [
+        { min: 60, label: '60점 이상', action: 'D-3 · D-2 계획대로 — 모의고사 뒤 이미 공부한 범위의 오답 · 암기 카드 복습으로 폭을 넓힌다 (새 단원은 시작하지 않음)' },
+        { min: 0, label: '60점 미만', action: 'D-3 · D-2 는 모의고사 뒤 틀린 유형 · 가장 낮은 영역만 반복 (새 단원은 시작하지 않음)' },
+      ],
     },
   },
 
   // ── 4단계: 기출 회독 · 최종 점검 ──
-  { d: 3, title: '기출 ③', kind: 'practice', topics: [{ text: '기출 1회분 실전 — 코딩 · SQL 부터, 틀린 유형은 바로 오답노트', scope: COMMON, study: 9, to: '/exam' }] },
-  { d: 2, title: '기출 ④ · 약점', kind: 'practice', topics: [{ text: '기출 1회분 실전 + 기출 ①~③ 에서 틀린 유형만 반복', scope: COMMON, study: 11, to: '/exam' }] },
+  { d: 3, title: '모의고사 ③', kind: 'practice', topics: [{ text: '자체 모의고사(랜덤 20문항) 실전 — 틀린 문항은 바로 오답노트', scope: COMMON, to: '/exam' }] },
+  { d: 2, title: '모의고사 ④ · 약점', kind: 'practice', topics: [{ text: '자체 모의고사(랜덤 20문항) 실전 + 모의고사 ①~③ 에서 틀린 유형만 반복', scope: COMMON, to: '/exam' }] },
   { d: 1, title: '핵심 공식 최종 점검', topics: [{ text: '오답노트 재풀이 30분 · 핵심 공식(서브넷 · 순환 복잡도 · HRN · 페이지 교체) · 컨디션 관리 — 새 내용 금지', scope: COMMON, study: 13, to: '/wrong' }] },
 ];
 
@@ -197,7 +200,7 @@ export function phaseOfD(d) {
  * @property {boolean} isPast
  * @property {boolean} busy 캘린더에서 가져온 "일정이 많은 날"인지 (학습일만)
  * @property {'study'|'practice'|'exam'} kind 보통 학습일 · 기출 실전일 · 시험 당일
- * @property {{metric: string, pass: string, below: string}|null} gate 점검일의 기준치와 분기
+ * @property {{metric: string, unit: string, bands: {min: number, label: string, action: string}[]}|null} gate 점검일의 점수 구간별 후속 계획
  */
 
 /**
@@ -312,13 +315,38 @@ export function roadmapSchedule(roadmap) {
 }
 
 /**
- * 그날의 2시간 배분. 보통 학습일은 고정 블록, 기출 실전일은 기출 한 덩어리, 시험 당일은 없음.
+ * 그날의 배분. 보통 학습일은 고정 블록, 실전 모의고사일은 풀이 + 채점·오답 정리, 시험 당일은 없음.
  * @param {{kind?: string, d: number}} day
- * @returns {{key: string, label: string, minutes: number, text: string, to?: string}[]}
+ * @returns {{key: string, label: string, minutes: number, required: boolean, text: string, to?: string}[]}
  */
 export function dayBlocks(day) {
   if (day.d === 0 || day.kind === 'exam') return [];
   return day.kind === 'practice' ? PRACTICE_BLOCKS : DAILY_BLOCKS;
+}
+
+/**
+ * 그날 계획량과 하루 가용 시간의 비교. 넘치면 넘치는 만큼과 다음 날로 넘길 수 있는 몫을 알려 준다.
+ * 실전 모의고사는 한 번에 풀어야 하므로 쪼개지 않는다 — 넘길 수 있는 것은 채점·오답 정리다.
+ * @param {{kind?: string, d: number}} day
+ * @param {number} [available] 하루 가용 시간(분)
+ * @returns {{planned: number, available: number, overflow: number, carryKey: string|null, carryMinutes: number}}
+ */
+export function dayLoad(day, available = DAILY_MINUTES) {
+  const blocks = dayBlocks(day);
+  const planned = blocks.reduce((sum, b) => sum + b.minutes, 0);
+  const overflow = Math.max(0, planned - available);
+  const carry = overflow > 0 ? blocks.find((b) => b.key === 'grade') ?? null : null;
+  return { planned, available, overflow, carryKey: carry?.key ?? null, carryMinutes: carry ? Math.min(carry.minutes, overflow) : 0 };
+}
+
+/**
+ * 점검일 점수가 들어갈 구간. 구간은 `min` 내림차순이고 마지막이 0 이라 0~100 의 어떤 값도 정확히 한 구간에 들어간다.
+ * @param {{bands: {min: number}[]}} gate
+ * @param {number} value
+ */
+export function gateBand(gate, value) {
+  if (!gate || !Number.isFinite(value)) return null;
+  return gate.bands.find((b) => value >= b.min) ?? gate.bands[gate.bands.length - 1];
 }
 
 /** 테스트와 화면이 같은 원본을 본다 */

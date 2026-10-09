@@ -6,6 +6,7 @@
 //
 // @typedef {Object} LessonQuestion
 //   id        레슨 안에서 유일한 문항 id
+//   goal      (선택) 이 문항이 확인하는 학습 목표의 위치(goals 배열 번호)
 //   prompt    문제 문장
 //   code      (선택) 문제 코드 — 없으면 문장형 문제  ·  lang  코드 언어
 //   alt       (선택) 같은 뜻의 다른 표기 목록  ·  ignoreCase  true 면 대소문자 무시(용어 문제)
@@ -13,7 +14,7 @@
 //   explain   해설
 //
 // @typedef {Object} Lesson
-//   id, d(일차), title, tablesTitle?, tables?[{name, columns, rows}], track('C'|'Java'|'Python'|'SQL'|'OS'|'네트워크'|'테스트'|'소프트웨어 공학'|'디자인패턴'|'통합 구현'|'보안'), minutes(예상 소요), summary, goals[],
+//   id, d(일차), title, tablesTitle?, tables?[{name, columns, rows}], track('C'|'Java'|'Python'|'SQL'|'OS'|'네트워크'|'테스트'|'소프트웨어 공학'|'디자인패턴'|'통합 구현'|'보안'), minutes(본문까지 정독할 때의 예상 소요 — 로드맵의 필수 몫은 주제 블록 40분, 넘는 부분은 추가 학습), summary, goals[],
 //   sections[{heading, body, code?, lang?, output?}], pitfalls[], questions[]
 
 import { matchesExpectedOutput } from './grading';
@@ -60,7 +61,7 @@ export const LESSONS = [
       },
       {
         heading: '논리 연산자 — 단락 평가',
-        body: '&& 는 왼쪽이 거짓이면 오른쪽을 평가하지 않고, || 는 왼쪽이 참이면 오른쪽을 건너뛴다. 오른쪽의 증감이 실행되지 않는 것이 단골 함정이다.',
+        body: '&& 는 왼쪽이 거짓이면 오른쪽을 평가하지 않고, || 는 왼쪽이 참이면 오른쪽을 건너뛴다. 오른쪽의 증감이 실행되지 않는 것이 흔한 함정이다.',
         lang: 'c',
         code: '#include <stdio.h>\nint main(void) {\n    int a = 0, b = 0;\n    if (a++ && b++) { }   /* a++ 는 0(거짓) → b++ 는 건너뜀 */\n    printf("%d %d\\n", a, b);\n    return 0;\n}',
         output: '1 0',
@@ -647,7 +648,7 @@ print(a)          # b 와 같은 객체
 c = a[:]
 c.append(4)
 print(a, c)`,
-        output: '[1, 2, 3] / [1, 2, 3] [1, 2, 3, 4]',
+        output: '[1, 2, 3]\n[1, 2, 3] [1, 2, 3, 4]',
       },
       {
         heading: '클래스 상속',
@@ -673,6 +674,7 @@ C().show()`,
     questions: [
       {
         id: 'q1',
+        goal: 2,
         prompt: '출력 결과는?',
         lang: 'python',
         code: 'print([i * i for i in range(5) if i % 2 == 0])',
@@ -681,6 +683,7 @@ C().show()`,
       },
       {
         id: 'q2',
+        goal: 0,
         prompt: '출력 결과는?',
         lang: 'python',
         code: code`
@@ -691,6 +694,7 @@ print(s[1:4], s[::-1][:2])`,
       },
       {
         id: 'q3',
+        goal: 1,
         prompt: '출력 결과는?',
         lang: 'python',
         code: code`
@@ -704,6 +708,7 @@ print(f(2))`,
       },
       {
         id: 'q4',
+        goal: 2,
         prompt: '출력 결과는?',
         lang: 'python',
         code: code`
@@ -714,6 +719,75 @@ for w in words:
 print(d["a"], len(d))`,
         answer: '3 3',
         explain: 'a 는 3번 나오고, 서로 다른 키는 a, b, c 세 개.',
+      },
+      {
+        id: 'q5',
+        goal: 1,
+        prompt: '출력 결과는? (얕은 복사와 중첩 리스트)',
+        lang: 'python',
+        code: code`
+a = [[1, 2], [3]]
+b = a[:]
+b[0].append(9)
+b.append([4])
+print(a, len(b))`,
+        answer: '[[1, 2, 9], [3]] 3',
+        explain: 'a[:] 는 바깥 리스트만 새로 만든다(얕은 복사). 안쪽 리스트 [1, 2] 는 a 와 b 가 함께 가리켜 b[0].append(9) 가 a 에도 보인다. b.append([4]) 는 b 바깥 리스트에만 붙어 a 는 그대로다.',
+      },
+      {
+        id: 'q6',
+        goal: 1,
+        prompt: '출력 결과는? (참조 · 복사 · is 와 ==)',
+        lang: 'python',
+        code: code`
+a = [1, 2]
+b = a
+c = a[:]
+b += [3]
+print(a, c, a is b, a == c)`,
+        answer: '[1, 2, 3] [1, 2] True False',
+        explain: 'b = a 는 같은 객체를 가리킨다. 리스트의 += 는 그 객체를 제자리에서 늘리므로 a 도 [1, 2, 3]. c 는 복사본이라 [1, 2] 그대로다. is 는 같은 객체인지(True), == 는 내용이 같은지(False)를 본다.',
+      },
+      {
+        id: 'q7',
+        goal: 3,
+        prompt: '출력 결과는? (super().__init__() 를 부르는 위치)',
+        lang: 'python',
+        code: code`
+class P:
+    def __init__(self, n):
+        self.n = n
+        self.tag = "P"
+
+class C(P):
+    def __init__(self):
+        self.n = 100
+        super().__init__(5)
+        self.n *= 2
+
+c = C()
+print(c.n, c.tag)`,
+        answer: '10 P',
+        explain: 'self.n = 100 을 먼저 넣어도 super().__init__(5) 가 n 을 5 로 덮는다. 그 뒤 self.n *= 2 로 10. tag 는 부모 초기화가 만든 속성이다.',
+      },
+      {
+        id: 'q8',
+        goal: 3,
+        prompt: '출력 결과는? (자식 __init__ 이 super() 를 부르지 않을 때)',
+        lang: 'python',
+        code: code`
+class P:
+    def __init__(self):
+        self.x = 1
+
+class C(P):
+    def __init__(self):
+        self.y = 2
+
+c = C()
+print(hasattr(c, "x"), c.y)`,
+        answer: 'False 2',
+        explain: '자식이 __init__ 을 정의하면 부모 __init__ 은 자동으로 불리지 않는다. super().__init__() 이 없어 x 가 만들어지지 않는다.',
       },
     ],
   },
@@ -743,14 +817,14 @@ print(d["a"], len(d))`,
         body: 'WHERE 로 행을 거르고 ORDER BY 로 정렬한다(DESC 는 내림차순). NULL 은 비교 결과가 참이 아니라서 score >= 80 에도 걸리지 않는다.',
         lang: 'sql',
         code: 'SELECT name FROM STUDENT\nWHERE score >= 80\nORDER BY score DESC;',
-        output: '이 / 최 / 김',
+        output: '이\n최\n김',
       },
       {
         heading: 'IN · BETWEEN · IS NULL',
         body: 'IN 은 목록 중 하나, BETWEEN a AND b 는 양 끝을 포함한 범위다. NULL 검사는 = 가 아니라 IS NULL / IS NOT NULL 을 쓴다.',
         lang: 'sql',
         code: 'SELECT name FROM STUDENT\nWHERE grade IN (1, 2) AND score IS NOT NULL;   -- 김 / 이 / 박\nSELECT COUNT(*) FROM STUDENT\nWHERE grade BETWEEN 2 AND 3;                    -- 3',
-        output: '김 이 박 / 3',
+        output: '김\n이\n박\n3',
       },
       {
         heading: '집계 함수와 NULL',
@@ -837,14 +911,14 @@ print(d["a"], len(d))`,
         body: 'INNER JOIN 은 양쪽에 짝이 있는 행만 남긴다. LEFT JOIN 은 왼쪽 표의 행을 모두 남기고 짝이 없으면 오른쪽을 NULL 로 채운다. EMP 의 한(dept NULL)은 INNER JOIN 에서 사라지고, 사원이 없는 기획(40)은 DEPT 기준 LEFT JOIN 에서 NULL 행으로 남는다.',
         lang: 'sql',
         code: 'SELECT COUNT(*) FROM EMP e JOIN DEPT d ON e.dept = d.id;        -- 5\nSELECT COUNT(*) FROM DEPT d LEFT JOIN EMP e ON e.dept = d.id;   -- 6',
-        output: '5 / 6',
+        output: '5\n6',
       },
       {
         heading: 'GROUP BY + HAVING',
         body: '실행 순서는 FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY. WHERE 는 그룹을 만들기 전 행을, HAVING 은 집계 결과(그룹)를 거른다.',
         lang: 'sql',
         code: 'SELECT d.name, SUM(e.sal)\nFROM EMP e JOIN DEPT d ON e.dept = d.id\nGROUP BY d.name\nHAVING SUM(e.sal) >= 600\nORDER BY d.name;',
-        output: '개발 600 / 영업 800 / 인사 600',
+        output: '개발 600\n영업 800\n인사 600',
       },
       {
         heading: 'COUNT 와 NULL',
@@ -858,7 +932,7 @@ print(d["a"], len(d))`,
         body: '안쪽 쿼리를 먼저 계산해 값 하나로 바꾼 뒤 바깥 WHERE 가 비교한다. EMP 급여 평균은 2100 / 6 = 350.',
         lang: 'sql',
         code: 'SELECT name FROM EMP\nWHERE sal > (SELECT AVG(sal) FROM EMP);',
-        output: '이 / 박 / 정',
+        output: '이\n박\n정',
       },
     ],
     pitfalls: [

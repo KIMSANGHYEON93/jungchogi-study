@@ -185,3 +185,47 @@ describe('정답 확인에서 문제도 함께 보인다', () => {
     unmount();
   });
 });
+
+describe('점수는 직접 채점 결과로만 정한다', () => {
+  it('답을 다 쓰고 채점하지 않으면 합격으로 보지 않는다 — 예전에는 작성 문항 수로 100점이 나왔다', async () => {
+    const { container, unmount } = render();
+    await startExam(container);
+    const ta = container.querySelector('textarea');
+    const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    await act(async () => { set.call(ta, '아무 답'); ta.dispatchEvent(new Event('input', { bubbles: true })); });
+    await submitExam(container);
+    const score = container.querySelector('.score');
+    expect(score.textContent).toContain('0점');
+    expect(container.textContent).toContain('채점 중');
+    expect(container.textContent).not.toContain('합격 기준(60점) 이상');
+    unmount();
+  });
+
+  it('모두 채점하면 맞힌 수 × 5점, 회차 기록(exam_sessions)과 영역별 결과가 남고 틀린 문항은 오답노트에 들어간다', async () => {
+    const { container, unmount } = render();
+    await startExam(container);
+    await submitExam(container);
+    const cards = questionCards(container);
+    for (const [i, card] of cards.entries()) {
+      await act(async () => { buttonByName(card, i === 0 ? '틀렸어요' : '맞았어요').click(); });
+    }
+    const [session] = loadProgress('exam_sessions', []);
+    expect(session.items).toHaveLength(cards.length);
+    expect(session.items.every((it) => it.verdict)).toBe(true);
+    expect(container.querySelector('.score').textContent).toBe(`${(cards.length - 1) * 5}점`);
+    expect(container.textContent).toContain('영역별 정답');
+    const wrong = loadProgress('wrong_notes', []);
+    expect(wrong).toHaveLength(1);
+    expect(wrong[0].source).toBe('exam');
+    unmount();
+  });
+
+  it('시작 화면은 실전 시간·문항 출처(자체 제작, 복원 기출 아님)·시험 시간 출처를 밝힌다', async () => {
+    const { container, unmount } = render();
+    await flush();
+    expect(container.textContent).toContain('150분');
+    expect(container.textContent).toContain('연도·회차별 복원 기출이 아닙니다');
+    expect(container.textContent).toContain('큐넷 원문 미확인');
+    unmount();
+  });
+});

@@ -7,6 +7,7 @@ import QuizItem from '../components/ui/QuizItem';
 import { BOOKMARK_TYPE } from '../domain/bookmarks';
 import { LESSONS, lessonByDay } from '../domain/lessons';
 import useStudyState from '../hooks/useStudyState';
+import { TOPIC_MINUTES } from '../domain/studyTime';
 
 const card = 'tw:rounded-xl tw:border tw:border-line tw:bg-card tw:p-4 tw:sm:p-5';
 const h2 = 'tw:mb-3 tw:text-lg tw:font-bold tw:text-ink';
@@ -42,7 +43,8 @@ export default function LessonPage() {
         <header className="tw:flex tw:flex-col tw:gap-3 tw:sm:flex-row tw:sm:items-start tw:sm:justify-between">
           <div className="tw:min-w-0">
             <p className="tw:mb-1 tw:text-sm tw:font-semibold tw:text-primary">
-              D-{lesson.d} · {lesson.track} · 약 {lesson.minutes}분
+              D-{lesson.d} · {lesson.track} · 주제 블록 {TOPIC_MINUTES}분 (필수: 학습 목표 · 확인 퀴즈)
+              {lesson.minutes > TOPIC_MINUTES ? ` · 본문 정독은 추가 약 ${lesson.minutes - TOPIC_MINUTES}분` : ''}
             </p>
             <h1 className="tw:text-2xl tw:font-bold tw:text-ink">{lesson.title}</h1>
             <p className="tw:mt-1 tw:text-dim">{lesson.summary}</p>
@@ -104,7 +106,7 @@ export default function LessonPage() {
           <h2 id="lesson-quiz" className={h2}>확인 퀴즈</h2>
           <ol className="tw:m-0 tw:flex tw:list-none tw:flex-col tw:gap-3 tw:p-0">
             {lesson.questions.map((q, i) => (
-              <QuizItem key={`${lesson.id}-${q.id}`} index={i} question={q} />
+              <QuizItem key={`${lesson.id}-${q.id}`} index={i} question={q} lesson={lesson} />
             ))}
           </ol>
         </section>

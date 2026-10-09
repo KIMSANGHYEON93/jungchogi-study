@@ -166,3 +166,35 @@ describe('matchesLessonAnswer', () => {
     }
   });
 });
+
+describe('학습 목표 ↔ 확인 퀴즈', () => {
+  it('goal 을 단 문항은 그 레슨의 목표 범위 안을 가리킨다', () => {
+    for (const lesson of LESSONS) {
+      for (const q of lesson.questions) {
+        if (q.goal === undefined) continue;
+        expect(Number.isInteger(q.goal), `${lesson.id}/${q.id}`).toBe(true);
+        expect(q.goal, `${lesson.id}/${q.id}`).toBeLessThan(lesson.goals.length);
+      }
+    }
+  });
+
+  it('D-19 Python 레슨은 모든 학습 목표(참조·복사, 상속 초기화 포함)를 문항으로 확인한다', () => {
+    const lesson = LESSONS.find((l) => l.d === 19);
+    const covered = new Set(lesson.questions.map((q) => q.goal));
+    lesson.goals.forEach((_, i) => expect(covered.has(i), lesson.goals[i]).toBe(true));
+    // 얕은 복사·중첩 리스트, super().__init__() 이후 속성 변화 오개념 문항이 있다
+    const codes = lesson.questions.map((q) => q.code ?? '').join('\n');
+    expect(codes).toMatch(/b\[0\]\.append/);
+    expect(codes).toMatch(/super\(\)\.__init__\(5\)/);
+  });
+
+  it('예제 출력을 " / " 로 이어 적지 않는다 — 코드의 표준 출력은 줄바꿈 그대로 적는다', () => {
+    for (const lesson of LESSONS) {
+      for (const s of lesson.sections) {
+        if (['python', 'c', 'java', 'sql'].includes(s.lang) && s.output) {
+          expect(s.output, `${lesson.id}/${s.heading}`).not.toMatch(/ \/ /);
+        }
+      }
+    }
+  });
+});

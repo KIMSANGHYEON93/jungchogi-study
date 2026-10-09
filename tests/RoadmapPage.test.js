@@ -63,10 +63,12 @@ describe('25일 로드맵 화면', () => {
     expect(today[0].textContent).toContain('오늘');
   });
 
-  it('시험 종류 선택 없이 기사·산업기사 공통 로드맵이라고 안내한다', () => {
+  it('목표 자격(정보처리기사 실기)과 지원 범위를 밝힌다 — 산업기사는 지원하지 않는다고 적는다', () => {
     const c = render();
     expect(c.querySelector('[role="radiogroup"]')).toBeNull();
-    expect(c.querySelector('.road-controls-title').textContent).toContain('공통 로드맵');
+    expect(c.querySelector('.road-controls-title').textContent).toContain('정보처리기사 실기 로드맵');
+    expect(c.querySelector('.road-controls').textContent).toContain('정보처리산업기사는 지원하지 않습니다');
+    expect(c.querySelector('.road-controls').textContent).toContain('복원 기출이 없고');
     expect(c.querySelector('.road-controls').textContent).toContain('공통 모듈');
     expect(c.querySelector('.road-controls').textContent).toContain('기사 특화');
   });
@@ -168,13 +170,17 @@ describe('밀린 일차 안내', () => {
     vi.setSystemTime(new Date(2026, 9, 4, 12, 0, 0)); // D-21
     saveProgress('roadmap_checks', { 24: true });
     const c = render();
-    const note = c.querySelector('.road-late');
-    expect(note.textContent).toContain('밀린 일차 2개: D-23 · D-22');
-    expect(note.textContent).toContain('자동으로');
+    const note = c.querySelector('.road-catchup');
+    expect(note.textContent).toContain('밀린 일차 2개');
+    expect(note.textContent).toContain('D-23 · D-22');
+    // 원래 일정과 재배치 제안을 구분하고, 완료 기록은 바꾸지 않는다
+    expect(note.textContent).toContain('재배치 제안');
+    expect(note.textContent).toContain('원래 D-23');
+    expect(loadProgress('roadmap_checks', {})).toEqual({ 24: true });
   });
 
   it('밀린 일차가 없으면 안내가 없다', () => {
-    expect(render().querySelector('.road-late')).toBeNull();
+    expect(render().querySelector('.road-catchup')).toBeNull();
   });
 });
 
@@ -193,11 +199,15 @@ describe('하루 배분 · 점검 기준 표시', () => {
     expect(gate.textContent).toContain('코드 80분');
   });
 
-  it('기출 실전일(D-10)은 배지와 2시간 기출 블록을 보인다', () => {
+  it('실전 모의고사일(D-10)은 배지 · 실전 150분 + 채점 30분 · 하루 가용 시간 초과 안내를 보인다', () => {
     const c = render();
     const card = dayCard(c, 'D-10');
-    expect(card.textContent).toContain('기출 실전');
-    expect(card.querySelector('.road-block').textContent).toContain('기출 120분');
+    expect(card.textContent).toContain('실전 모의고사');
+    expect([...card.querySelectorAll('.road-block strong')].map((e) => e.textContent)).toEqual(['실전 모의고사 150분', '채점 · 오답 정리 30분']);
+    expect(card.querySelector('.road-load').textContent).toContain('60분 초과');
+    expect(card.querySelector('.road-load').textContent).toContain('다음 날 복습 블록');
+    expect(card.textContent).not.toContain('복원 기출');
+    expect(dayCard(c, 'D-22').querySelector('.road-load')).toBeNull();
     expect(dayCard(c, 'D-22').querySelector('.road-block')).toBeNull();
   });
 });

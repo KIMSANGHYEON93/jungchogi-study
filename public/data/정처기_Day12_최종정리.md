@@ -1,6 +1,6 @@
 # Day 12 - 최종 정리 (전 범위 핵심 요약 1장)
 
-> **권장 학습 시간**: 19:00~22:00
+> **학습 시간**: 로드맵 하루 120분 배분(코드 60 · 주제 40 · 복습 20)을 따릅니다. 이 문서는 그날 주제 블록의 참고 자료이고, 끝까지 정독하는 것은 추가 학습입니다.
 > **목표**: 시험 전 범위를 1장으로 압축 → 반복 읽기용 최종본
 > **학습 후 체크**: [ ] 전체 3회 읽기  [ ] 빈칸 채우기 연습  [ ] 암기 완료
 
@@ -71,7 +71,7 @@ ALTER TABLE t ADD col TYPE;
 ALTER TABLE t MODIFY col TYPE;
 ALTER TABLE t DROP COLUMN col;
 DROP TABLE t [CASCADE|RESTRICT];
-TRUNCATE TABLE t;   -- 구조유지+전체삭제+롤백불가
+TRUNCATE TABLE t;   -- 구조유지+전체삭제 (롤백: Oracle·MySQL 불가 / PostgreSQL·SQL Server 트랜잭션 안에서 가능)
 
 -- DML
 INSERT INTO t(col1,col2) VALUES(v1,v2);
@@ -91,8 +91,10 @@ COMMIT; ROLLBACK; SAVEPOINT sp1; ROLLBACK TO sp1;
 |--|--------|----------|------|
 | 분류 | DML | DDL | DDL |
 | 구조 | 유지 | 유지 | 삭제 |
-| 롤백 | O | X | X |
+| 롤백 | O | X (Oracle·MySQL 기준) | X (Oracle·MySQL 기준) |
 | WHERE | O | X | X |
+
+> **DBMS 전제**: TRUNCATE·DROP 의 롤백 가능 여부는 DBMS마다 다르다 — Oracle·MySQL 은 DDL 이 자동 커밋돼 롤백할 수 없고, PostgreSQL·SQL Server 는 명시적 트랜잭션 안이면 롤백할 수 있다. 아래 "롤백 X"는 Oracle·MySQL 기준이다.
 
 ---
 
@@ -207,4 +209,4 @@ OSI: 물리(허브)-데이터링크(스위치,MAC)-네트워크(라우터,IP)
 
 ---
 
-> **내일 Day 13 예고**: 시험 전날 마무리 (최빈출 문제 + 직전 암기)
+> **내일 Day 13 예고**: 시험 전날 마무리 (핵심 문제 + 직전 암기)

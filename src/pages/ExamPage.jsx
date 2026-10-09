@@ -10,7 +10,11 @@ import {
   removeWrongNote,
   getExamResults,
   saveExamResults,
+  saveExamSession,
+  recordWrongNoteRetry,
 } from '../utils/storage';
+import { EXAM_SPEC, MOCK_EXAM, formatMinutes } from '../domain/studyTime';
+import { AREA_LABEL, areaOfExamQuestion, summarizeSession } from '../domain/planAdvice';
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
 import Icon from '../components/Icon';
@@ -26,6 +30,25 @@ const SELF_GRADE_STATE = {
   [QUIZ_RESULT.CORRECT]: '정답으로 기록됨',
   [QUIZ_RESULT.INCORRECT]: '오답으로 기록됨',
 };
+
+/** 모의고사 문항 → 오답노트 항목 */
+function examWrongNote(q, answer) {
+  return {
+    id: q.id,
+    source: 'exam',
+    type: q.type,
+    question: q.type === 'quiz' ? q.question : undefined,
+    title: q.type === 'code' ? q.title : undefined,
+    context: q.type === 'code' ? q.context : undefined,
+    code: q.type === 'code' ? q.code : undefined,
+    lang: q.type === 'code' ? q.lang : undefined,
+    answer: q.answer,
+    pitfall: q.pitfall,
+    expectedOutput: q.type === 'code' ? q.expectedOutput || undefined : undefined,
+    userAnswer: answer?.trim() || '',
+    category: q.category,
+  };
+}
 
 function shuffleArray(arr) {
   const a = [...arr];
@@ -49,7 +72,9 @@ export default function ExamPage() {
   const [phase, setPhase] = useState('ready'); // ready | exam | result
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
-  const [timeLeft, setTimeLeft] = useState(150 * 60); // 150분
+  const [timeLeft, setTimeLeft] = useState(MOCK_EXAM.minutes * 60); // 실전 시험 시간
+  // 이번 회차 — 문항별 영역과 직접 채점 결과. 계획(점검일 점수 · 영역별 배분)이 이 기록을 읽는다
+  const [session, setSession] = useState(null);
   const [currentQ, setCurrentQ] = useState(0);
   const timerRef = useRef(null);
   const endTimeRef = useRef(null);
@@ -76,15 +101,23 @@ export default function ExamPage() {
   }, []);
 
   const startExam = () => {
-    // 단답형 12문제 + 코드 8문제 = 20문제
-    const quizQ = shuffleArray(quizPool).slice(0, 12);
-    const codeQ = shuffleArray(codePool).slice(0, 8);
+    // 단답형 12문제 + 코드 8문제 = 20문제 (앱이 정한 구성)
+    const quizQ = shuffleArray(quizPool).slice(0, MOCK_EXAM.quizCount);
+    const codeQ = shuffleArray(codePool).slice(0, MOCK_EXAM.codeCount);
     const all = shuffleArray([...quizQ, ...codeQ]);
     setQuestions(all);
     setAnswers({});
     setCurrentQ(0);
-    setTimeLeft(150 * 60);
-    endTimeRef.current = Date.now() + 150 * 60 * 1000;
+    setTimeLeft(MOCK_EXAM.minutes * 60);
+    endTimeRef.current = Date.now() + MOCK_EXAM.minutes * 60 * 1000;
+    const startedAt = Date.now();
+    const next = {
+      id: `exam-${startedAt}`,
+      startedAt,
+      items: all.map((q) => ({ qid: q.id, area: areaOfExamQuestion(q), verdict: null })),
+    };
+    setSession(next);
+    saveExamSession(next);
     setPhase('exam');
   };
 
@@ -120,11 +153,28 @@ export default function ExamPage() {
    * @param {string} id
    * @param {'correct'|'incorrect'} verdict
    */
-  const recordGrade = (id, verdict) => {
+  const recordGrade = (id, verdict, index) => {
     const next = withQuizResult(getExamResults(), id, verdict);
     saveExamResults(next);
     setExamResults(next);
+    // 채점 → 오답 저장을 한 번에: 틀렸으면 오답노트에 남기고, 오답노트에 있던 문항을 맞혔으면 복습 1회로 센다
+    const q = index !== undefined ? questions[index] : null;
+    if (q && verdict === QUIZ_RESULT.INCORRECT) {
+      addWrongNote(examWrongNote(q, answers[index]));
+      setWrongIds((prev) => new Set(prev).add(q.id));
+    } else if (q && verdict === QUIZ_RESULT.CORRECT) {
+      recordWrongNoteRetry('exam', q.id, true);
+    }
+    // 이번 회차의 그 자리 문항에도 남긴다 — 같은 id 가 다른 회차에 또 나와도 회차 점수가 섞이지 않는다
+    if (session && index !== undefined) {
+      const updated = { ...session, items: session.items.map((it, i) => (i === index ? { ...it, verdict } : it)) };
+      setSession(updated);
+      saveExamSession(updated);
+    }
   };
+
+  // 이번 회차에서 그 자리 문항의 채점 결과. 회차 기록이 없으면(옛 화면 상태) 문항별 마지막 결과로 대신한다
+  const verdictAt = (i) => (session ? session.items[i]?.verdict ?? undefined : examResults[questions[i]?.id]);
 
   const timerClass = timeLeft < 300 ? 'timer danger' : timeLeft < 600 ? 'timer warning' : 'timer';
   const answeredCount = Object.keys(answers).filter((k) => answers[k]?.trim()).length;
@@ -134,14 +184,22 @@ export default function ExamPage() {
     return (
       <div className="page">
         <h1>모의고사</h1>
-        <p className="subtitle">실전과 동일한 150분 타이머 + 랜덤 20문제</p>
+        <p className="subtitle">실전 시험 시간({formatMinutes(EXAM_SPEC.minutes)}) 타이머 + 자체 제작 문항 랜덤 {MOCK_EXAM.questions}문제</p>
 
         <div className="card" style={{ textAlign: 'center', padding: '60px 32px' }}>
           <div style={{ marginBottom: 16, color: 'var(--primary)' }}><Icon name="exam" size={64}/></div>
-          <h2 style={{ marginBottom: 12 }}>정보처리기사 실기 모의고사</h2>
-          <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>단답형 12문제 + 코드 트레이싱 8문제 = 총 20문제</p>
-          <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>제한 시간: 150분 (2시간 30분)</p>
-          <p style={{ color: 'var(--text-dim)', marginBottom: 32 }}>합격 기준: 60점 이상 (100점 만점, 문항당 5점)</p>
+          <h2 style={{ marginBottom: 12 }}>{EXAM_SPEC.certificate} {EXAM_SPEC.stage} 모의고사 (실전 모드)</h2>
+          <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>
+            단답형 {MOCK_EXAM.quizCount}문제 + 코드 트레이싱 {MOCK_EXAM.codeCount}문제 = 총 {MOCK_EXAM.questions}문제 (문항당 {MOCK_EXAM.pointsEach}점, 앱이 정한 구성)
+          </p>
+          <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>제한 시간: {EXAM_SPEC.minutes}분 ({formatMinutes(EXAM_SPEC.minutes)}) — 실제 시험 시간과 같게</p>
+          <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>합격 기준: {EXAM_SPEC.passScore}점 이상 ({EXAM_SPEC.maxScore}점 만점)</p>
+          <p style={{ color: 'var(--text-dim)', marginBottom: 8, fontSize: '0.85rem' }}>
+            문항 출처: 이 앱에서 만든 단답형 100선 · 코드 트레이싱 드릴에서 무작위로 고릅니다. 연도·회차별 복원 기출이 아닙니다.
+          </p>
+          <p style={{ color: 'var(--text-dim)', marginBottom: 32, fontSize: '0.85rem' }}>
+            {EXAM_SPEC.sourceNote}. 풀이 뒤 채점 · 오답 정리에 약 {MOCK_EXAM.reviewMinutes}분을 따로 잡으세요.
+          </p>
 
           <button className="btn-primary" onClick={startExam} style={{ fontSize: '1.1rem', padding: '14px 40px' }}
             disabled={quizPool.length === 0}>
@@ -162,8 +220,8 @@ export default function ExamPage() {
           <div className={timerClass} role="timer" aria-live="assertive" aria-label="남은 시간">{formatTime(timeLeft)}</div>
         </div>
 
-        <div className="progress-bar" role="progressbar" aria-valuenow={Math.round((answeredCount / 20) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="학습 진도" style={{ marginBottom: 16 }}>
-          <div className="fill" style={{ width: `${(answeredCount / 20) * 100}%` }} />
+        <div className="progress-bar" role="progressbar" aria-valuenow={Math.round((answeredCount / MOCK_EXAM.questions) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="학습 진도" style={{ marginBottom: 16 }}>
+          <div className="fill" style={{ width: `${(answeredCount / MOCK_EXAM.questions) * 100}%` }} />
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -185,7 +243,7 @@ export default function ExamPage() {
 
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontWeight: 700 }}>문제 {currentQ + 1} / 20</span>
+            <span style={{ fontWeight: 700 }}>문제 {currentQ + 1} / {questions.length}</span>
             <span style={{ display: 'flex', gap: 8 }}>
               <span className={`badge ${q.type === 'code' ? 'badge-warning' : 'badge-primary'}`}>
                 {q.type === 'code' ? `코드(${q.lang?.toUpperCase()})` : '단답형'}
@@ -218,8 +276,8 @@ export default function ExamPage() {
             <button className="btn-outline" onClick={() => setCurrentQ((c) => Math.max(0, c - 1))} disabled={currentQ === 0}>
               <Icon name="chevron-left" size={16}/> 이전
             </button>
-            <span className="flashcard-counter">{answeredCount}/20 답안 작성</span>
-            <button className="btn-outline" onClick={() => setCurrentQ((c) => Math.min(19, c + 1))} disabled={currentQ === 19}>
+            <span className="flashcard-counter">{answeredCount}/{questions.length} 답안 작성</span>
+            <button className="btn-outline" onClick={() => setCurrentQ((c) => Math.min(questions.length - 1, c + 1))} disabled={currentQ === questions.length - 1}>
               다음 <Icon name="chevron-right" size={16}/>
             </button>
           </div>
@@ -234,22 +292,36 @@ export default function ExamPage() {
 
   // ─── RESULT ───
   const totalAnswered = Object.keys(answers).filter((k) => answers[k]?.trim()).length;
-  const estimatedScore = Math.round((totalAnswered / 20) * 100);
-  const pass = estimatedScore >= 60;
+  // 점수는 직접 채점한 결과로만 센다. 예전에는 "답안을 쓴 문항 수"로 점수를 내서 다 틀려도 100점이 나왔다.
+  const summary = summarizeSession(session ?? { items: [] });
+  const pass = summary.complete && summary.score >= EXAM_SPEC.passScore;
 
   return (
     <div className="page">
       <h1>시험 결과</h1>
 
       <div className="card score-display">
-        <div style={{ fontSize: '1rem', color: 'var(--text-dim)', marginBottom: 8 }}>예상 점수</div>
-        <div className={`score ${pass ? 'pass' : 'fail'}`}>{estimatedScore}점</div>
-        <div style={{ marginTop: 12, fontSize: '1.2rem' }}>
-          {pass ? <><Icon name="party" size={24}/> 합격 예상!</> : '아쉽습니다. 복습 후 재도전!'}
+        <div style={{ fontSize: '1rem', color: 'var(--text-dim)', marginBottom: 8 }}>
+          {summary.complete ? '채점 점수' : `채점 중 — ${summary.graded}/${summary.total}문항 채점`}
+        </div>
+        <div className={`score ${pass ? 'pass' : 'fail'}`} role="status">
+          {summary.complete ? `${summary.score}점` : `${summary.score}점 (채점한 문항까지)`}
+        </div>
+        <div style={{ marginTop: 12, fontSize: '1.1rem' }}>
+          {!summary.complete
+            ? '아래에서 문항마다 정답과 비교해 직접 채점하면 점수와 영역별 결과가 정해집니다.'
+            : pass
+              ? <><Icon name="party" size={24}/> 합격 기준({EXAM_SPEC.passScore}점) 이상</>
+              : `합격 기준(${EXAM_SPEC.passScore}점) 미달 — 오답노트로 틀린 문항을 복습하세요`}
         </div>
         <div style={{ color: 'var(--text-dim)', marginTop: 8 }}>
-          작성 답안: {totalAnswered}/20 | 미작성: {20 - totalAnswered}
+          작성 답안: {totalAnswered}/{questions.length} | 미작성: {questions.length - totalAnswered}
         </div>
+        {summary.graded > 0 ? (
+          <div className="exam-area-summary" style={{ color: 'var(--text-dim)', marginTop: 8 }}>
+            영역별 정답: {Object.entries(summary.byArea).filter(([, a]) => a.total > 0).map(([k, a]) => `${AREA_LABEL[k] ?? k} ${a.correct}/${a.graded}`).join(' · ')}
+          </div>
+        ) : null}
       </div>
 
       <h2 style={{ marginTop: 32, marginBottom: 16 }}>문제별 확인</h2>
@@ -298,24 +370,26 @@ export default function ExamPage() {
             <span className="self-grade-label">직접 채점</span>
             <button
               type="button"
-              className={`btn-outline self-grade-button ${examResults[q.id] === QUIZ_RESULT.CORRECT ? 'active' : ''}`}
+              className={`btn-outline self-grade-button ${verdictAt(i) === QUIZ_RESULT.CORRECT ? 'active' : ''}`}
               aria-label={`맞았어요 (${q.id}번 문항)`}
-              aria-pressed={examResults[q.id] === QUIZ_RESULT.CORRECT}
-              onClick={() => recordGrade(q.id, QUIZ_RESULT.CORRECT)}
+              aria-pressed={verdictAt(i) === QUIZ_RESULT.CORRECT}
+              onClick={() => recordGrade(q.id, QUIZ_RESULT.CORRECT, i)}
             >
               맞았어요
             </button>
             <button
               type="button"
-              className={`btn-outline self-grade-button ${examResults[q.id] === QUIZ_RESULT.INCORRECT ? 'active' : ''}`}
+              className={`btn-outline self-grade-button ${verdictAt(i) === QUIZ_RESULT.INCORRECT ? 'active' : ''}`}
               aria-label={`틀렸어요 (${q.id}번 문항)`}
-              aria-pressed={examResults[q.id] === QUIZ_RESULT.INCORRECT}
-              onClick={() => recordGrade(q.id, QUIZ_RESULT.INCORRECT)}
+              aria-pressed={verdictAt(i) === QUIZ_RESULT.INCORRECT}
+              onClick={() => recordGrade(q.id, QUIZ_RESULT.INCORRECT, i)}
             >
               틀렸어요
             </button>
             <span className="self-grade-state" role="status">
-              {SELF_GRADE_STATE[examResults[q.id]] ?? '아직 채점하지 않음'}
+              {verdictAt(i) === QUIZ_RESULT.INCORRECT
+                ? '오답으로 기록됨 · 오답노트에 저장'
+                : SELF_GRADE_STATE[verdictAt(i)] ?? '아직 채점하지 않음'}
             </span>
           </div>
 
@@ -336,20 +410,7 @@ export default function ExamPage() {
                 className="btn-outline"
                 style={{ color: 'var(--danger)', fontSize: '0.85rem', padding: '6px 14px' }}
                 onClick={() => {
-                  addWrongNote({
-                    id: q.id,
-                    source: 'exam',
-                    type: q.type,
-                    question: q.type === 'quiz' ? q.question : undefined,
-                    title: q.type === 'code' ? q.title : undefined,
-                    context: q.type === 'code' ? q.context : undefined,
-                    code: q.type === 'code' ? q.code : undefined,
-                    lang: q.type === 'code' ? q.lang : undefined,
-                    answer: q.answer,
-                    pitfall: q.pitfall,
-                    userAnswer: answers[i]?.trim() || '',
-                    category: q.category,
-                  });
+                  addWrongNote(examWrongNote(q, answers[i]));
                   setWrongIds((prev) => new Set(prev).add(q.id));
                 }}
               >

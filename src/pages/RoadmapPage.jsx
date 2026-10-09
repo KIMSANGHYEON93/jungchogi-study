@@ -4,10 +4,15 @@ import Icon from '../components/Icon';
 import LessonCard from '../components/ui/LessonCard';
 import { BOOKMARK_TYPE } from '../domain/bookmarks';
 import { LESSONS, lessonByDay } from '../domain/lessons';
-import { DAILY_BLOCKS, DAILY_MINUTES, buildRoadmap, dayBlocks, topicLinks } from '../domain/roadmap';
+import { DAILY_BLOCKS, DAILY_MINUTES, ROADMAP_DAYS, buildRoadmap, dayBlocks, topicLinks } from '../domain/roadmap';
+import { adjustmentFor, catchUpPlan, evaluateGate } from '../domain/planAdvice';
+import { EXAM_SPEC, MOCK_EXAM, formatMinutes } from '../domain/studyTime';
+import { CatchUpPanel, GateBands, LoadNote } from '../components/PlanAdvice';
 import useStudyState from '../hooks/useStudyState';
 import { loadStoredBusy } from '../utils/busyStore';
-import { getExamDate, toLocalDateKey } from '../utils/storage';
+import { getExamDate, getExamSessions, loadProgress, toLocalDateKey } from '../utils/storage';
+
+const GATE_DAYS = ROADMAP_DAYS.filter((x) => x.gate);
 
 const SCOPE_LABEL = { common: '공통', engineer: '기사 특화' };
 
@@ -24,10 +29,16 @@ export default function RoadmapPage() {
   const study = useStudyState();
   const [onlyBookmarks, setOnlyBookmarks] = useState(false);
   const [busy] = useState(loadStoredBusy);
+  // 진단 데이터 — 모의고사 회차 채점 결과와 변수 추적표 직접 채점 결과
+  const [diag] = useState(() => ({
+    sessions: getExamSessions(),
+    traceProgress: loadProgress('practice_done', {})?.trace ?? {},
+  }));
   const todayRef = useRef(null);
 
   const roadmap = buildRoadmap({ examDate: getExamDate(), today, checks: study.checks, busyDates: busy.busyDates });
   const { progress } = roadmap;
+  const catchUp = catchUpPlan(roadmap);
   const shelf = onlyBookmarks ? LESSONS.filter((l) => study.isBookmarked(BOOKMARK_TYPE.LESSON, l.id)) : LESSONS;
 
   // 오늘 카드가 목록 아래쪽이면 화면 밖이다. 첫 렌더 뒤 한 번만 끌어온다.
@@ -48,7 +59,7 @@ export default function RoadmapPage() {
         <span className="road-day-date">{formatDate(day.date)}</span>
         {day.isToday ? <span className="badge badge-primary">오늘</span> : null}
         {day.busy ? <span className="badge badge-warning" title="캘린더에서 가져온 일정이 많은 날 — 가볍게 복습하세요">일정 많음</span> : null}
-        {day.kind === 'practice' ? <span className="badge badge-danger">기출 실전</span> : null}
+        {day.kind === 'practice' ? <span className="badge badge-danger">실전 모의고사</span> : null}
         <strong className="road-day-title">{day.title}</strong>
         {lessonByDay(day.d) ? (
           <Link className="note-link" to={`/lesson/${day.d}`}>
@@ -68,21 +79,22 @@ export default function RoadmapPage() {
         ) : null}
       </div>
       {day.kind === 'practice' ? (
-        <p className="road-blocks road-blocks-practice">
-          {dayBlocks(day).map((b) => (
-            <span key={b.key} className="road-block">
-              <strong>{b.label} {b.minutes}분</strong> {b.text}
-            </span>
-          ))}
-        </p>
+        <>
+          <p className="road-blocks road-blocks-practice">
+            {dayBlocks(day).map((b) => (
+              <span key={b.key} className="road-block">
+                <strong>{b.label} {b.minutes}분</strong> {b.text}
+              </span>
+            ))}
+          </p>
+          <LoadNote day={day} />
+        </>
       ) : null}
-      {day.gate ? (
-        <p className="road-gate" role="note">
-          <strong>기준 · {day.gate.metric}</strong>
-          <span>{day.gate.pass}</span>
-          <span>{day.gate.below}</span>
-        </p>
-      ) : null}
+      {day.gate ? <GateBands gate={day.gate} evaluation={evaluateGate(day, diag)} /> : null}
+      {(() => {
+        const adj = day.d > 0 ? adjustmentFor(day, { ...diag, gateDays: GATE_DAYS }) : null;
+        return adj ? <p className="road-adjust" role="note">배분 조정 · {adj.text}</p> : null;
+      })()}
       <ul className="road-topics">
         {day.topics.map((topic) => (
           <li key={topic.text} className={`road-topic is-${topic.scope}`}>
@@ -112,12 +124,13 @@ export default function RoadmapPage() {
 
       <section className="card road-controls" aria-labelledby="road-target">
         <h2 id="road-target" className="road-controls-title">
-          <Icon name="target" size={18} /> 정보처리기사 · 산업기사 공통 로드맵
+          <Icon name="target" size={18} /> {EXAM_SPEC.certificate} {EXAM_SPEC.stage} 로드맵
         </h2>
         <p className="road-hint">
-          두 시험을 함께 준비하는 하나의 계획입니다. 두 시험이 겹치는 <strong>공통 모듈</strong>(코딩 · SQL · OS/네트워크 · 테스트)을
+          목표 자격은 <strong>{EXAM_SPEC.certificate} 실기</strong>입니다. <strong>공통 모듈</strong>(코딩 · SQL · OS/네트워크 · 테스트)을
           먼저 두고, <span className="badge badge-warning">기사 특화</span> 주제(SDLC · 디자인패턴 · 연계 · 보안)는 3단계에서
-          공통 복습 뒤에 이어집니다.
+          공통 복습 뒤에 이어집니다. <strong>정보처리산업기사는 지원하지 않습니다</strong> — 산업기사의 출제기준·범위·시험 설정은 이 앱에서
+          확인하거나 반영하지 않았습니다.
         </p>
 
         <h3 className="road-blocks-title">하루 {DAILY_MINUTES}분 배분 — 매일 같다</h3>
@@ -131,9 +144,12 @@ export default function RoadmapPage() {
           ))}
         </ul>
         <p className="road-hint">
-          코드 블록은 그날 주제가 OS·네트워크여도 빠지지 않습니다. 기출 실전일(<span className="badge badge-danger">기출 실전</span>)은
-          세 블록 대신 복원 기출 1회분을 2시간 안에 풀고, 점검일의 <strong>기준</strong>이 다음 구간의 배분을 정합니다.
+          코드 블록은 그날 주제가 OS·네트워크여도 빠지지 않습니다. 실전 모의고사일(<span className="badge badge-danger">실전 모의고사</span>)은
+          세 블록 대신 <strong>자체 모의고사</strong>를 실제 시험 시간({formatMinutes(MOCK_EXAM.minutes)})으로 풀고 채점·오답 정리 {MOCK_EXAM.reviewMinutes}분을 따로 잡습니다 —
+          하루 {DAILY_MINUTES}분을 넘으므로 그날은 시간을 더 내야 합니다. 이 앱에는 연도·회차별 복원 기출이 없고, 모의고사 문항은 모두 앱에서 만든 것입니다.
+          점검일의 <strong>점수 구간</strong>(직접 채점한 결과 기준)이 다음 구간의 배분을 정합니다. 시간 조정은 이 앱의 운영 규칙이며 공식 출제 비중이 아닙니다.
         </p>
+        <p className="road-hint">시험 설정: {EXAM_SPEC.format} {formatMinutes(EXAM_SPEC.minutes)} · {EXAM_SPEC.passScore}점 이상 합격 — {EXAM_SPEC.sourceNote}.</p>
 
         <div className="road-gauge">
           <div
@@ -157,12 +173,7 @@ export default function RoadmapPage() {
           시험일을 설정하지 않아 {roadmap.examDate.replace(/-/g, '.')} 기준으로 계산했습니다. 대시보드에서 바꿀 수 있어요.
         </p>
       ) : null}
-      {roadmap.status === 'ok' && roadmap.late.length > 0 ? (
-        <p className="road-hint road-late" role="status">
-          밀린 일차 {roadmap.late.length}개: {roadmap.late.map((d) => `D-${d}`).join(' · ')}. 일차는 날짜에 고정돼 있어 자동으로
-          옮겨지지 않아요 — 시간이 나는 날 이어서 하고 완료 표시를 해 주세요.
-        </p>
-      ) : null}
+      {catchUp ? <CatchUpPanel plan={catchUp} /> : null}
       {roadmap.status === 'before' ? (
         <p className="road-hint" role="status">로드맵은 D-24 부터 시작합니다. 아래는 시험일에 맞춘 전체 일정입니다.</p>
       ) : null}

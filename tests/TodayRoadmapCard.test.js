@@ -78,7 +78,7 @@ describe('TodayRoadmapCard — 오늘의 로드맵', () => {
     expect(c.querySelector('.road-gate')).toBeNull();
   });
 
-  it('D-16 점검일에는 85% 기준이, 기출 실전일(D-10)에는 기출 120분 블록이 보인다', () => {
+  it('D-16 점검일에는 85% 기준이, 실전 모의고사일(D-10)에는 150분 + 채점 30분과 초과 안내가 보인다', () => {
     vi.setSystemTime(day(10, 9));
     let c = render();
     expect(c.querySelector('.road-gate').textContent).toContain('85%');
@@ -86,7 +86,8 @@ describe('TodayRoadmapCard — 오늘의 로드맵', () => {
     vi.setSystemTime(day(10, 15));
     c = render();
     expect(c.querySelector('.goal-dday').textContent).toBe('D-10');
-    expect([...c.querySelectorAll('.goal-block strong')].map((e) => e.textContent)).toEqual(['기출 120분']);
+    expect([...c.querySelectorAll('.goal-block strong')].map((e) => e.textContent)).toEqual(['실전 모의고사 150분', '채점 · 오답 정리 30분']);
+    expect(c.querySelector('.road-load').textContent).toContain('60분 초과');
   });
 
   it('완료 버튼은 로드맵과 같은 저장소(roadmap_checks)에 기록한다', () => {
@@ -112,14 +113,14 @@ describe('TodayRoadmapCard — 오늘의 로드맵', () => {
     vi.setSystemTime(day(10, 4)); // D-21 — D-24 ~ D-22 가 지남
     saveProgress('roadmap_checks', { 24: true });
     const c = render();
-    const late = c.querySelector('.goal-late');
+    const late = c.querySelector('.road-catchup');
     expect(late.textContent).toContain('밀린 일차 2개');
     expect(late.textContent).toContain('D-23 · D-22');
     expect(late.querySelector('a').getAttribute('href')).toBe('/roadmap');
   });
 
   it('밀린 일차가 없으면 알림이 없다', () => {
-    expect(render().querySelector('.goal-late')).toBeNull();
+    expect(render().querySelector('.road-catchup')).toBeNull();
   });
 
   it('시험 당일에는 D-Day 가 나오고 완료 버튼이 없다', () => {
