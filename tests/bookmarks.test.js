@@ -136,6 +136,8 @@ describe('북마크 화면', () => {
 
 describe('각 화면의 북마크 버튼', () => {
   it('플래시카드: 카드를 북마크하고 "북마크만"으로 걸러 본다', async () => {
+    // 한 장씩 보기의 동작을 확인한다 (기본 보기는 문제·답 함께 보기 목록)
+    localStorage.setItem('jungchogi-flashcard-view', 'card');
     const c = render(FlashcardPage, '/flashcard');
     await flush();
     const btn = byLabel(c, '001번 카드 북마크');

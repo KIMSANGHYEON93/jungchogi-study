@@ -495,6 +495,152 @@ a.btn-danger {
   font-size: 0.9rem;
 }
 
+/* ── 플래시카드: 보기 방식 · 색 구분 ──
+   외움 = 초록, 모름 = 빨강, 안 봄 = 회색. 색만으로 구분하지 않도록 글자 표시(외움/모름/안 봄)도 함께 둔다 */
+:root {
+  --fc-known: var(--success);
+  --fc-unknown: var(--danger);
+  --fc-new: var(--border);
+  --fc-known-bg: rgba(4, 120, 87, 0.08);
+  --fc-unknown-bg: rgba(220, 38, 38, 0.07);
+}
+[data-theme="dark"] {
+  --fc-known-bg: rgba(52, 211, 153, 0.12);
+  --fc-unknown-bg: rgba(248, 113, 113, 0.12);
+}
+.fc-view-toggle {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.fc-view-toggle button { flex: 1 1 0; }
+.fc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.fc-legend li::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.fc-legend .is-known::before { background: var(--fc-known); }
+.fc-legend .is-unknown::before { background: var(--fc-unknown); }
+.fc-legend .is-new::before { background: var(--fc-new); }
+.fc-hide-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.fc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.fc-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 6px solid var(--fc-new);
+  border-radius: var(--radius);
+  transition: background-color 0.2s, border-color 0.2s;
+}
+.fc-item.is-known { border-color: var(--fc-known); background: var(--fc-known-bg); }
+.fc-item.is-unknown { border-color: var(--fc-unknown); background: var(--fc-unknown-bg); }
+.fc-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fc-item-id { font-weight: 700; color: var(--text-dim); }
+.fc-item-tools { margin-left: auto; }
+.fc-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+.fc-status.is-known { background: var(--fc-known); color: #fff; }
+.fc-status.is-unknown { background: var(--fc-unknown); color: #fff; }
+.fc-question {
+  margin: 0;
+  font-weight: 700;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.fc-answer {
+  font-size: 0.92rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  overflow-wrap: anywhere;
+}
+.fc-answer > :first-child { margin-top: 0; }
+.fc-answer > :last-child { margin-bottom: 0; }
+.fc-answer-fold summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+  min-height: 32px;
+}
+.fc-item-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.fc-item-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+}
+.fc-item-actions .fc-open-card { margin-left: auto; }
+.fc-btn-known { color: var(--fc-known); border-color: var(--fc-known); }
+.fc-btn-unknown { color: var(--fc-unknown); border-color: var(--fc-unknown); }
+
+/* 한 장씩 볼 때도 같은 색으로 카드 테두리를 칠한다 */
+.flashcard-container { position: relative; }
+.flashcard-container.is-known .flashcard-face { border: 2px solid var(--fc-known); }
+.flashcard-container.is-unknown .flashcard-face { border: 2px solid var(--fc-unknown); }
+.flashcard-container.is-known .flashcard-face:not(.flashcard-back) { background: linear-gradient(var(--fc-known-bg), var(--fc-known-bg)), var(--bg-card); }
+.flashcard-container.is-unknown .flashcard-face:not(.flashcard-back) { background: linear-gradient(var(--fc-unknown-bg), var(--fc-unknown-bg)), var(--bg-card); }
+.fc-status-floating {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .fc-list { grid-template-columns: 1fr; }
+  .fc-item-actions button { flex: 1 1 0; justify-content: center; min-height: 44px; }
+  .fc-item-actions .fc-open-card { flex-basis: 100%; margin-left: 0; }
+}
+
 /* Quiz specific */
 .quiz-code {
   background: var(--code-bg);
