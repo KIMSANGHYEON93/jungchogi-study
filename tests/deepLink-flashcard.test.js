@@ -104,6 +104,8 @@ describe('지목한 카드에서 시작한다', () => {
 
 describe('`?id=` 가 없으면 기존 동작 그대로', () => {
   it('단답형 덱 첫 카드에서 시작하고 안내도 없다', async () => {
+    // 한 장씩 보기의 동작을 확인한다 (기본 보기는 문제·답 함께 보기 목록)
+    localStorage.setItem('jungchogi-flashcard-view', 'card');
     const { container, unmount } = renderAt('/flashcard');
     await flush();
 

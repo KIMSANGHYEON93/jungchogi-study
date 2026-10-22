@@ -116,6 +116,8 @@ describe('코드 퀴즈 번호판', () => {
 
 describe('플래시카드 번호판', () => {
   it('외움 · 모름 · 안 봄을 구분하고, "다음 미완료" 는 모름도 다시 들른다', async () => {
+    // 한 장씩 보기의 동작을 확인한다 (기본 보기는 문제·답 함께 보기 목록)
+    localStorage.setItem('jungchogi-flashcard-view', 'card');
     localStorage.setItem('jungchogi_flashcard_known_quiz100', JSON.stringify({ '001': true, '002': false }));
     const c = render(FlashcardPage, '/flashcard');
     await flush();

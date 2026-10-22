@@ -46,6 +46,31 @@ function deckForId(id) {
   return DECKS.find((d) => d.idPattern.test(id))?.key ?? null;
 }
 
+const VIEW_KEY = 'jungchogi-flashcard-view';
+
+function loadView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'card' ? 'card' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function saveView(view) {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // 기억하지 못해도 이번 화면에서는 바뀐 방식으로 보인다
+  }
+}
+
+/** 카드 상태 → 색 구분 클래스와 이름. 외움 = 초록, 모름 = 빨강, 아직 표시 안 함 = 회색 */
+const STATUS_LOOK = {
+  [ITEM_STATUS.DONE]: { cls: 'is-known', label: '외움' },
+  [ITEM_STATUS.WRONG]: { cls: 'is-unknown', label: '모름' },
+  [ITEM_STATUS.TODO]: { cls: 'is-new', label: '안 봄' },
+};
+
 export default function FlashcardPage() {
   useStudyTimer();
   // `/flashcard?id=B07` 로 지목받은 카드. 첫 렌더에만 읽는다.
@@ -57,6 +82,10 @@ export default function FlashcardPage() {
   const [category, setCategory] = useState('전체');
   const [known, setKnown] = useState({});
   const [filterMode, setFilterMode] = useState('all');
+  // 보기 방식: 'list' = 문제와 답을 한눈에(기본), 'card' = 한 장씩 뒤집기.
+  // 특정 카드로 온 링크는 그 카드를 한 장으로 연다. 고른 방식은 이 기기에만 기억한다(백업 대상 아님)
+  const [view, setView] = useState(() => (requestedId ? 'card' : loadView()));
+  const [hideAnswers, setHideAnswers] = useState(false);
   const study = useStudyState();
   const bookmarkType = DECK_BOOKMARK_TYPE[deck];
   const { bookmarks } = study;
@@ -139,14 +168,29 @@ export default function FlashcardPage() {
   };
 
   useEffect(() => {
+    // 목록 보기에서는 스페이스가 화면 스크롤이어야 한다 — 한 장씩 볼 때만 단축키를 건다
+    if (view !== 'card') return undefined;
     const handler = (e) => {
+      if (e.target instanceof HTMLElement && e.target.closest('button, input, textarea, select, a')) return;
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setFlipped((f) => !f); }
       if (e.key === 'ArrowRight') next();
       if (e.key === 'ArrowLeft') prev();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [next, prev]);
+  }, [next, prev, view]);
+
+  const changeView = (v) => {
+    setView(v);
+    saveView(v);
+    setFlipped(false);
+  };
+
+  // 목록에서 카드를 누르면 그 카드부터 한 장씩 본다
+  const openCard = (i) => {
+    setIndex(i);
+    changeView('card');
+  };
 
   const swipeHandlers = useSwipe({
     onSwipeLeft: next,
@@ -159,7 +203,20 @@ export default function FlashcardPage() {
   return (
     <div className="page">
       <h1>플래시카드</h1>
-      <p className="subtitle">탭하여 뒤집기, 좌우 스와이프로 이동</p>
+      <p className="subtitle">
+        {view === 'list'
+          ? '문제와 답을 한눈에 보고 외움·모름을 표시하세요 — 카드 색으로 구분됩니다'
+          : '탭하여 뒤집기, 좌우 스와이프로 이동'}
+      </p>
+
+      <div className="fc-view-toggle" role="group" aria-label="보기 방식">
+        <button type="button" className={view === 'list' ? 'btn-primary' : 'btn-outline'} aria-pressed={view === 'list'} onClick={() => changeView('list')}>
+          문제·답 함께 보기
+        </button>
+        <button type="button" className={view === 'card' ? 'btn-primary' : 'btn-outline'} aria-pressed={view === 'card'} onClick={() => changeView('card')}>
+          한 장씩 뒤집기
+        </button>
+      </div>
 
       {/* 덱 선택 */}
       <div className="deck-selector">
@@ -215,6 +272,82 @@ export default function FlashcardPage() {
         </div>
       )}
 
+      {/* 한 장씩 볼 때는 번호판 요약이 같은 수를 보여 주므로 목록에서만 색 안내를 띄운다 */}
+      {view === 'list' ? (
+      <ul className="fc-legend" aria-label="카드 색 안내">
+        <li className="is-known">외움 {knownCount}</li>
+        <li className="is-unknown">모름 {allCards.filter((c) => known[c.id] === false).length}</li>
+        <li className="is-new">안 봄 {allCards.filter((c) => known[c.id] === undefined).length}</li>
+      </ul>
+      ) : null}
+
+      {view === 'list' && cards.length > 0 ? (
+        <>
+          <label className="fc-hide-toggle">
+            <input type="checkbox" checked={hideAnswers} onChange={(e) => setHideAnswers(e.target.checked)} />
+            답 가리기 (스스로 떠올린 뒤 펼쳐 보기)
+          </label>
+          <ol className="fc-list">
+            {cards.map((card, i) => {
+              const look = STATUS_LOOK[statusOf(card)];
+              return (
+                <li key={card.id} className={`fc-item ${look.cls}`}>
+                  <div className="fc-item-head">
+                    <span className="fc-item-id">{card.id}</span>
+                    <span className="badge badge-primary">{card.category}</span>
+                    <span className={`fc-status ${look.cls}`}>{look.label}</span>
+                    <span className="fc-item-tools">
+                      <BookmarkButton
+                        active={study.isBookmarked(bookmarkType, card.id)}
+                        onToggle={() => study.toggleBookmark(bookmarkType, card.id)}
+                        label={`${card.id}번 카드 북마크`}
+                      />
+                    </span>
+                  </div>
+                  <p className="fc-question">{card.question}</p>
+                  {hideAnswers ? (
+                    <details className="fc-answer-fold">
+                      <summary>답 보기</summary>
+                      <div className="md-content fc-answer">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{card.answer}</ReactMarkdown>
+                      </div>
+                    </details>
+                  ) : (
+                    <div className="md-content fc-answer">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{card.answer}</ReactMarkdown>
+                    </div>
+                  )}
+                  <div className="fc-item-actions">
+                    <button
+                      type="button"
+                      className={known[card.id] === false ? 'btn-danger' : 'btn-outline fc-btn-unknown'}
+                      aria-pressed={known[card.id] === false}
+                      aria-label={`${card.id}번 모름 표시`}
+                      onClick={() => markKnown(card, false)}
+                    >
+                      <Icon name="x" size={16} /> 모름
+                    </button>
+                    <button
+                      type="button"
+                      className={known[card.id] === true ? 'btn-success' : 'btn-outline fc-btn-known'}
+                      aria-pressed={known[card.id] === true}
+                      aria-label={`${card.id}번 외움 표시`}
+                      onClick={() => markKnown(card, true)}
+                    >
+                      <Icon name="check" size={16} /> 외움
+                    </button>
+                    <button type="button" className="btn-outline fc-open-card" onClick={() => openCard(i)}>
+                      한 장으로 보기
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      ) : null}
+
+      {view === 'card' ? (
       <ProgressNav
         items={cards}
         index={idx}
@@ -224,6 +357,7 @@ export default function FlashcardPage() {
         pending={[ITEM_STATUS.TODO, ITEM_STATUS.WRONG]}
         collapsible
       />
+      ) : null}
 
       {cards.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 60 }}>
@@ -231,7 +365,7 @@ export default function FlashcardPage() {
             : filterMode === 'bookmarked' && allCards.length > 0 ? '북마크한 카드가 없습니다. 카드 위의 북마크 버튼으로 추가해 보세요.'
             : '문제를 불러오는 중...'}
         </div>
-      ) : current ? (
+      ) : view === 'card' && current ? (
         <>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
             <BookmarkButton
@@ -240,7 +374,8 @@ export default function FlashcardPage() {
               label={`${current.id}번 카드 북마크`}
             />
           </div>
-          <div className="flashcard-container" {...swipeHandlers}>
+          <div className={`flashcard-container ${STATUS_LOOK[statusOf(current)].cls}`} {...swipeHandlers}>
+            <span className={`fc-status fc-status-floating ${STATUS_LOOK[statusOf(current)].cls}`}>{STATUS_LOOK[statusOf(current)].label}</span>
             <div className={`flashcard ${flipped ? 'flipped' : ''} ${deck === CORE_DECK_KEY && flipped ? 'flashcard-tall' : ''}`} onClick={() => setFlipped(!flipped)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setFlipped(!flipped); } }} role="button" tabIndex={0} aria-label="카드 뒤집기">
               <div className="flashcard-face">
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
