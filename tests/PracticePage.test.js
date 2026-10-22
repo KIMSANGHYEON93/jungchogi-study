@@ -83,6 +83,12 @@ describe('실기 연습 화면', () => {
     expect(answer.querySelector('summary').textContent).toBe('정답 및 풀이');
     expect(answer.textContent).toContain('출력: 18');
     expect(answer.textContent).toContain('함정:');
+    // 추적표와 정답 사이에 나의 답 · 트레이싱 메모 칸이 있다
+    const note = c.querySelector('.trace-note');
+    expect(note).not.toBeNull();
+    expect(note.compareDocumentPosition(answer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(c.querySelector('#trace-note-memo-C-09')).not.toBeNull();
+    expect(c.querySelector('#trace-note-answer-C-09')).not.toBeNull();
   });
 
   it('SQL 탭: 문항 목록과 빈칸 입력이 나온다', async () => {
