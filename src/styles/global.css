@@ -2686,6 +2686,16 @@ html { scroll-behavior: smooth; }
   color: var(--text-dim);
 }
 
+/* 이어서 연 모의고사 안내 */
+.exam-resumed {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
 /* ── TraceNote ── */
 .trace-note {
   display: flex;
@@ -2952,6 +2962,30 @@ html { scroll-behavior: smooth; }
      화면 오른쪽 아래(플래시카드 '외움' 버튼, 각 화면의 마지막 줄)를 가렸다 */
   .cheat-fab {
     display: none;
+  }
+}
+
+/* 맨 위로 — 데스크톱은 '공식' 버튼 위, 휴대폰은 하단 탭바 위 */
+.scroll-top-button {
+  position: fixed;
+  right: 16px;
+  bottom: 76px;
+  z-index: 90;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+@media (max-width: 768px) {
+  .scroll-top-button {
+    bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 12px);
   }
 }
 

@@ -47,6 +47,8 @@ function buttonByName(scope, name) {
 
 beforeEach(() => {
   localStorage.clear();
+  // 빈 답안이 있으면 제출 전에 묻는다 — 이 테스트들은 '제출'을 고른다
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
   vi.stubGlobal(
     'fetch',
     vi.fn((url) =>
