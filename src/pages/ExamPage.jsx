@@ -259,7 +259,7 @@ export default function ExamPage() {
           <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>제한 시간: {EXAM_SPEC.minutes}분 ({formatMinutes(EXAM_SPEC.minutes)}) — 실제 시험 시간과 같게</p>
           <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>합격 기준: {EXAM_SPEC.passScore}점 이상 ({EXAM_SPEC.maxScore}점 만점)</p>
           <p style={{ color: 'var(--text-dim)', marginBottom: 8, fontSize: '0.85rem' }}>
-            문항 출처: 이 앱에서 만든 단답형 100선 · 출제범위 확장 80선 · 기출 주제 보강 63선 · 코드 트레이싱 드릴
+            문항 출처: 이 앱에서 만든 단답형 100선 · 출제범위 확장 80선 · 기출 주제 보강 65선 · 코드 트레이싱 드릴
             (단답형 {quizPool.length} · 코드 {codePool.length}문항). 지난 회차에 덜 나온 문항부터 고르므로 풀을 한 바퀴 돌기 전에는 같은 문제가 다시 나오지 않습니다.
             연도·회차별 복원 기출이 아닙니다(원문을 옮기지 않았습니다).
           </p>

@@ -43,7 +43,7 @@ export const PAST_EXAMS = [
     { label: 'IPSec', ref: '083' },
     { label: '정적 분석 도구', ref: '071' },
     { label: '옵저버 패턴', ref: '048' },
-    { label: '모바일 운영체제', ref: null },
+    { label: '모바일 운영체제', ref: 'Y064' },
     { label: 'CREATE INDEX', ref: '010' },
     { label: 'SOAP', ref: 'Y061' },
     { label: 'SQL 인젝션', ref: '080' },
@@ -73,7 +73,7 @@ export const PAST_EXAMS = [
     { label: 'UI 직관성', ref: '098' },
     { label: 'Java continue 합계', ref: 'code:java' },
     { label: 'EAI 유형', ref: 'X033' },
-    { label: '생성자 개념', ref: null },
+    { label: '생성자 개념', ref: 'Y065' },
     { label: 'ALTER TABLE', ref: 'X010' },
   ] },
   { key: '2020-4', year: 2020, round: 4, topics: [

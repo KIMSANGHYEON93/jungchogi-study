@@ -23,6 +23,10 @@ describe('회차별 기출 주제 지도', () => {
     expect(pastExamSourceUrl('2024-1')).toBe('https://www.sqldpass.com/blog/past-exam/engineer-2024-1');
   });
 
+  it('420개 주제가 모두 앱 문항이나 코드 언어에 이어져 있다 (빈 주제 없음)', () => {
+    expect(PAST_EXAMS.flatMap((e) => e.topics).filter((t) => t.ref === null)).toEqual([]);
+  });
+
   it('주제에 이어 둔 문항 id 가 모두 앱 문항에 있고, 코드 주제의 언어가 드릴에 있다', () => {
     const quizIds = new Set(quizPool.map((q) => String(q.id)));
     const langs = new Set(codePool.map((q) => q.lang));
@@ -39,7 +43,7 @@ describe('회차별 기출 주제 지도', () => {
   it('보강 문항(Y)은 모두 어느 회차의 주제에 쓰인다', () => {
     const used = new Set(PAST_EXAMS.flatMap((e) => e.topics.map((t) => t.ref)));
     const ys = parseQuiz(read('정처기_기출주제_보강문항.md')).map((q) => q.id);
-    expect(ys).toHaveLength(63);
+    expect(ys).toHaveLength(65);
     expect(ys.filter((id) => !used.has(id))).toEqual([]);
   });
 });
