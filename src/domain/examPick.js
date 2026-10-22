@@ -55,3 +55,43 @@ export function pickLeastUsed(pool, count, counts, random = Math.random) {
 export function unseenCount(pool, counts) {
   return pool.filter((q) => !counts.has(String(q.id))).length;
 }
+
+/**
+ * 회차별 모의고사 — 그 회차의 주제 구성(이론 · SQL · 언어별 코드)을 그대로 따라 문항을 고른다.
+ * 주제에 이어 둔 앱 문항이 있으면 그것을, 코드 주제(`code:c` 등)는 같은 언어의 덜 나온 드릴 문항을,
+ * 이어 둔 문항이 없거나 이미 고른 문항이면 같은 영역(코드 → 같은 언어, 이론 → 이론)의 덜 나온 문항으로 채운다.
+ *
+ * @param {{topics: {label: string, ref: string|null}[]}} exam
+ * @param {{id: string|number, type: 'quiz'}[]} quizPool
+ * @param {{id: string, type: 'code', lang: string}[]} codePool
+ * @param {Map<string, number>} counts 지난 회차들에서 나온 횟수
+ * @param {() => number} [random]
+ * @returns {{question: object, topic: string}[]} 회차 문항 순서 그대로
+ */
+export function buildPastExam(exam, quizPool, codePool, counts, random = Math.random) {
+  const used = new Set();
+  const take = (pool) => {
+    const q = pickLeastUsed(pool.filter((x) => !used.has(`${x.type}:${x.id}`)), 1, counts, random)[0];
+    if (q) used.add(`${q.type}:${q.id}`);
+    return q;
+  };
+  const picked = [];
+  for (const topic of exam.topics) {
+    const ref = topic.ref;
+    let q = null;
+    if (typeof ref === 'string' && ref.startsWith('code:')) {
+      const lang = ref.slice(5);
+      q = take(codePool.filter((c) => c.lang === lang)) ?? take(codePool);
+    } else {
+      const direct = ref ? quizPool.find((x) => String(x.id) === ref) : null;
+      if (direct && !used.has(`quiz:${direct.id}`)) {
+        used.add(`quiz:${direct.id}`);
+        q = direct;
+      } else {
+        q = take(quizPool);
+      }
+    }
+    if (q) picked.push({ question: q, topic: topic.label });
+  }
+  return picked;
+}

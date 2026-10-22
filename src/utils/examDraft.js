@@ -10,7 +10,7 @@ export const EXAM_DRAFT_KEY = 'jungchogi-exam-draft';
  * @typedef {{
  *   v: 1,
  *   phase: 'exam'|'result',
- *   items: {type: 'quiz'|'code', id: string|number}[],
+ *   items: {type: 'quiz'|'code', id: string|number, topic?: string}[],
  *   answers: Record<number, string>,
  *   currentQ: number,
  *   endTime: number,
@@ -51,7 +51,11 @@ export function clearExamDraft(storage = localStorage) {
  * @returns {object[]|null}
  */
 export function restoreQuestions(draft, quizPool, codePool) {
-  const find = ({ type, id }) => (type === 'code' ? codePool : quizPool).find((q) => String(q.id) === String(id));
+  const find = ({ type, id, topic }) => {
+    const q = (type === 'code' ? codePool : quizPool).find((x) => String(x.id) === String(id));
+    // 회차별 모의고사의 '기출 주제' 표시도 되살린다
+    return q && topic ? { ...q, pastTopic: topic } : q;
+  };
   const questions = draft.items.map(find);
   return questions.every(Boolean) ? questions : null;
 }

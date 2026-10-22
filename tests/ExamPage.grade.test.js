@@ -295,3 +295,30 @@ describe('풀던 모의고사 이어 풀기', () => {
     unmount();
   });
 });
+
+describe('회차별 모의고사', () => {
+  it('21회차 중 하나를 골라 그 회차 주제 구성으로 시작하고, 원문 링크를 외부로 연다', async () => {
+    const { container, unmount } = render();
+    await flush();
+    const select = container.querySelector('#past-exam-select');
+    expect(select.querySelectorAll('option')).toHaveLength(21);
+    expect(select.value).toBe('2026-2');
+    act(() => {
+      select.value = '2024-1';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(container.querySelectorAll('.past-exam-topics li')).toHaveLength(20);
+    const link = container.querySelector('.past-exam-source');
+    expect(link.getAttribute('href')).toBe('https://www.sqldpass.com/blog/past-exam/engineer-2024-1');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+
+    await act(async () => { buttonByName(container, '2024년 1회 주제로 시험 시작').click(); });
+    await flush();
+    expect(container.querySelector('h1').textContent).toBe('모의고사 · 2024년 1회 주제');
+    expect(container.querySelector('.past-exam-qtopic').textContent).toBe('기출 주제: Java 싱글톤');
+    const sessions = JSON.parse(localStorage.getItem('jungchogi_exam_sessions'));
+    expect(sessions.at(-1).pastKey).toBe('2024-1');
+    unmount();
+  });
+});

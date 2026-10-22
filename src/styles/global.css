@@ -2839,6 +2839,45 @@ html { scroll-behavior: smooth; }
   color: var(--text-dim);
 }
 
+/* 회차별 모의고사 */
+.past-exam-picker {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.past-exam-title { margin: 0; font-size: 1.15rem; }
+.past-exam-note { margin: 0; font-size: 0.85rem; color: var(--text-dim); }
+.past-exam-select-label { font-weight: 600; font-size: 0.9rem; }
+.past-exam-select { margin: 0; max-width: 240px; }
+.past-exam-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  counter-reset: topic;
+}
+.past-exam-topics li {
+  counter-increment: topic;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.past-exam-topics li::before { content: counter(topic) '. '; color: var(--text-dim); }
+.past-exam-topics li.is-code { border: 1px solid var(--warning); }
+.past-exam-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.past-exam-source { text-decoration: none; }
+.past-exam-qtopic { margin: 0 0 10px; font-size: 0.85rem; color: var(--text-dim); }
+@media (max-width: 768px) {
+  .past-exam-actions > * { flex: 1 1 100%; justify-content: center; }
+  .past-exam-select { max-width: none; }
+}
+
 /* 이어서 연 모의고사 안내 */
 .exam-resumed {
   margin: 0 0 12px;
