@@ -91,14 +91,18 @@ function mapTokenError(type) {
   return fail('ACCESS_DENIED');
 }
 
-/** 사용자 클릭 직후 호출해야 브라우저가 팝업을 막지 않는다 */
-function requestAccessToken(google, clientId) {
+/**
+ * 사용자 클릭 직후 호출해야 브라우저가 팝업을 막지 않는다.
+ * `scope` 를 받아 캘린더 읽기와 Drive 앱 폴더 동기화(services/googleDriveSync.js)가 같이 쓴다.
+ * 실패는 CalendarError 로 던진다 — 코드(ACCESS_DENIED · POPUP_BLOCKED)만 보고 쓰는 쪽이 문구를 고른다.
+ */
+export function requestAccessToken(google, clientId, scope = CALENDAR_SCOPE) {
   return new Promise((resolve, reject) => {
     let client;
     try {
       client = google.accounts.oauth2.initTokenClient({
         client_id: clientId,
-        scope: CALENDAR_SCOPE,
+        scope,
         callback: (resp) => {
           if (!resp || resp.error || !resp.access_token) {
             reject(mapTokenError(resp?.error));

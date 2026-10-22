@@ -9,6 +9,8 @@ import { lessonByDay } from '../domain/lessons';
 import { loadStoredBusy } from '../utils/busyStore';
 import { MAX_BACKUP_BYTES, applyBackup, buildBackup, failureMessage, parseBackup, successMessage } from '../utils/backup';
 import { summarizeQuizResults } from '../domain/grading';
+import { isGoogleCalendarConfigured } from '../services/googleCalendar';
+import { lastSyncedAt, syncWithDrive } from '../services/googleDriveSync';
 
 import { CORE_CARD_COUNT, CORE_DECK_KEY } from '../domain/coreDeck';
 
@@ -41,6 +43,10 @@ export default function DashboardPage() {
   const [examDate, setExamDateState] = useState(() => getExamDate() || '');
   const [showDateInput, setShowDateInput] = useState(false);
   const [spacedDue] = useState(getSpacedRepetitionDue);
+  // Google Drive 동기화 — 'idle' | 'loading' | 'error'. 성공하면 화면 전체가 새 기록을 읽도록 새로고침한다
+  const [driveSync, setDriveSync] = useState({ status: 'idle', message: '' });
+  const [lastSync] = useState(() => lastSyncedAt());
+  const driveConfigured = isGoogleCalendarConfigured();
 
   // 학습 시간 추적: 페이지 떠날 때 기록
   useEffect(() => {
@@ -94,6 +100,22 @@ export default function DashboardPage() {
       window.location.reload();
     };
     input.click();
+  };
+
+  // 클릭에서 바로 호출해야 로그인 팝업이 막히지 않는다
+  const handleDriveSync = async () => {
+    setDriveSync({ status: 'loading', message: '' });
+    try {
+      const r = await syncWithDrive();
+      window.alert(
+        r.created
+          ? 'Google Drive 에 이 기기의 기록을 처음 올렸습니다. 다른 기기에서도 "Google Drive 동기화"를 누르면 합쳐집니다.'
+          : `Drive 의 기록 ${r.merged}개 항목을 이 기기와 합치고, 합친 결과를 다시 올렸습니다.`,
+      );
+      window.location.reload();
+    } catch (e) {
+      setDriveSync({ status: 'error', message: e?.message ?? '동기화하지 못했습니다.' });
+    }
   };
 
   const handleExamDateSave = (val) => {
@@ -432,9 +454,26 @@ export default function DashboardPage() {
           학습 기록은 서버 없이 <strong>이 브라우저에만</strong> 저장됩니다. 다른 기기·다른 브라우저에서는 보이지 않고,
           브라우저의 사이트 데이터 삭제·사생활 보호 모드 종료 시 사라집니다. 기기를 바꾸거나 데이터를 지우기 전에 내보내기 파일을 보관하세요.
         </p>
+        <p className="drive-sync-note" role="status" style={{ fontSize: '0.85rem', color: 'var(--text-dim)', margin: '0 0 12px' }}>
+          <strong>폰·PC 맞추기</strong>: 같은 Google 계정으로 각 기기에서 <strong>Google Drive 동기화</strong>를 한 번씩 누르면 두 기기의 기록이 합쳐집니다
+          (내 Drive 의 앱 전용 숨김 폴더에만 저장 — 다른 Drive 파일은 읽지 않습니다).
+          {lastSync ? ` 이 기기의 마지막 동기화: ${new Date(lastSync).toLocaleString('ko-KR')}.` : ' 이 기기는 아직 동기화한 적이 없습니다.'}
+          {!driveConfigured ? ' (지금 배포에는 Google 연동 설정이 없어 버튼이 꺼져 있습니다 — 내보내기·가져오기(합치기)로 맞추세요.)' : ''}
+        </p>
+        {driveSync.status === 'error' ? (
+          <p role="alert" style={{ fontSize: '0.85rem', color: 'var(--danger)', margin: '0 0 12px' }}>{driveSync.message}</p>
+        ) : null}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button className="btn-outline" onClick={() => exportData()}>
             학습 데이터 내보내기
+          </button>
+          <button
+            className="btn-primary"
+            onClick={handleDriveSync}
+            disabled={!driveConfigured || driveSync.status === 'loading'}
+            title={driveConfigured ? '같은 Google 계정으로 폰·PC 에서 각각 누르면 기록이 합쳐집니다' : 'Google 연동 설정(VITE_GOOGLE_CLIENT_ID)이 필요합니다'}
+          >
+            {driveSync.status === 'loading' ? '동기화 중…' : 'Google Drive 동기화'}
           </button>
           <button className="btn-outline" onClick={() => importData('merge')}>
             가져오기 (합치기)
