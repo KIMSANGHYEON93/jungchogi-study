@@ -2686,6 +2686,36 @@ html { scroll-behavior: smooth; }
   color: var(--text-dim);
 }
 
+/* ── TraceNote ── */
+.trace-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: 16px;
+  min-width: 0;
+}
+.trace-note-label {
+  font-weight: 600;
+}
+.trace-note-memo,
+.trace-note-answer {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'JetBrains Mono', monospace;
+  resize: vertical;
+}
+.trace-note-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+@media (max-width: 600px) {
+  .trace-note-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 /* ── SqlQuizCard ── */
 .sqlq {
   display: flex;

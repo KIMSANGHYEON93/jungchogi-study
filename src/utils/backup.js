@@ -50,6 +50,11 @@ export function isValidValue(key, value) {
   if (key === 'study_checklist') {
     return isPlainObject(value) && Object.values(value).every((doc) => isPlainObject(doc) && Object.values(doc).every((v) => v === true));
   }
+  if (key === 'trace_notes') {
+    return isPlainObject(value) && Object.values(value).every(
+      (n) => isPlainObject(n) && typeof n.answer === 'string' && typeof n.memo === 'string' && isFiniteNumber(n.updatedAt)
+    );
+  }
   if (key === 'practice_done') {
     return isPlainObject(value) && Object.values(value).every(
       (tab) => isPlainObject(tab) && Object.values(tab).every((v) => v === 'done' || v === 'wrong' || v === 'viewed')
@@ -144,6 +149,14 @@ export function mergeValue(key, current, incoming) {
         if (!(id in merged) || (rank[v] ?? 0) > (rank[merged[id]] ?? 0)) merged[id] = v;
       }
       out[tab] = merged;
+    }
+    return out;
+  }
+  if (key === 'trace_notes') {
+    // 문제별로 나중에 고친 쪽을 쓴다. 같은 시각이면 이 기기의 기록을 지킨다
+    const out = { ...current };
+    for (const [id, note] of Object.entries(incoming)) {
+      if (!(id in out) || note.updatedAt > (Number(out[id]?.updatedAt) || 0)) out[id] = note;
     }
     return out;
   }

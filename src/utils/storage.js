@@ -338,3 +338,34 @@ export function saveExamSession(session) {
   const next = [...rest, session].slice(-EXAM_SESSIONS_LIMIT);
   return saveProgress(EXAM_SESSIONS_KEY, next);
 }
+
+// ─── 코드 트레이싱 나의 답 · 메모 ───
+
+/**
+ * 실기 연습 변수 추적표에서 문제마다 적은 나의 답과 트레이싱 메모.
+ * 값: { [문제 id]: { answer: string, memo: string, updatedAt: number } }
+ * 두 칸이 모두 비면 항목을 지운다. 기기 간 합치기는 updatedAt 이 늦은 쪽을 쓴다.
+ */
+export const TRACE_NOTES_KEY = 'trace_notes';
+
+export function getTraceNotes() {
+  const value = loadProgress(TRACE_NOTES_KEY, {});
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+/** @returns {{answer: string, memo: string}} */
+export function getTraceNote(id) {
+  const note = getTraceNotes()[id];
+  return {
+    answer: typeof note?.answer === 'string' ? note.answer : '',
+    memo: typeof note?.memo === 'string' ? note.memo : '',
+  };
+}
+
+/** @returns {boolean} 저장 성공 여부 */
+export function saveTraceNote(id, { answer = '', memo = '' }, now = Date.now()) {
+  const notes = { ...getTraceNotes() };
+  if (answer.trim() === '' && memo.trim() === '') delete notes[id];
+  else notes[id] = { answer, memo, updatedAt: now };
+  return saveProgress(TRACE_NOTES_KEY, notes);
+}

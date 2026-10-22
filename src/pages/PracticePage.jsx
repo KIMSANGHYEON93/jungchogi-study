@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import CodeTracingTable from '../components/CodeTracingTable';
 import ShortAnswerGrader from '../components/ShortAnswerGrader';
 import SqlQuizCard from '../components/SqlQuizCard';
+import TraceNote from '../components/TraceNote';
 import { SHORT_ANSWER_ITEMS } from '../domain/shortAnswer';
 import { SQL_BLANK_ITEMS } from '../domain/sqlBlanks';
 import { TRACES, traceFor } from '../domain/traces';
@@ -105,6 +106,7 @@ function TracePanel() {
         steps={traceFor(active.id).steps}
         onComplete={(status) => progress.record(active.id, status)}
       />
+      <TraceNote key={`note-${active.id}`} problemId={active.id} expectedOutput={active.expectedOutput} />
       {active.answer ? (
         <details key={`answer-${active.id}`} className="card practice-answer" style={{ marginTop: 16 }}>
           <summary>정답 및 풀이</summary>
