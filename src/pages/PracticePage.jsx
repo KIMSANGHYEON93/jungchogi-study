@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import CodeTracingTable from '../components/CodeTracingTable';
 import ShortAnswerGrader from '../components/ShortAnswerGrader';
 import SqlQuizCard from '../components/SqlQuizCard';
@@ -104,6 +105,19 @@ function TracePanel() {
         steps={traceFor(active.id).steps}
         onComplete={(status) => progress.record(active.id, status)}
       />
+      {active.answer ? (
+        <details key={`answer-${active.id}`} className="card practice-answer" style={{ marginTop: 16 }}>
+          <summary>정답 및 풀이</summary>
+          <div className="md-content" style={{ fontSize: '0.9rem' }}>
+            <ReactMarkdown>{active.answer}</ReactMarkdown>
+          </div>
+          {active.pitfall ? (
+            <p style={{ marginTop: 12 }}>
+              <strong style={{ color: 'var(--warning)' }}>함정:</strong> {active.pitfall}
+            </p>
+          ) : null}
+        </details>
+      ) : null}
     </>
   );
 }

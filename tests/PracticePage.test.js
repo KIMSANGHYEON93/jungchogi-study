@@ -74,6 +74,17 @@ describe('실기 연습 화면', () => {
     expect(target.getAttribute('aria-current')).toBe('true');
   });
 
+  it('추적표 아래에 해당 문제의 정답 및 풀이를 펼쳐 볼 수 있다', async () => {
+    const c = render();
+    await flush();
+    const target = pickers(c).find((b) => chipLabel(b) === 'C-09');
+    await act(async () => { target.click(); });
+    const answer = c.querySelector('details.practice-answer');
+    expect(answer.querySelector('summary').textContent).toBe('정답 및 풀이');
+    expect(answer.textContent).toContain('출력: 18');
+    expect(answer.textContent).toContain('함정:');
+  });
+
   it('SQL 탭: 문항 목록과 빈칸 입력이 나온다', async () => {
     const c = render('/practice?tab=sql');
     expect(pickers(c)).toHaveLength(SQL_BLANK_ITEMS.length);
