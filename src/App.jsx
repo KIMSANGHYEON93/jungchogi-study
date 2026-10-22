@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import FormulaCheatSheetModal from './components/FormulaCheatSheetModal';
 import { useTheme, ThemeProvider } from './hooks/useTheme';
+import useScrollBoundsGuard from './hooks/useScrollBoundsGuard';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const BookmarksPage = lazy(() => import('./pages/BookmarksPage'));
@@ -34,6 +35,8 @@ function AppLayout() {
   const isLanding = location.pathname === '/landing';
   // 공식 치트시트는 어느 화면에서나 열 수 있어야 해서 최상위가 상태를 갖는다
   const [cheatOpen, setCheatOpen] = useState(false);
+  // iOS 에서 키보드를 닫은 뒤 문서 아래로 빈 공간이 남아 끝없이 내려가던 문제
+  useScrollBoundsGuard();
 
   return (
     <>
