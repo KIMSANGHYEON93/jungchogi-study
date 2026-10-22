@@ -76,8 +76,8 @@ describe('bookmarkLink', () => {
     expect(bookmarkLink({ type: 'doc', id: 'gone.md' })).toBeNull();
     expect(bookmarkLink({ type: 'weird', id: 'x' })).toBeNull();
     expect(docName(DAY1)).toBe('Day 01 — C언어');
-    // 핵심 암기(core) · 출제범위 확장(extra)과, 옛 북마크를 해제할 수 있게 남긴 암기 119선(bogang)을 포함해 7종
-    expect(Object.values(BOOKMARK_TYPE)).toEqual(['lesson', 'quiz100', 'core', 'extra', 'bogang', 'codeDrill', 'doc']);
+    // 핵심 암기(core) · 출제범위 확장(extra) · 기출 주제 보강(pastTopic)과, 옛 북마크를 해제할 수 있게 남긴 암기 119선(bogang)을 포함해 8종
+    expect(Object.values(BOOKMARK_TYPE)).toEqual(['lesson', 'quiz100', 'core', 'extra', 'pastTopic', 'bogang', 'codeDrill', 'doc']);
   });
 });
 

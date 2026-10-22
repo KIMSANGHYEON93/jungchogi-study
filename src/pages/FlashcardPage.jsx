@@ -28,6 +28,7 @@ const DECKS = [
   { key: 'quiz100', label: '단답형 100선', file: '정처기_단답형_100선.md', parser: 'quiz', idPattern: /^\d{3}$/ },
   { key: CORE_DECK_KEY, label: '핵심 암기 카드', file: CORE_DECK_FILE, parser: 'quiz', idPattern: /^K\d{3}$/ },
   { key: 'extra', label: '출제범위 확장 80', file: '정처기_출제범위_확장문항.md', parser: 'quiz', idPattern: /^X\d{3}$/ },
+  { key: 'pastTopic', label: '기출 주제 보강 63', file: '정처기_기출주제_보강문항.md', parser: 'quiz', idPattern: /^Y\d{3}$/ },
 ];
 
 const DEFAULT_DECK = 'quiz100';

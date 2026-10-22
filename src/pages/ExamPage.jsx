@@ -19,7 +19,8 @@ import { AREA_LABEL, areaOfExamQuestion, summarizeSession } from '../domain/plan
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
 import { clearExamDraft, loadExamDraft, restoreQuestions, saveExamDraft } from '../utils/examDraft';
-import { pickLeastUsed, shuffle, unseenCount, usageCounts } from '../domain/examPick';
+import { buildPastExam, pickLeastUsed, shuffle, unseenCount, usageCounts } from '../domain/examPick';
+import { PAST_EXAMS, pastExamByKey, pastExamLabel, pastExamSourceUrl } from '../domain/pastExams';
 import Icon from '../components/Icon';
 import ProblemContext from '../components/ProblemContext';
 import {
@@ -28,8 +29,8 @@ import {
 } from '../domain/grading';
 import { useThemeContext } from '../hooks/useTheme';
 
-/** 단답형 100선과 함께 쓰는 출제범위 확장 문항(2020~2026 실기 범위, 자체 제작) */
-const EXTRA_QUIZ_FILE = '정처기_출제범위_확장문항.md';
+/** 단답형 100선과 함께 쓰는 문항 — 출제범위 확장(X) · 기출 주제 보강(Y), 모두 자체 제작 */
+const EXTRA_QUIZ_FILES = ['정처기_출제범위_확장문항.md', '정처기_기출주제_보강문항.md'];
 
 /** 자기 채점 상태 문구 — 코드 퀴즈(QuizPage)와 같은 말을 쓴다 */
 const SELF_GRADE_STATE = {
@@ -81,6 +82,9 @@ export default function ExamPage() {
   const [examResults, setExamResults] = useState(getExamResults);
   // 보관해 둔 시험을 이어서 열었을 때 한 번 알린다
   const [resumed, setResumed] = useState('');
+  // 회차별 모의고사에서 고른 회차 (기본: 가장 최근 회차)
+  const [pastKey, setPastKey] = useState(PAST_EXAMS[PAST_EXAMS.length - 1].key);
+  const selectedPast = pastExamByKey(pastKey);
 
   // 문제 풀 로드
   const [quizPool, setQuizPool] = useState([]);
@@ -92,10 +96,10 @@ export default function ExamPage() {
       fetchMarkdown('정처기_단답형_100선.md').then(parseQuiz),
       fetchMarkdown('정처기_코드트레이싱_드릴.md').then(parseCodeDrill),
       // 단답형 풀을 넓혀 반복을 줄인다 — 받지 못해도 100선만으로 시험은 열린다
-      fetchMarkdown(EXTRA_QUIZ_FILE).then(parseQuiz).catch(() => []),
-    ]).then(([quiz, code, extra]) => {
+      ...EXTRA_QUIZ_FILES.map((f) => fetchMarkdown(f).then(parseQuiz).catch(() => [])),
+    ]).then(([quiz, code, ...extras]) => {
       if (cancelled) return;
-      const quizList = [...quiz, ...extra].map((q) => ({ ...q, type: 'quiz' }));
+      const quizList = [...quiz, ...extras.flat()].map((q) => ({ ...q, type: 'quiz' }));
       const codeList = code.map((q) => ({ ...q, type: 'code' }));
       setQuizPool(quizList);
       setCodePool(codeList);
@@ -127,7 +131,7 @@ export default function ExamPage() {
     if (phase === 'ready' || questions.length === 0) return;
     saveExamDraft({
       phase,
-      items: questions.map((q) => ({ type: q.type, id: q.id })),
+      items: questions.map((q) => ({ type: q.type, id: q.id, ...(q.pastTopic ? { topic: q.pastTopic } : {}) })),
       answers,
       currentQ,
       endTime: endTimeRef.current,
@@ -146,12 +150,16 @@ export default function ExamPage() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [phase]);
 
-  const startExam = () => {
-    // 단답형 12문제 + 코드 8문제 = 20문제 (앱이 정한 구성). 지난 회차에 덜 나온 문항부터 고른다
+  const startExam = (pastKey = null) => {
     const counts = usageCounts(getExamSessions());
-    const quizQ = pickLeastUsed(quizPool, MOCK_EXAM.quizCount, counts);
-    const codeQ = pickLeastUsed(codePool, MOCK_EXAM.codeCount, counts);
-    const all = shuffle([...quizQ, ...codeQ]);
+    const past = pastKey ? pastExamByKey(pastKey) : null;
+    // 회차별: 그 회차의 주제 구성 순서 그대로 / 기본: 단답형 12 + 코드 8 을 덜 나온 문항부터 골라 섞는다
+    const all = past
+      ? buildPastExam(past, quizPool, codePool, counts).map((x) => ({ ...x.question, pastTopic: x.topic }))
+      : shuffle([
+          ...pickLeastUsed(quizPool, MOCK_EXAM.quizCount, counts),
+          ...pickLeastUsed(codePool, MOCK_EXAM.codeCount, counts),
+        ]);
     setResumed('');
     setQuestions(all);
     setAnswers({});
@@ -161,6 +169,7 @@ export default function ExamPage() {
     const startedAt = Date.now();
     const next = {
       id: `exam-${startedAt}`,
+      ...(past ? { pastKey: past.key } : {}),
       startedAt,
       items: all.map((q) => ({ qid: q.id, area: areaOfExamQuestion(q), verdict: null })),
     };
@@ -236,7 +245,10 @@ export default function ExamPage() {
     return (
       <div className="page">
         <h1>모의고사</h1>
-        <p className="subtitle">실전 시험 시간({formatMinutes(EXAM_SPEC.minutes)}) 타이머 + 자체 제작 문항 랜덤 {MOCK_EXAM.questions}문제</p>
+        <p className="subtitle">
+          실전 시험 시간({formatMinutes(EXAM_SPEC.minutes)}) 타이머 + 자체 제작 문항 랜덤 {MOCK_EXAM.questions}문제 ·{' '}
+          <a href="#past-exam-title">회차별 모의고사(2020~2026)로 바로 가기</a>
+        </p>
 
         <div className="card" style={{ textAlign: 'center', padding: '60px 32px' }}>
           <div style={{ marginBottom: 16, color: 'var(--primary)' }}><Icon name="exam" size={64}/></div>
@@ -247,7 +259,7 @@ export default function ExamPage() {
           <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>제한 시간: {EXAM_SPEC.minutes}분 ({formatMinutes(EXAM_SPEC.minutes)}) — 실제 시험 시간과 같게</p>
           <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>합격 기준: {EXAM_SPEC.passScore}점 이상 ({EXAM_SPEC.maxScore}점 만점)</p>
           <p style={{ color: 'var(--text-dim)', marginBottom: 8, fontSize: '0.85rem' }}>
-            문항 출처: 이 앱에서 만든 단답형 100선 · 출제범위 확장 80선(2020~2026 실기 범위) · 코드 트레이싱 드릴
+            문항 출처: 이 앱에서 만든 단답형 100선 · 출제범위 확장 80선 · 기출 주제 보강 63선 · 코드 트레이싱 드릴
             (단답형 {quizPool.length} · 코드 {codePool.length}문항). 지난 회차에 덜 나온 문항부터 고르므로 풀을 한 바퀴 돌기 전에는 같은 문제가 다시 나오지 않습니다.
             연도·회차별 복원 기출이 아닙니다(원문을 옮기지 않았습니다).
           </p>
@@ -260,11 +272,43 @@ export default function ExamPage() {
             {EXAM_SPEC.sourceNote}. 풀이 뒤 채점 · 오답 정리에 약 {MOCK_EXAM.reviewMinutes}분을 따로 잡으세요.
           </p>
 
-          <button className="btn-primary" onClick={startExam} style={{ fontSize: '1.1rem', padding: '14px 40px' }}
+          <button className="btn-primary" onClick={() => startExam()} style={{ fontSize: '1.1rem', padding: '14px 40px' }}
             disabled={quizPool.length === 0}>
             {quizPool.length === 0 ? '문제 로딩 중...' : '시험 시작'}
           </button>
         </div>
+
+        {/* 회차별 모의고사 — 2020~2026 실기 21회차의 주제 구성을 그대로 따른다 */}
+        <section className="card past-exam-picker" aria-labelledby="past-exam-title">
+          <h2 id="past-exam-title" className="past-exam-title">회차별 모의고사 (2020~2026 · {PAST_EXAMS.length}회차)</h2>
+          <p className="past-exam-note">
+            고른 회차에 나온 20개 주제를 같은 순서로, 같은 주제의 자체 문항으로 냅니다(코드 문제는 같은 언어).
+            복원 문항 원문은 옮기지 않았습니다 — 원문은 아래 외부 링크에서 무료로 풀 수 있습니다.
+          </p>
+          <label className="past-exam-select-label" htmlFor="past-exam-select">회차</label>
+          <select id="past-exam-select" className="quiz-input past-exam-select" value={pastKey} onChange={(e) => setPastKey(e.target.value)}>
+            {[...PAST_EXAMS].reverse().map((e) => (
+              <option key={e.key} value={e.key}>{pastExamLabel(e)}</option>
+            ))}
+          </select>
+          {selectedPast ? (
+            <>
+              <ol className="past-exam-topics" aria-label={`${pastExamLabel(selectedPast)} 출제 주제`}>
+                {selectedPast.topics.map((t, i) => (
+                  <li key={i} className={t.ref?.startsWith('code:') ? 'is-code' : ''}>{t.label}</li>
+                ))}
+              </ol>
+              <div className="past-exam-actions">
+                <button type="button" className="btn-primary" disabled={quizPool.length === 0} onClick={() => startExam(selectedPast.key)}>
+                  {pastExamLabel(selectedPast)} 주제로 시험 시작
+                </button>
+                <a className="btn-outline past-exam-source" href={pastExamSourceUrl(selectedPast.key)} target="_blank" rel="noopener noreferrer">
+                  원문 복원 문항 풀기 (외부 · 문어CBT)
+                </a>
+              </div>
+            </>
+          ) : null}
+        </section>
       </div>
     );
   }
@@ -275,13 +319,13 @@ export default function ExamPage() {
     return (
       <div className="page">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h1 style={{ marginBottom: 0 }}>모의고사</h1>
+          <h1 style={{ marginBottom: 0 }}>{session?.pastKey && pastExamByKey(session.pastKey) ? `모의고사 · ${pastExamLabel(pastExamByKey(session.pastKey))} 주제` : '모의고사'}</h1>
           <div className={timerClass} role="timer" aria-live="assertive" aria-label="남은 시간">{formatTime(timeLeft)}</div>
         </div>
         {resumed ? <p className="exam-resumed" role="status">{resumed}</p> : null}
 
-        <div className="progress-bar" role="progressbar" aria-valuenow={Math.round((answeredCount / MOCK_EXAM.questions) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="학습 진도" style={{ marginBottom: 16 }}>
-          <div className="fill" style={{ width: `${(answeredCount / MOCK_EXAM.questions) * 100}%` }} />
+        <div className="progress-bar" role="progressbar" aria-valuenow={Math.round((answeredCount / (questions.length || 1)) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="학습 진도" style={{ marginBottom: 16 }}>
+          <div className="fill" style={{ width: `${(answeredCount / (questions.length || 1)) * 100}%` }} />
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -310,6 +354,7 @@ export default function ExamPage() {
               </span>
             </span>
           </div>
+          {q.pastTopic ? <p className="past-exam-qtopic">기출 주제: {q.pastTopic}</p> : null}
 
           {q.type === 'quiz' ? (
             <h2 style={{ fontSize: '1.15rem', lineHeight: 1.7, marginBottom: 16 }}>{q.question}</h2>
@@ -358,7 +403,7 @@ export default function ExamPage() {
 
   return (
     <div className="page">
-      <h1>시험 결과</h1>
+      <h1>{session?.pastKey && pastExamByKey(session.pastKey) ? `시험 결과 · ${pastExamLabel(pastExamByKey(session.pastKey))} 주제` : '시험 결과'}</h1>
       {resumed ? <p className="exam-resumed" role="status">{resumed}</p> : null}
 
       <div className="card score-display">
@@ -396,6 +441,7 @@ export default function ExamPage() {
               </span>
             </span>
           </div>
+          {q.pastTopic ? <p className="past-exam-qtopic">기출 주제: {q.pastTopic}</p> : null}
           <div style={{ marginTop: 8 }}>
             <span style={{ color: 'var(--text-dim)' }}>내 답안: </span>
             <span style={{ color: answers[i]?.trim() ? 'var(--text)' : 'var(--danger)' }}>
