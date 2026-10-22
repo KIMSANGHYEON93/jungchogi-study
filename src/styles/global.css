@@ -621,6 +621,13 @@ a.btn-danger {
 .fc-btn-known { color: var(--fc-known); border-color: var(--fc-known); }
 .fc-btn-unknown { color: var(--fc-unknown); border-color: var(--fc-unknown); }
 
+.quiz-list-pitfall {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+.quiz-list .fc-item pre { overflow-x: auto; }
+
 /* 한 장씩 볼 때도 같은 색으로 카드 테두리를 칠한다 */
 .flashcard-container { position: relative; }
 .flashcard-container.is-known .flashcard-face { border: 2px solid var(--fc-known); }

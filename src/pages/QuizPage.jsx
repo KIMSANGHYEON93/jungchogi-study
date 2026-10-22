@@ -36,6 +36,33 @@ import {
   DEEP_LINK_NOTICE_STYLE,
 } from '../hooks/useDeepLink';
 
+const VIEW_KEY = 'jungchogi-quiz-view';
+
+/** 보기 방식: 'list' = 문제·답 함께 보기(기본), 'solve' = 한 문제씩 풀기. 이 기기에만 기억한다(백업 대상 아님) */
+function loadView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'solve' ? 'solve' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function saveView(view) {
+  try {
+    localStorage.setItem(VIEW_KEY, view);
+  } catch {
+    // 기억하지 못해도 이번 화면에서는 바뀐 방식으로 보인다
+  }
+}
+
+/** 채점 기록 → 카드 색(플래시카드와 같은 규칙: 정답 초록 · 오답 빨강 · 그 밖 회색)과 이름 */
+function resultLook(r) {
+  if (r === QUIZ_RESULT.CORRECT) return { cls: 'is-known', label: '정답' };
+  if (r === QUIZ_RESULT.INCORRECT) return { cls: 'is-unknown', label: '오답' };
+  if (r === QUIZ_RESULT.ANSWERED) return { cls: 'is-new', label: '채점 전' };
+  return { cls: 'is-new', label: '안 풂' };
+}
+
 const LANGS = ['전체', 'c', 'java', 'python', 'sql'];
 const LANG_LABEL = { 전체: '전체', c: 'C', java: 'Java', python: 'Python', sql: 'SQL' };
 
@@ -75,6 +102,9 @@ export default function QuizPage() {
   const [submitted, setSubmitted] = useState(false);
   const [results, setResults] = useState({}); // { id: 'correct'|'incorrect'|'answered' }
   const [wrongIds, setWrongIds] = useState(new Set());
+  // 특정 문항으로 온 링크는 그 문항을 바로 풀 수 있게 한 문제씩 보기로 연다
+  const [view, setView] = useState(() => (requestedId ? 'solve' : loadView()));
+  const [hideAnswers, setHideAnswers] = useState(false);
   const study = useStudyState();
 
   useEffect(() => {
@@ -132,16 +162,30 @@ export default function QuizPage() {
    * 채점 결과를 남긴다. 자기 채점 버튼과 출력 자동 일치가 같은 길로 들어온다.
    * @param {'correct'|'incorrect'} verdict
    */
-  const recordGrade = (verdict) => {
-    saveResults(withQuizResult(currentResults, current.id, verdict));
+  const recordGrade = (verdict) => recordGradeFor(current, verdict, userAnswer);
+
+  /** 문항을 지정해 채점한다 — 한 문제씩 풀기와 문제·답 함께 보기 목록이 같은 길을 쓴다 */
+  const recordGradeFor = (problem, verdict, answer = '') => {
+    saveResults(withQuizResult(currentResults, problem.id, verdict));
     // 채점 → 오답 저장을 한 번에: 틀렸으면 오답노트에(같은 문항은 하나로 합쳐진다),
     // 오답노트에 있던 문항을 맞혔으면 복습 1회로 센다
     if (verdict === QUIZ_RESULT.INCORRECT) {
-      addWrongNote(quizWrongNote(current, userAnswer));
-      setWrongIds((prev) => new Set(prev).add(current.id));
+      addWrongNote(quizWrongNote(problem, answer));
+      setWrongIds((prev) => new Set(prev).add(problem.id));
     } else if (verdict === QUIZ_RESULT.CORRECT) {
-      recordWrongNoteRetry('quiz', current.id, true);
+      recordWrongNoteRetry('quiz', problem.id, true);
     }
+  };
+
+  const changeView = (v) => {
+    setView(v);
+    saveView(v);
+  };
+
+  // 목록에서 '풀어 보기'를 누르면 그 문항을 한 문제씩 보기로 연다
+  const solveAt = (i) => {
+    goTo(i);
+    changeView('solve');
   };
 
   const goTo = (newIdx) => {
@@ -174,7 +218,20 @@ export default function QuizPage() {
   return (
     <div className="page">
       <h1>코드 퀴즈</h1>
-      <p className="subtitle">코드 트레이싱 40문제 — 출력 결과를 직접 입력하세요</p>
+      <p className="subtitle">
+        {view === 'list'
+          ? '코드 트레이싱 40문제 — 문제와 정답 · 풀이를 한눈에 보고 맞았는지 표시하세요'
+          : '코드 트레이싱 40문제 — 출력 결과를 직접 입력하세요'}
+      </p>
+
+      <div className="fc-view-toggle" role="group" aria-label="보기 방식">
+        <button type="button" className={view === 'list' ? 'btn-primary' : 'btn-outline'} aria-pressed={view === 'list'} onClick={() => changeView('list')}>
+          문제·답 함께 보기
+        </button>
+        <button type="button" className={view === 'solve' ? 'btn-primary' : 'btn-outline'} aria-pressed={view === 'solve'} onClick={() => changeView('solve')}>
+          한 문제씩 풀기
+        </button>
+      </div>
 
       <div className="stats">
         <div className="stat-box">
@@ -211,6 +268,84 @@ export default function QuizPage() {
         </div>
       )}
 
+      {view === 'list' && problems.length > 0 ? (
+        <>
+          <ul className="fc-legend" aria-label="카드 색 안내">
+            <li className="is-known">정답 {problems.filter((p) => results[p.id] === QUIZ_RESULT.CORRECT).length}</li>
+            <li className="is-unknown">오답 {problems.filter((p) => results[p.id] === QUIZ_RESULT.INCORRECT).length}</li>
+            <li className="is-new">그 밖 {problems.filter((p) => results[p.id] !== QUIZ_RESULT.CORRECT && results[p.id] !== QUIZ_RESULT.INCORRECT).length}</li>
+          </ul>
+          <label className="fc-hide-toggle">
+            <input type="checkbox" checked={hideAnswers} onChange={(e) => setHideAnswers(e.target.checked)} />
+            정답 가리기 (출력을 먼저 떠올린 뒤 펼쳐 보기)
+          </label>
+          <ol className="fc-list quiz-list">
+            {problems.map((p, i) => {
+              const look = resultLook(results[p.id]);
+              const answerBody = (
+                <>
+                  <div className="md-content fc-answer">
+                    <ReactMarkdown>{p.answer}</ReactMarkdown>
+                  </div>
+                  {p.pitfall ? <p className="quiz-list-pitfall"><strong>함정:</strong> {p.pitfall}</p> : null}
+                </>
+              );
+              return (
+                <li key={p.id} className={`fc-item ${look.cls}`}>
+                  <div className="fc-item-head">
+                    <span className="fc-item-id">{p.id}</span>
+                    <span className="badge badge-primary">{p.lang.toUpperCase()}</span>
+                    <span className={`fc-status ${look.cls}`}>{look.label}</span>
+                    <span className="fc-item-tools">
+                      <BookmarkButton
+                        active={study.isBookmarked(BOOKMARK_TYPE.CODE_DRILL, p.id)}
+                        onToggle={() => study.toggleBookmark(BOOKMARK_TYPE.CODE_DRILL, p.id)}
+                        label={`${p.id} 문제 북마크`}
+                      />
+                    </span>
+                  </div>
+                  <p className="fc-question">{p.title}</p>
+                  <ProblemContext text={p.context} fontSize="0.85rem" />
+                  <SyntaxHighlighter language={p.lang} style={syntaxTheme} customStyle={{ borderRadius: 8, fontSize: '0.82rem', margin: 0 }}>
+                    {p.code}
+                  </SyntaxHighlighter>
+                  {hideAnswers ? (
+                    <details className="fc-answer-fold">
+                      <summary>정답 · 풀이 보기</summary>
+                      {answerBody}
+                    </details>
+                  ) : answerBody}
+                  <div className="fc-item-actions">
+                    <button
+                      type="button"
+                      className={results[p.id] === QUIZ_RESULT.INCORRECT ? 'btn-danger' : 'btn-outline fc-btn-unknown'}
+                      aria-pressed={results[p.id] === QUIZ_RESULT.INCORRECT}
+                      aria-label={`${p.id} 틀렸어요`}
+                      onClick={() => recordGradeFor(p, QUIZ_RESULT.INCORRECT)}
+                    >
+                      <Icon name="x" size={16} /> 틀렸어요
+                    </button>
+                    <button
+                      type="button"
+                      className={results[p.id] === QUIZ_RESULT.CORRECT ? 'btn-success' : 'btn-outline fc-btn-known'}
+                      aria-pressed={results[p.id] === QUIZ_RESULT.CORRECT}
+                      aria-label={`${p.id} 맞았어요`}
+                      onClick={() => recordGradeFor(p, QUIZ_RESULT.CORRECT)}
+                    >
+                      <Icon name="check" size={16} /> 맞았어요
+                    </button>
+                    <button type="button" className="btn-outline fc-open-card" onClick={() => solveAt(i)}>
+                      직접 풀어 보기
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      ) : null}
+
+      {view === 'solve' ? (
       <ProgressNav
         items={problems}
         index={idx}
@@ -219,10 +354,11 @@ export default function QuizPage() {
         labels={{ done: '풀이 완료', wrong: '오답', todo: '미완료' }}
         collapsible
       />
+      ) : null}
 
       {problems.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 60 }}>문제를 불러오는 중...</div>
-      ) : current ? (
+      ) : view === 'solve' && current ? (
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ fontSize: '1.1rem' }}>{current.id}. {current.title}</h2>

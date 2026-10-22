@@ -1,5 +1,5 @@
 // 단답형_100선.md · 핵심암기_카드.md → [{id, question, answer, category}]
-// id 는 단답형이 `001`, 핵심 암기 카드가 `K001` 이다.
+// id 는 단답형이 `001`, 핵심 암기 카드가 `K001`, 출제범위 확장 문항이 `X001` 이다.
 export function parseQuiz(mdText) {
   const questions = [];
   let currentCategory = '';
@@ -12,6 +12,7 @@ export function parseQuiz(mdText) {
     'D': '테스트',
     'E': '보안/네트워크',
     'F': 'OS/기타',
+    'G': '인터페이스/UI',
   };
 
   const lines = mdText.split(/\r?\n/);
@@ -19,13 +20,13 @@ export function parseQuiz(mdText) {
 
   while (i < lines.length) {
     // 카테고리 감지: ## A. or ## B. etc
-    const catMatch = lines[i].match(/^## ([A-F])\./);
+    const catMatch = lines[i].match(/^## ([A-G])\./);
     if (catMatch) {
       currentCategory = categoryMap[catMatch[1]] || catMatch[1];
     }
 
-    // 문제 감지: ### 001. 제목 / ### K001. 제목
-    const qMatch = lines[i].match(/^### (K?\d{3})\.\s*(.+)/);
+    // 문제 감지: ### 001. 제목 / ### K001. 제목 / ### X001. 제목
+    const qMatch = lines[i].match(/^### ([KX]?\d{3})\.\s*(.+)/);
     if (qMatch) {
       const id = qMatch[1];
       const question = qMatch[2].trim();

@@ -58,6 +58,8 @@ async function answer(container, value) {
 
 beforeEach(() => {
   localStorage.clear();
+  // 한 문제씩 풀기 동작을 확인한다 (기본 보기는 문제·답 함께 보기 목록)
+  localStorage.setItem('jungchogi-quiz-view', 'solve');
   vi.stubGlobal(
     'fetch',
     vi.fn((url) =>

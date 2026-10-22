@@ -21,12 +21,13 @@ import {
   DEEP_LINK_NOTICE_STYLE,
 } from '../hooks/useDeepLink';
 
-const CATEGORIES = ['전체', '데이터베이스', '소프트웨어공학', '디자인패턴/UML', '테스트', '보안/네트워크', 'OS/기타'];
+const CATEGORIES = ['전체', '데이터베이스', '소프트웨어공학', '디자인패턴/UML', '인터페이스/UI', '테스트', '보안/네트워크', 'OS/기타'];
 
 // `idPattern` 은 교재 카드 id 형식이다 — 딥링크가 어느 덱을 가리키는지 모양으로 가른다.
 const DECKS = [
   { key: 'quiz100', label: '단답형 100선', file: '정처기_단답형_100선.md', parser: 'quiz', idPattern: /^\d{3}$/ },
   { key: CORE_DECK_KEY, label: '핵심 암기 카드', file: CORE_DECK_FILE, parser: 'quiz', idPattern: /^K\d{3}$/ },
+  { key: 'extra', label: '출제범위 확장 80', file: '정처기_출제범위_확장문항.md', parser: 'quiz', idPattern: /^X\d{3}$/ },
 ];
 
 const DEFAULT_DECK = 'quiz100';

@@ -54,6 +54,8 @@ function buttonByName(container, name) {
 
 beforeEach(() => {
   localStorage.clear();
+  // 한 문제씩 풀기 동작을 확인한다 (기본 보기는 문제·답 함께 보기 목록)
+  localStorage.setItem('jungchogi-quiz-view', 'solve');
   vi.stubGlobal(
     'fetch',
     vi.fn(() => Promise.resolve(new Response(DRILL_MD, { status: 200 })))

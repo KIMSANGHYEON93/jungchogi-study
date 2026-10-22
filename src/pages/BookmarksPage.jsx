@@ -20,6 +20,7 @@ const card = 'tw:rounded-xl tw:border tw:border-line tw:bg-card';
 const SOURCES = {
   [BOOKMARK_TYPE.QUIZ100]: { file: '정처기_단답형_100선.md', pick: (md) => parseQuiz(md).map((q) => [q.id, q.question]) },
   [BOOKMARK_TYPE.CORE]: { file: CORE_DECK_FILE, pick: (md) => parseQuiz(md).map((q) => [q.id, q.question]) },
+  [BOOKMARK_TYPE.EXTRA]: { file: '정처기_출제범위_확장문항.md', pick: (md) => parseQuiz(md).map((q) => [q.id, q.question]) },
   [BOOKMARK_TYPE.CODE_DRILL]: { file: '정처기_코드트레이싱_드릴.md', pick: (md) => parseCodeDrill(md).map((q) => [q.id, q.title]) },
 };
 

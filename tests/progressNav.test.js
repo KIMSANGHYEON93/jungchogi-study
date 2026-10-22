@@ -74,6 +74,9 @@ afterEach(() => {
 });
 
 describe('코드 퀴즈 번호판', () => {
+  // 한 문제씩 풀기의 번호판을 확인한다 (기본 보기는 문제·답 함께 보기 목록)
+  beforeEach(() => localStorage.setItem('jungchogi-quiz-view', 'solve'));
+
   it('정답 · 오답 · 미완료를 칩으로 구분하고, 첫 미완료 문항에서 시작한다', async () => {
     localStorage.setItem('jungchogi_quiz_results', JSON.stringify({ 'C-01': 'correct', 'J-01': 'incorrect' }));
     const c = render(QuizPage, '/quiz');

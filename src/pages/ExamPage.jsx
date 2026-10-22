@@ -19,6 +19,7 @@ import { AREA_LABEL, areaOfExamQuestion, summarizeSession } from '../domain/plan
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
 import { clearExamDraft, loadExamDraft, restoreQuestions, saveExamDraft } from '../utils/examDraft';
+import { pickLeastUsed, shuffle, unseenCount, usageCounts } from '../domain/examPick';
 import Icon from '../components/Icon';
 import ProblemContext from '../components/ProblemContext';
 import {
@@ -26,6 +27,9 @@ import {
   withQuizResult,
 } from '../domain/grading';
 import { useThemeContext } from '../hooks/useTheme';
+
+/** 단답형 100선과 함께 쓰는 출제범위 확장 문항(2020~2026 실기 범위, 자체 제작) */
+const EXTRA_QUIZ_FILE = '정처기_출제범위_확장문항.md';
 
 /** 자기 채점 상태 문구 — 코드 퀴즈(QuizPage)와 같은 말을 쓴다 */
 const SELF_GRADE_STATE = {
@@ -50,15 +54,6 @@ function examWrongNote(q, answer) {
     userAnswer: answer?.trim() || '',
     category: q.category,
   };
-}
-
-function shuffleArray(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }
 
 function formatTime(seconds) {
@@ -96,9 +91,11 @@ export default function ExamPage() {
     Promise.all([
       fetchMarkdown('정처기_단답형_100선.md').then(parseQuiz),
       fetchMarkdown('정처기_코드트레이싱_드릴.md').then(parseCodeDrill),
-    ]).then(([quiz, code]) => {
+      // 단답형 풀을 넓혀 반복을 줄인다 — 받지 못해도 100선만으로 시험은 열린다
+      fetchMarkdown(EXTRA_QUIZ_FILE).then(parseQuiz).catch(() => []),
+    ]).then(([quiz, code, extra]) => {
       if (cancelled) return;
-      const quizList = quiz.map((q) => ({ ...q, type: 'quiz' }));
+      const quizList = [...quiz, ...extra].map((q) => ({ ...q, type: 'quiz' }));
       const codeList = code.map((q) => ({ ...q, type: 'code' }));
       setQuizPool(quizList);
       setCodePool(codeList);
@@ -150,10 +147,11 @@ export default function ExamPage() {
   }, [phase]);
 
   const startExam = () => {
-    // 단답형 12문제 + 코드 8문제 = 20문제 (앱이 정한 구성)
-    const quizQ = shuffleArray(quizPool).slice(0, MOCK_EXAM.quizCount);
-    const codeQ = shuffleArray(codePool).slice(0, MOCK_EXAM.codeCount);
-    const all = shuffleArray([...quizQ, ...codeQ]);
+    // 단답형 12문제 + 코드 8문제 = 20문제 (앱이 정한 구성). 지난 회차에 덜 나온 문항부터 고른다
+    const counts = usageCounts(getExamSessions());
+    const quizQ = pickLeastUsed(quizPool, MOCK_EXAM.quizCount, counts);
+    const codeQ = pickLeastUsed(codePool, MOCK_EXAM.codeCount, counts);
+    const all = shuffle([...quizQ, ...codeQ]);
     setResumed('');
     setQuestions(all);
     setAnswers({});
@@ -234,6 +232,7 @@ export default function ExamPage() {
 
   // ─── READY ───
   if (phase === 'ready') {
+    const poolCounts = usageCounts(getExamSessions());
     return (
       <div className="page">
         <h1>모의고사</h1>
@@ -248,8 +247,15 @@ export default function ExamPage() {
           <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>제한 시간: {EXAM_SPEC.minutes}분 ({formatMinutes(EXAM_SPEC.minutes)}) — 실제 시험 시간과 같게</p>
           <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>합격 기준: {EXAM_SPEC.passScore}점 이상 ({EXAM_SPEC.maxScore}점 만점)</p>
           <p style={{ color: 'var(--text-dim)', marginBottom: 8, fontSize: '0.85rem' }}>
-            문항 출처: 이 앱에서 만든 단답형 100선 · 코드 트레이싱 드릴에서 무작위로 고릅니다. 연도·회차별 복원 기출이 아닙니다.
+            문항 출처: 이 앱에서 만든 단답형 100선 · 출제범위 확장 80선(2020~2026 실기 범위) · 코드 트레이싱 드릴
+            (단답형 {quizPool.length} · 코드 {codePool.length}문항). 지난 회차에 덜 나온 문항부터 고르므로 풀을 한 바퀴 돌기 전에는 같은 문제가 다시 나오지 않습니다.
+            연도·회차별 복원 기출이 아닙니다(원문을 옮기지 않았습니다).
           </p>
+          {quizPool.length > 0 ? (
+            <p className="exam-pool-status" style={{ color: 'var(--text-dim)', marginBottom: 8, fontSize: '0.85rem' }}>
+              아직 안 나온 문항: 단답형 {unseenCount(quizPool, poolCounts)}개 · 코드 {unseenCount(codePool, poolCounts)}개
+            </p>
+          ) : null}
           <p style={{ color: 'var(--text-dim)', marginBottom: 32, fontSize: '0.85rem' }}>
             {EXAM_SPEC.sourceNote}. 풀이 뒤 채점 · 오답 정리에 약 {MOCK_EXAM.reviewMinutes}분을 따로 잡으세요.
           </p>
