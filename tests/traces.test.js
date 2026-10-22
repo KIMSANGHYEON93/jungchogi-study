@@ -9,12 +9,10 @@ const problems = new Map(parseCodeDrill(md).map((p) => [p.id, p]));
 const normalize = (s) => s.split(/\s+/).filter(Boolean).join(' ');
 
 describe('traces', () => {
-  it('언어별 최소 2문제, 총 8문제 이상', () => {
-    const ids = Object.keys(TRACES);
-    expect(ids.length).toBeGreaterThanOrEqual(8);
-    for (const prefix of ['C-', 'J-', 'P-']) {
-      expect(ids.filter((id) => id.startsWith(prefix)).length).toBeGreaterThanOrEqual(2);
-    }
+  it('C·Java·Python 코드 문제 30개 모두 추적표가 있다', () => {
+    const codeIds = [...problems.keys()].filter((id) => /^[CJP]-/.test(id));
+    expect(codeIds).toHaveLength(30);
+    expect(codeIds.filter((id) => !traceFor(id))).toEqual([]);
   });
 
   it('traceFor — 없는 id 는 null', () => {
