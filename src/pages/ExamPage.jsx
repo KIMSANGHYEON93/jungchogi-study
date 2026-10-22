@@ -9,6 +9,7 @@ import {
   getWrongNotes,
   removeWrongNote,
   getExamResults,
+  getExamSessions,
   saveExamResults,
   saveExamSession,
   recordWrongNoteRetry,
@@ -17,6 +18,7 @@ import { EXAM_SPEC, MOCK_EXAM, formatMinutes } from '../domain/studyTime';
 import { AREA_LABEL, areaOfExamQuestion, summarizeSession } from '../domain/planAdvice';
 import useStudyTimer from '../hooks/useStudyTimer';
 import { fetchMarkdown } from '../utils/mdCache';
+import { clearExamDraft, loadExamDraft, restoreQuestions, saveExamDraft } from '../utils/examDraft';
 import Icon from '../components/Icon';
 import ProblemContext from '../components/ProblemContext';
 import {
@@ -82,6 +84,8 @@ export default function ExamPage() {
   // 모의고사 채점 결과는 `exam_results` 에 쌓는다 — `quiz_results` 는 분모가 40 으로
   // 고정된 코드 퀴즈 진도를 세는 칸이라 모의고사 id 가 섞이면 진도가 어긋난다.
   const [examResults, setExamResults] = useState(getExamResults);
+  // 보관해 둔 시험을 이어서 열었을 때 한 번 알린다
+  const [resumed, setResumed] = useState('');
 
   // 문제 풀 로드
   const [quizPool, setQuizPool] = useState([]);
@@ -94,17 +98,63 @@ export default function ExamPage() {
       fetchMarkdown('정처기_코드트레이싱_드릴.md').then(parseCodeDrill),
     ]).then(([quiz, code]) => {
       if (cancelled) return;
-      setQuizPool(quiz.map((q) => ({ ...q, type: 'quiz' })));
-      setCodePool(code.map((q) => ({ ...q, type: 'code' })));
+      const quizList = quiz.map((q) => ({ ...q, type: 'quiz' }));
+      const codeList = code.map((q) => ({ ...q, type: 'code' }));
+      setQuizPool(quizList);
+      setCodePool(codeList);
+      // 풀던 시험이 있으면 그대로 이어서 연다 — 새로고침 · 탭 이동 · 백그라운드 정리로 답안이 사라지지 않게
+      const draft = loadExamDraft();
+      const restored = draft && restoreQuestions(draft, quizList, codeList);
+      if (!restored) {
+        if (draft) clearExamDraft();
+        return;
+      }
+      setQuestions(restored);
+      setAnswers(draft.answers);
+      setCurrentQ(Math.min(draft.currentQ, restored.length - 1));
+      endTimeRef.current = draft.endTime;
+      setSession(getExamSessions().find((x) => x.id === draft.sessionId) ?? null);
+      const stillRunning = draft.phase === 'exam' && draft.endTime > Date.now();
+      setTimeLeft(Math.max(0, Math.ceil((draft.endTime - Date.now()) / 1000)));
+      if (!stillRunning) {
+        setWrongIds(new Set(getWrongNotes().filter((n) => n.source === 'exam').map((n) => n.id)));
+      }
+      setResumed(stillRunning ? '풀던 모의고사를 이어서 엽니다. 타이머는 멈추지 않고 계속 흘렀습니다.' : '풀던 모의고사의 결과를 다시 엽니다.');
+      setPhase(stillRunning ? 'exam' : 'result');
     });
     return () => { cancelled = true; };
   }, []);
+
+  // 시험 중 · 결과 화면의 상태를 보관한다. '다시 도전'으로 준비 화면에 돌아가면 지운다
+  useEffect(() => {
+    if (phase === 'ready' || questions.length === 0) return;
+    saveExamDraft({
+      phase,
+      items: questions.map((q) => ({ type: q.type, id: q.id })),
+      answers,
+      currentQ,
+      endTime: endTimeRef.current,
+      sessionId: session?.id ?? null,
+    });
+  }, [phase, questions, answers, currentQ, session]);
+
+  // 시험 중 새로고침 · 창 닫기 전에 한 번 묻는다 (답안은 보관되지만 실수로 나가는 것을 막는다)
+  useEffect(() => {
+    if (phase !== 'exam') return undefined;
+    const warn = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [phase]);
 
   const startExam = () => {
     // 단답형 12문제 + 코드 8문제 = 20문제 (앱이 정한 구성)
     const quizQ = shuffleArray(quizPool).slice(0, MOCK_EXAM.quizCount);
     const codeQ = shuffleArray(codePool).slice(0, MOCK_EXAM.codeCount);
     const all = shuffleArray([...quizQ, ...codeQ]);
+    setResumed('');
     setQuestions(all);
     setAnswers({});
     setCurrentQ(0);
@@ -138,6 +188,9 @@ export default function ExamPage() {
   }, [phase]);
 
   const submitExam = () => {
+    const blank = questions.length - Object.keys(answers).filter((k) => answers[k]?.trim()).length;
+    // 제출은 되돌릴 수 없다 — 손가락이 스쳐 시험이 끝나지 않도록 남은 문항이 있으면 한 번 묻는다
+    if (blank > 0 && !window.confirm(`아직 답을 쓰지 않은 문항이 ${blank}개 있습니다. 제출할까요?`)) return;
     clearInterval(timerRef.current);
     setPhase('result');
     const savedWrong = getWrongNotes().filter((n) => n.source === 'exam').map((n) => n.id);
@@ -219,6 +272,7 @@ export default function ExamPage() {
           <h1 style={{ marginBottom: 0 }}>모의고사</h1>
           <div className={timerClass} role="timer" aria-live="assertive" aria-label="남은 시간">{formatTime(timeLeft)}</div>
         </div>
+        {resumed ? <p className="exam-resumed" role="status">{resumed}</p> : null}
 
         <div className="progress-bar" role="progressbar" aria-valuenow={Math.round((answeredCount / MOCK_EXAM.questions) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label="학습 진도" style={{ marginBottom: 16 }}>
           <div className="fill" style={{ width: `${(answeredCount / MOCK_EXAM.questions) * 100}%` }} />
@@ -299,6 +353,7 @@ export default function ExamPage() {
   return (
     <div className="page">
       <h1>시험 결과</h1>
+      {resumed ? <p className="exam-resumed" role="status">{resumed}</p> : null}
 
       <div className="card score-display">
         <div style={{ fontSize: '1rem', color: 'var(--text-dim)', marginBottom: 8 }}>
@@ -422,7 +477,7 @@ export default function ExamPage() {
       ))}
 
       <div style={{ textAlign: 'center', marginTop: 32 }}>
-        <button className="btn-primary" onClick={() => setPhase('ready')} style={{ padding: '14px 40px' }}>
+        <button className="btn-primary" onClick={() => { clearExamDraft(); setResumed(''); setPhase('ready'); }} style={{ padding: '14px 40px' }}>
           다시 도전
         </button>
       </div>

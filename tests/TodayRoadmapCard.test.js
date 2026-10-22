@@ -119,6 +119,15 @@ describe('TodayRoadmapCard — 오늘의 로드맵', () => {
     expect(late.querySelector('a').getAttribute('href')).toBe('/roadmap');
   });
 
+  it('밀린 일차가 많으면 대시보드 요약은 앞의 4개만 적고 "외 N일"로 줄인다', () => {
+    vi.setSystemTime(day(10, 22)); // D-3 — 학습일이 많이 지남
+    saveProgress('roadmap_checks', {});
+    const c = render();
+    const late = c.querySelector('.road-catchup');
+    expect(late.textContent).toMatch(/학습일 D-24 · D-23 · D-22 · D-21 외 \d+일/);
+    expect(late.textContent).not.toContain('D-20 · D-19');
+  });
+
   it('밀린 일차가 없으면 알림이 없다', () => {
     expect(render().querySelector('.road-catchup')).toBeNull();
   });

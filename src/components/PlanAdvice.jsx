@@ -41,6 +41,16 @@ export function LoadNote({ day }) {
 }
 
 /** 밀린 일정 보충 계획 */
+/** 대시보드 요약에서 밀린 일차를 몇 개까지 이름으로 보여 줄지 — 그 이상은 "외 N일"로 줄인다 */
+const COMPACT_LATE_NAMES = 4;
+
+/** `D-24 · D-23 …` 목록. 요약(compact)에서는 앞의 몇 개만 적고 나머지는 개수로 줄인다 */
+function lateNames(days, compact) {
+  const names = days.map((d) => `D-${d}`);
+  if (!compact || names.length <= COMPACT_LATE_NAMES + 1) return names.join(' · ');
+  return `${names.slice(0, COMPACT_LATE_NAMES).join(' · ')} 외 ${names.length - COMPACT_LATE_NAMES}일`;
+}
+
 export function CatchUpPanel({ plan, compact = false }) {
   if (!plan) return null;
   const { lateStudy, latePractice, assignments, optional, feasible, perDay, slotCount, extraPerDayNeeded } = plan;
@@ -48,8 +58,8 @@ export function CatchUpPanel({ plan, compact = false }) {
     <div className="road-catchup" role="status">
       <strong>
         밀린 일차 {lateStudy.length + latePractice.length}개
-        {lateStudy.length > 0 ? ` — 학습일 ${lateStudy.map((d) => `D-${d}`).join(' · ')}` : ''}
-        {latePractice.length > 0 ? ` · 실전일 ${latePractice.map((d) => `D-${d}`).join(' · ')}` : ''}
+        {lateStudy.length > 0 ? ` — 학습일 ${lateNames(lateStudy, compact)}` : ''}
+        {latePractice.length > 0 ? ` · 실전일 ${lateNames(latePractice, compact)}` : ''}
       </strong>
       {compact ? (
         <span>

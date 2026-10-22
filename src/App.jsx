@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import ErrorBoundary from './components/ErrorBoundary';
 import FormulaCheatSheetModal from './components/FormulaCheatSheetModal';
+import ScrollTopButton from './components/ScrollTopButton';
 import { useTheme, ThemeProvider } from './hooks/useTheme';
 import useScrollBoundsGuard from './hooks/useScrollBoundsGuard';
 
@@ -66,6 +67,7 @@ function AppLayout() {
           공식
         </button>
       )}
+      {!isLanding && <ScrollTopButton />}
       <FormulaCheatSheetModal open={cheatOpen} onClose={() => setCheatOpen(false)} />
     </>
   );

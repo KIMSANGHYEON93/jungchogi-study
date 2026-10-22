@@ -62,12 +62,12 @@ describe('대시보드 — 로드맵 하나로 통합', () => {
     expect([...c.querySelectorAll('button')].some((b) => b.textContent === '레슨 시작')).toBe(true);
   });
 
-  it('추천: 레슨이 없는 일차(점검일)는 로드맵 보기', () => {
-    vi.setSystemTime(day(10, 9)); // D-16
+  it('추천: 레슨이 없는 일차(점검일)는 그날 할 화면으로 바로 보낸다', () => {
+    vi.setSystemTime(day(10, 9)); // D-16 — 첫 할 일은 실기 연습 변수 추적표
     saveProgress('roadmap_checks', {});
     const c = render();
     expect(c.textContent).toContain('오늘의 로드맵 — D-16 1단계 점검');
-    expect([...c.querySelectorAll('button')].some((b) => b.textContent === '로드맵 보기')).toBe(true);
+    expect([...c.querySelectorAll('button')].some((b) => b.textContent === '실기 연습 시작')).toBe(true);
   });
 
   it('추천: 오늘 일차를 끝냈고 밀린 일차가 있으면 이어하기를 권한다', () => {

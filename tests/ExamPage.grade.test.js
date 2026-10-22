@@ -46,6 +46,8 @@ function buttonByName(scope, name) {
 
 beforeEach(() => {
   localStorage.clear();
+  // 답을 비워 둔 채 제출하면 한 번 묻는다 — 기존 흐름 테스트는 '제출'을 고른다
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
   vi.stubGlobal(
     'fetch',
     vi.fn((url) =>
@@ -56,6 +58,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   document.body.innerHTML = '';
 });
 
@@ -226,6 +229,69 @@ describe('점수는 직접 채점 결과로만 정한다', () => {
     expect(container.textContent).toContain('150분');
     expect(container.textContent).toContain('연도·회차별 복원 기출이 아닙니다');
     expect(container.textContent).toContain('큐넷 원문 미확인');
+    unmount();
+  });
+});
+
+describe('풀던 모의고사 이어 풀기', () => {
+  function typeAnswer(container, value) {
+    const ta = container.querySelector('textarea');
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    act(() => {
+      setter.call(ta, value);
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  it('새로고침(다시 열기)해도 문항 · 답안 · 남은 시간을 그대로 이어서 연다', async () => {
+    let view = render();
+    await startExam(view.container);
+    typeAnswer(view.container, '내 답안');
+    const firstTitle = view.container.querySelector('.card').textContent;
+    view.unmount();
+
+    view = render();
+    await flush();
+    expect(view.container.querySelector('.exam-resumed').textContent).toContain('이어서');
+    expect(view.container.querySelector('textarea').value).toBe('내 답안');
+    expect(view.container.querySelector('.card').textContent).toBe(firstTitle);
+    expect(view.container.querySelector('[role="timer"]').textContent).toMatch(/^1[45]\d:\d\d$/);
+    view.unmount();
+  });
+
+  it('빈 문항이 있으면 제출 전에 묻고, 취소하면 시험이 계속된다', async () => {
+    window.confirm.mockReturnValue(false);
+    const { container, unmount } = render();
+    await startExam(container);
+    await submitExam(container);
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringMatching(/답을 쓰지 않은 문항이 \d+개/));
+    expect(buttonByName(container, '시험 제출')).toBeDefined();
+    expect(questionCards(container)).toHaveLength(0);
+    unmount();
+  });
+
+  it('마감 시각이 지난 시험은 결과 화면으로 열고, 다시 도전하면 보관분을 지운다', async () => {
+    let view = render();
+    await startExam(view.container);
+    view.unmount();
+    const draft = JSON.parse(localStorage.getItem('jungchogi-exam-draft'));
+    localStorage.setItem('jungchogi-exam-draft', JSON.stringify({ ...draft, endTime: Date.now() - 1000 }));
+
+    view = render();
+    await flush();
+    expect(view.container.querySelector('h1').textContent).toBe('시험 결과');
+    expect(questionCards(view.container).length).toBeGreaterThan(0);
+    await act(async () => { buttonByName(view.container, '다시 도전').click(); });
+    expect(localStorage.getItem('jungchogi-exam-draft')).toBeNull();
+    expect(buttonByName(view.container, '시험 시작')).toBeDefined();
+    view.unmount();
+  });
+
+  it('보관분은 백업 · 동기화 대상(jungchogi_ 접두사)이 아니다', async () => {
+    const { container, unmount } = render();
+    await startExam(container);
+    expect(Object.keys(localStorage).filter((k) => k.startsWith('jungchogi_')).every((k) => !k.includes('draft'))).toBe(true);
+    expect(localStorage.getItem('jungchogi-exam-draft')).not.toBeNull();
     unmount();
   });
 });

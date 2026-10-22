@@ -4,7 +4,7 @@ import { loadProgress, getWrongNotes, getExamDate, setExamDate, getWeeklyStudyTi
 import Icon from '../components/Icon';
 import TodayRoadmapCard from '../components/TodayRoadmapCard';
 import useStudyState from '../hooks/useStudyState';
-import { buildRoadmap, ROADMAP_DAYS } from '../domain/roadmap';
+import { buildRoadmap, ROADMAP_DAYS, topicLinks } from '../domain/roadmap';
 import { lessonByDay } from '../domain/lessons';
 import { loadStoredBusy } from '../utils/busyStore';
 import { MAX_BACKUP_BYTES, applyBackup, buildBackup, failureMessage, parseBackup, successMessage } from '../utils/backup';
@@ -171,10 +171,16 @@ export default function DashboardPage() {
     const todayDay = roadmap.today;
     if (todayDay && todayDay.d > 0 && !todayDay.done) {
       const lesson = lessonByDay(todayDay.d);
+      if (lesson) {
+        return { text: `오늘의 로드맵 — ${todayDay.label} ${todayDay.title}`, action: () => navigate(`/lesson/${lesson.d}`), btn: '레슨 시작' };
+      }
+      // 레슨이 없는 날(모의고사 · 총정리)은 로드맵을 한 번 더 거치지 않고 그날 할 화면으로 바로 보낸다
+      const links = (todayDay.topics ?? []).flatMap(topicLinks);
+      const target = links.find((l) => !l.to.startsWith('/study') && !l.to.startsWith('/search')) ?? links[0];
       return {
         text: `오늘의 로드맵 — ${todayDay.label} ${todayDay.title}`,
-        action: () => navigate(lesson ? `/lesson/${lesson.d}` : '/roadmap'),
-        btn: lesson ? '레슨 시작' : '로드맵 보기',
+        action: () => navigate(target ? target.to : '/roadmap'),
+        btn: target ? `${target.label.split(' · ')[0]} 시작` : '로드맵 보기',
       };
     }
     if (roadmap.late.length > 0) return { text: `밀린 로드맵 일차가 ${roadmap.late.length}개 있어요`, action: () => navigate('/roadmap'), btn: '이어하기' };
